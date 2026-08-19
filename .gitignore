@@ -1,0 +1,11 @@
+# Never commit real router credentials or exported tunnel profiles.
+secrets/
+private/
+*.key
+*.pem
+*.secret
+*.subscription
+*.conf
+!tests/fixtures/*.conf
+.env
+.env.*

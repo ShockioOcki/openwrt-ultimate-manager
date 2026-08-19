@@ -1,0 +1,2 @@
+vless://00000000-0000-4000-8000-000000000001@192.0.2.20:443?type=tcp&security=reality&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&fp=edge&sni=example.test&sid=0102030405060708&flow=xtls-rprx-vision#fixture-reality
+hysteria2://fixture-password@192.0.2.30:443?sni=example.test&fm=%7B%22quicParams%22%3A%7B%22congestion%22%3A%22bbr%22%7D%7D#fixture-hy2
