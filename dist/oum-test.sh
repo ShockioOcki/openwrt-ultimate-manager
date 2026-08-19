@@ -1,6 +1,6 @@
 #!/bin/sh
 # Generated from modular sources. Do not edit dist/oum-test.sh directly.
-OUM_VERSION="9.0.0-test.3"
+OUM_VERSION="9.0.0-test.4"
 OUM_STATE_DIR="/etc/oum"
 OUM_BACKUP_DIR="/root/oum-backups"
 OUM_TMP_DIR="/tmp/oum.$$"
@@ -135,6 +135,94 @@ oum_mihomo_core() {
     done
     return 1
 }
+OPENCLASH_VERSION="0.47.156"
+OPENCLASH_APK_URL="https://github.com/vernesong/OpenClash/releases/download/v0.47.156/luci-app-openclash-0.47.156.apk"
+OPENCLASH_APK_SHA256="1e4f330fc654e0270ac9cfa762af221335567d9b89388219890e8a7745b914ab"
+OPENCLASH_IPK_URL="https://github.com/vernesong/OpenClash/releases/download/v0.47.156/luci-app-openclash_0.47.156_all.ipk"
+OPENCLASH_IPK_SHA256="b5d48ef26cb6de2942c3573e27b74490d354c0cfadaf24afe748daf806434eed"
+MIHOMO_VERSION="1.19.30"
+MIHOMO_ARM64_URL="https://github.com/MetaCubeX/mihomo/releases/download/v1.19.30/mihomo-linux-arm64-v1.19.30.gz"
+MIHOMO_ARM64_SHA256="58896873736d28628f66de3677c8654fa0f180662523148e136cff4f6e890069"
+
+oum_verify_sha256() {
+    file="$1"
+    expected="$2"
+    actual="$(sha256sum "$file" 2>/dev/null | awk '{print $1}')"
+    [ "$actual" = "$expected" ] || {
+        oum_err "Контрольная сумма загруженного файла не совпала"
+        return 1
+    }
+}
+
+oum_install_mihomo() {
+    case "$(uname -m)" in
+        aarch64|arm64) core_url="$MIHOMO_ARM64_URL"; core_sha="$MIHOMO_ARM64_SHA256" ;;
+        *) oum_err "Для архитектуры $(uname -m) в тестовой версии нет закреплённого ядра"; return 1 ;;
+    esac
+    archive="$OUM_TMP_DIR/mihomo.gz"
+    core_tmp="$OUM_TMP_DIR/clash_meta"
+    oum_info "Загружаем Mihomo $MIHOMO_VERSION"
+    oum_download "$core_url" "$archive" || { oum_err "Не удалось загрузить Mihomo"; return 1; }
+    oum_verify_sha256 "$archive" "$core_sha" || return 1
+    gzip -dc "$archive" > "$core_tmp" || return 1
+    chmod 755 "$core_tmp"
+    mkdir -p "$OPENCLASH_DIR/core"
+    mv "$core_tmp" "$OPENCLASH_DIR/core/clash_meta"
+    chmod 755 "$OPENCLASH_DIR/core/clash_meta"
+    "$OPENCLASH_DIR/core/clash_meta" -v >/dev/null 2>&1 || {
+        oum_err "Загруженное ядро Mihomo не запускается"
+        return 1
+    }
+}
+
+oum_install_openclash() {
+    oum_header
+    oum_prepare_dirs
+    if oum_pkg_installed luci-app-openclash && oum_require_runtime && oum_mihomo_core >/dev/null 2>&1; then
+        oum_ok "OpenClash, Ruby и Mihomo уже установлены"
+        return 0
+    fi
+
+    oum_info "Первичная установка OpenClash $OPENCLASH_VERSION"
+    case "$(oum_pkg_manager 2>/dev/null)" in
+        apk)
+            package_file="$OUM_TMP_DIR/openclash.apk"
+            apk update || { oum_err "Не удалось обновить индекс пакетов"; return 1; }
+            oum_download "$OPENCLASH_APK_URL" "$package_file" || return 1
+            oum_verify_sha256 "$package_file" "$OPENCLASH_APK_SHA256" || return 1
+            apk add --allow-untrusted "$package_file" || { oum_err "Не удалось установить OpenClash"; return 1; }
+            ;;
+        opkg)
+            package_file="$OUM_TMP_DIR/openclash.ipk"
+            opkg update || { oum_err "Не удалось обновить индекс пакетов"; return 1; }
+            oum_download "$OPENCLASH_IPK_URL" "$package_file" || return 1
+            oum_verify_sha256 "$package_file" "$OPENCLASH_IPK_SHA256" || return 1
+            opkg install "$package_file" || { oum_err "Не удалось установить OpenClash"; return 1; }
+            ;;
+        *) oum_err "Пакетный менеджер OpenWrt не найден"; return 1 ;;
+    esac
+
+    oum_require_runtime || return 1
+    oum_install_mihomo || return 1
+    mkdir -p "$OPENCLASH_DIR/config" "$OPENCLASH_DIR/rule_provider"
+    /etc/init.d/openclash stop >/dev/null 2>&1 || true
+    /etc/init.d/openclash disable >/dev/null 2>&1 || true
+    /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+    /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+    oum_ok "OpenClash $OPENCLASH_VERSION и Mihomo $MIHOMO_VERSION установлены"
+    oum_info "Сервис запустится после добавления первого подключения"
+}
+
+oum_ensure_openclash() {
+    if oum_pkg_installed luci-app-openclash && oum_require_runtime && oum_mihomo_core >/dev/null 2>&1; then
+        return 0
+    fi
+    oum_warn "OpenClash ещё не установлен"
+    printf 'Установить сейчас? [Y/n]: '
+    IFS= read -r answer
+    case "$answer" in n|N|no|NO) return 1 ;; esac
+    oum_install_openclash
+}
 oum_write_source_converter() {
     destination="$1"
     cat > "$destination" <<'OUM_RUBY_EOF'
@@ -145,9 +233,9 @@ require 'yaml'
 # Keep the converter self-contained and depend only on ruby-yaml (Psych).
 ShareURI = Struct.new(:scheme, :user, :host, :port, :query, :fragment)
 SOURCE_GROUPS = {
-  'subscription' => 'SUBSCRIPTION',
-  'awg' => 'AMNEZIA',
-  'reality' => 'REALITY'
+  'subscription' => 'Subscription',
+  'awg' => 'AWG_Tunnel',
+  'reality' => 'Proxy_Nodes'
 }.freeze
 
 MASS_RULE_PROVIDER_SOURCES = [
@@ -278,11 +366,15 @@ def parse_vless(uri, index)
     'network' => network,
     'udp' => true
   }
+  node['encryption'] = query['encryption'] unless query['encryption'].to_s.empty?
   node['flow'] = query['flow'] unless query['flow'].to_s.empty?
   node['packet-encoding'] = query['packetEncoding'] if query['packetEncoding']
   node['tls'] = true if %w[tls reality].include?(security)
   node['servername'] = query['sni'] unless query['sni'].to_s.empty?
   node['client-fingerprint'] = query['fp'] unless query['fp'].to_s.empty?
+  node['alpn'] = query['alpn'].split(',').map(&:strip).reject(&:empty?) unless query['alpn'].to_s.empty?
+  insecure = query['allowInsecure'] || query['allow_insecure'] || query['insecure']
+  node['skip-cert-verify'] = %w[1 true yes].include?(insecure.to_s.downcase) unless insecure.nil?
   if security == 'reality'
     abort 'VLESS Reality URI is missing pbk' if query['pbk'].to_s.empty?
     reality = {'public-key' => query['pbk']}
@@ -300,10 +392,16 @@ def parse_vless(uri, index)
     options = {}
     options['path'] = query['path'] if query['path']
     options['mode'] = query['mode'] if query['mode']
+    options['host'] = query['host'] if query['host']
     begin
-      options['extra'] = load_yaml_text(query['extra']) if query['extra']
+      extra = load_yaml_text(query['extra']) if query['extra']
+      if extra.is_a?(Hash)
+        options['x-padding-bytes'] = extra['xPaddingBytes'] if extra['xPaddingBytes']
+        options['no-grpc-header'] = extra['noGRPCHeader'] if extra.key?('noGRPCHeader')
+        options['headers'] = extra['headers'] if extra['headers'].is_a?(Hash)
+      end
     rescue StandardError
-      options['extra'] = query['extra']
+      warn 'WARNING: malformed XHTTP extra settings were ignored'
     end
     node['xhttp-opts'] = options
   when 'tcp'
@@ -324,7 +422,9 @@ def parse_hysteria2(uri, index)
     'password' => uri.user.to_s
   }
   node['sni'] = query['sni'] unless query['sni'].to_s.empty?
-  node['skip-cert-verify'] = %w[1 true].include?(query['insecure'].to_s.downcase) if query.key?('insecure')
+  insecure = query['allowInsecure'] || query['allow_insecure'] || query['insecure']
+  node['skip-cert-verify'] = %w[1 true yes].include?(insecure.to_s.downcase) unless insecure.nil?
+  node['alpn'] = query['alpn'].split(',').map(&:strip).reject(&:empty?) unless query['alpn'].to_s.empty?
   node
 end
 
@@ -457,24 +557,6 @@ def convert_awg(input, name)
   {'proxies' => [node]}
 end
 
-def groups(config)
-  config['proxy-groups'] = [] unless config['proxy-groups'].is_a?(Array)
-  config['proxy-groups']
-end
-
-def ensure_group(config, name, type = 'select')
-  group = groups(config).find { |item| item.is_a?(Hash) && item['name'] == name }
-  return group if group
-  group = {'name' => name, 'type' => type}
-  groups(config) << group
-  group
-end
-
-def append_unique(hash, key, value)
-  hash[key] = [] unless hash[key].is_a?(Array)
-  hash[key] << value unless hash[key].include?(value)
-end
-
 def source_group_name(kind)
   SOURCE_GROUPS.fetch(kind, 'OUM-SOURCES')
 end
@@ -490,29 +572,48 @@ def apply_mass_routing(config)
   config
 end
 
-def attach_provider(config, id, path, kind)
-  abort 'invalid provider id' unless id.match?(/\A[a-z0-9][a-z0-9_-]*\z/)
-  config['proxy-providers'] = {} unless config['proxy-providers'].is_a?(Hash)
-  config['proxy-providers'][id] = {
-    'type' => 'file',
-    'path' => path,
-    'health-check' => {'enable' => true, 'url' => 'https://www.gstatic.com/generate_204', 'interval' => 600, 'lazy' => true}
+def base_config
+  {
+    'mixed-port' => 7890,
+    'allow-lan' => true,
+    'bind-address' => '*',
+    'mode' => 'rule',
+    'log-level' => 'info',
+    'ipv6' => false,
+    'external-controller' => '127.0.0.1:9090',
+    'profile' => {'store-selected' => true, 'store-fake-ip' => true},
+    'dns' => {
+      'enable' => true,
+      'ipv6' => false,
+      'enhanced-mode' => 'fake-ip',
+      'fake-ip-range' => '198.18.0.1/16',
+      'fake-ip-filter' => ['*.lan', '*.local'],
+      'default-nameserver' => ['1.1.1.1', '8.8.8.8'],
+      'nameserver' => ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query']
+    }
   }
-  source_group = ensure_group(config, source_group_name(kind))
-  source_group['type'] = 'select'
-  append_unique(source_group, 'use', id)
-  proxy_group = ensure_group(config, 'PROXY')
-  append_unique(proxy_group, 'proxies', source_group_name(kind))
-  config
 end
 
-
-def standalone_config(config, provider_file, kind)
+def single_profile(provider_file, kind)
+  config = base_config
   group_name = source_group_name(kind)
   nodes = load_yaml(provider_file).fetch('proxies', [])
   abort 'standalone source contains no proxies' unless nodes.is_a?(Array) && !nodes.empty?
-  names = nodes.map { |node| node['name'] }.compact
-  abort 'standalone source contains unnamed proxies' unless names.length == nodes.length
+  reserved = ['PROXY', group_name, 'AUTO', 'META', 'DIRECT', 'REJECT']
+  used = reserved.each_with_object({}) { |name, out| out[name] = true }
+  nodes.each do |node|
+    original = node['name'].to_s.strip
+    abort 'standalone source contains unnamed proxies' if original.empty?
+    candidate = original
+    suffix = 1
+    while used[candidate]
+      candidate = "#{original} Node #{suffix}"
+      suffix += 1
+    end
+    node['name'] = candidate
+    used[candidate] = true
+  end
+  names = nodes.map { |node| node['name'] }
   config['proxies'] = nodes
   config.delete('proxy-providers')
   config['proxy-groups'] = [
@@ -538,24 +639,15 @@ when 'subscription'
   input, output = ARGV
   abort 'usage: subscription INPUT OUTPUT' unless input && output
   write_yaml(convert_uri_list(input, filter_subscription: true), output)
-when 'attach'
-  input, output, id, path, kind = ARGV
-  abort 'usage: attach CONFIG OUTPUT ID PATH KIND' unless input && output && id && path && kind
-  write_yaml(attach_provider(load_yaml(input), id, path, kind), output)
 when 'standalone'
-  input, output, provider_file, kind = ARGV
-  abort 'usage: standalone CONFIG OUTPUT PROVIDER_FILE KIND' unless input && output && provider_file && kind
-  write_yaml(standalone_config(load_yaml(input), provider_file, kind), output)
+  output, provider_file, kind = ARGV
+  abort 'usage: standalone OUTPUT PROVIDER_FILE KIND' unless output && provider_file && kind
+  write_yaml(single_profile(provider_file, kind), output)
 else
-  abort 'modes: awg, uris, subscription, attach, standalone'
+  abort 'modes: awg, uris, subscription, standalone'
 end
 OUM_RUBY_EOF
 }
-oum_provider_id() {
-    prefix="$1"
-    printf 'oum-%s-%s\n' "$prefix" "$(date +%Y%m%d%H%M%S)"
-}
-
 oum_deploy_converter() {
     converter="$OUM_TMP_DIR/source_converter.rb"
     oum_write_source_converter "$converter"
@@ -563,97 +655,152 @@ oum_deploy_converter() {
     printf '%s\n' "$converter"
 }
 
-oum_apply_openclash_candidate() {
-    candidate="$1"
-    active="$2"
-    core="$(oum_mihomo_core)" || { oum_err "Ядро Mihomo не найдено"; return 1; }
-    oum_prepare_dirs
-    backup="$OUM_BACKUP_DIR/openclash-$(date +%Y%m%d-%H%M%S).yaml"
-    cp "$active" "$backup" || return 1
-    chmod 600 "$backup"
+oum_profile_name() {
+    case "$1" in
+        subscription) printf '%s\n' 'Subscription.yaml' ;;
+        awg) printf '%s\n' 'AWG_Tunnel.yaml' ;;
+        reality) printf '%s\n' 'Proxy.yaml' ;;
+        *) return 1 ;;
+    esac
+}
 
-    oum_info "Останавливаем OpenClash для проверки без второго ядра в памяти"
+oum_managed_profiles() {
+    printf '%s\n' \
+        'Subscription.yaml' 'AWG_Tunnel.yaml' 'Proxy.yaml' \
+        'oum-subscription.yaml' 'oum-amnezia.yaml' 'oum-reality.yaml' 'oum.yaml'
+}
+
+oum_clear_subscription_info() {
+    uci -q delete openclash.oum_subscription_info >/dev/null 2>&1 || true
+}
+
+oum_set_subscription_info() {
+    url="$1"
+    oum_clear_subscription_info
+    uci set openclash.oum_subscription_info='subscribe_info'
+    uci set openclash.oum_subscription_info.name='Subscription'
+    uci set "openclash.oum_subscription_info.url=$url"
+}
+
+oum_discard_source_transaction() {
+    transaction="$1"
+    [ -d "$transaction" ] || return 0
+    find "$transaction" -type f -exec rm -f {} \; 2>/dev/null || true
+    rmdir "$transaction/config" 2>/dev/null || true
+    rmdir "$transaction" 2>/dev/null || true
+}
+
+oum_restore_source_transaction() {
+    transaction="$1"
+    was_running="$2"
+    /etc/init.d/openclash stop >/dev/null 2>&1 || true
+    for profile in $(oum_managed_profiles); do
+        rm -f "$OPENCLASH_DIR/config/$profile" "$OPENCLASH_DIR/$profile"
+    done
+    if [ -d "$transaction/config" ]; then
+        for saved in "$transaction"/config/*; do
+            [ -f "$saved" ] && cp "$saved" "$OPENCLASH_DIR/config/$(basename "$saved")"
+        done
+    fi
+    if [ -f "$transaction/openclash.uci" ]; then
+        cp "$transaction/openclash.uci" /etc/config/openclash
+    fi
+    if [ "$was_running" = 1 ]; then
+        /etc/init.d/openclash start >/dev/null 2>&1 || true
+    fi
+    oum_discard_source_transaction "$transaction"
+}
+
+oum_activate_single_profile() {
+    candidate="$1"
+    source_kind="$2"
+    subscription_url="${3:-}"
+    profile="$(oum_profile_name "$source_kind")" || return 1
+    target="$OPENCLASH_DIR/config/$profile"
+    core="$(oum_mihomo_core)" || { oum_err "Mihomo не найден"; return 1; }
+    transaction="$OUM_BACKUP_DIR/source-switch-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$transaction/config" "$OPENCLASH_DIR/config"
+    chmod 700 "$transaction" "$transaction/config"
+    cp /etc/config/openclash "$transaction/openclash.uci" || return 1
+    chmod 600 "$transaction/openclash.uci"
+    for old_profile in $(oum_managed_profiles); do
+        [ -f "$OPENCLASH_DIR/config/$old_profile" ] && cp "$OPENCLASH_DIR/config/$old_profile" "$transaction/config/$old_profile"
+    done
+    was_running=0
+    pgrep -f 'clash_meta|mihomo|/clash ' >/dev/null 2>&1 && was_running=1
+
+    oum_info "Останавливаем OpenClash и проверяем новый профиль"
     /etc/init.d/openclash stop >/dev/null 2>&1 || true
     if ! "$core" -t -d "$OPENCLASH_DIR" -f "$candidate"; then
-        /etc/init.d/openclash start >/dev/null 2>&1 || true
-        oum_err "Mihomo отклонил новый конфиг; активный YAML не изменён"
+        [ "$was_running" = 1 ] && /etc/init.d/openclash start >/dev/null 2>&1 || true
+        oum_discard_source_transaction "$transaction"
+        oum_err "Mihomo отклонил новый профиль; старый источник не изменён"
         return 1
     fi
-    cp "$candidate" "$active" || {
-        cp "$backup" "$active"
-        /etc/init.d/openclash start >/dev/null 2>&1 || true
+
+    cp "$candidate" "$target" || {
+        oum_restore_source_transaction "$transaction" "$was_running"
         return 1
     }
-    chmod 600 "$active"
+    chmod 600 "$target"
+    uci set "openclash.config.config_path=$target"
+    uci set openclash.config.enable='1'
+    if [ "$source_kind" = subscription ]; then
+        oum_set_subscription_info "$subscription_url"
+    else
+        oum_clear_subscription_info
+    fi
+    uci commit openclash
+    chmod 600 /etc/config/openclash
     /etc/init.d/podkop stop >/dev/null 2>&1 || true
     /etc/init.d/podkop disable >/dev/null 2>&1 || true
-    printf '%s\n' openclash > "$OUM_STATE_DIR/proxy_backend"
     /etc/init.d/openclash enable >/dev/null 2>&1 || true
     /etc/init.d/openclash start >/dev/null 2>&1 || true
 
     elapsed=0
-    while [ "$elapsed" -lt 30 ]; do
-        pgrep -f 'clash_meta|mihomo|/clash ' >/dev/null 2>&1 && {
-            oum_ok "OpenClash запущен; бэкап: $backup"
-            return 0
-        }
+    started=0
+    while [ "$elapsed" -lt 45 ]; do
+        if pgrep -f "/etc/openclash/$profile" >/dev/null 2>&1; then
+            started=1
+            break
+        fi
         sleep 2
         elapsed=$((elapsed + 2))
     done
-    oum_err "OpenClash не запустился; восстанавливаем предыдущий YAML"
-    cp "$backup" "$active"
-    /etc/init.d/openclash restart >/dev/null 2>&1 || true
-    return 1
-}
-
-oum_save_standalone_config() {
-    candidate="$1"
-    source_kind="$2"
-    core="$(oum_mihomo_core)" || { oum_err "Ядро Mihomo не найдено"; return 1; }
-    case "$source_kind" in
-        subscription) config_name="oum-subscription.yaml" ;;
-        awg) config_name="oum-amnezia.yaml" ;;
-        reality) config_name="oum-reality.yaml" ;;
-        *) config_name="oum-source.yaml" ;;
-    esac
-    target="$OPENCLASH_DIR/config/$config_name"
-    mkdir -p "$OPENCLASH_DIR/config"
-    backup=""
-    if [ -f "$target" ]; then
-        backup="$OUM_BACKUP_DIR/${config_name%.yaml}-$(date +%Y%m%d-%H%M%S).yaml"
-        cp "$target" "$backup"
-    fi
-    oum_info "Проверяем отдельный конфиг; OpenClash будет кратко остановлен"
-    /etc/init.d/openclash stop >/dev/null 2>&1 || true
-    if ! "$core" -t -d "$OPENCLASH_DIR" -f "$candidate"; then
-        /etc/init.d/openclash start >/dev/null 2>&1 || true
-        oum_err "Mihomo отклонил отдельный конфиг"
+    if [ "$started" -ne 1 ]; then
+        oum_err "OpenClash не загрузил выбранный профиль; выполняем откат"
+        oum_restore_source_transaction "$transaction" "$was_running"
         return 1
     fi
-    cp "$candidate" "$target" || {
-        /etc/init.d/openclash start >/dev/null 2>&1 || true
-        return 1
-    }
-    chmod 600 "$target"
-    /etc/init.d/openclash start >/dev/null 2>&1 || true
-    oum_ok "Создан $target"
-    oum_info "Он появится в OpenClash → Config File. Активный конфиг не переключался."
-    [ -n "$backup" ] && oum_info "Предыдущая версия: $backup"
+
+    for old_profile in $(oum_managed_profiles); do
+        [ "$old_profile" = "$profile" ] && continue
+        rm -f "$OPENCLASH_DIR/config/$old_profile" "$OPENCLASH_DIR/$old_profile"
+    done
+    for provider in "$OPENCLASH_DIR"/proxy_provider/oum-*.yaml; do
+        [ -f "$provider" ] && rm -f "$provider"
+    done
+    printf '%s\n' "$source_kind" > "$OUM_STATE_DIR/active_source"
+    printf '%s\n' "$target" > "$OUM_STATE_DIR/active_profile"
+    chmod 600 "$OUM_STATE_DIR/active_source" "$OUM_STATE_DIR/active_profile"
+    printf '%s\n' openclash > "$OUM_STATE_DIR/proxy_backend"
+    chmod 600 "$OUM_STATE_DIR/proxy_backend"
+    oum_discard_source_transaction "$transaction"
+    oum_log "active source replaced type=$source_kind profile=$profile"
+    oum_ok "$profile активирован; предыдущий OUM-источник удалён"
 }
 
-oum_install_provider() {
+oum_install_source() {
     mode="$1"
     input="$2"
-    provider_id="$3"
-    display_name="$4"
-    source_kind="$5"
+    display_name="$3"
+    source_kind="$4"
+    subscription_url="${5:-}"
+    oum_ensure_openclash || return 1
     oum_require_runtime || return 1
-    active="$(oum_openclash_config)" || { oum_err "Активный OpenClash YAML не найден"; return 1; }
     converter="$(oum_deploy_converter)" || return 1
-    mkdir -p "$OPENCLASH_DIR/proxy_provider"
-    provider_tmp="$OUM_TMP_DIR/${provider_id}.yaml"
-    provider_final="$OPENCLASH_DIR/proxy_provider/${provider_id}.yaml"
-    candidate="$OUM_TMP_DIR/openclash-candidate.yaml"
+    provider_tmp="$OUM_TMP_DIR/source.yaml"
+    candidate="$OUM_TMP_DIR/profile.yaml"
 
     case "$mode" in
         awg) ruby "$converter" awg "$input" "$provider_tmp" "$display_name" || return 1 ;;
@@ -662,56 +809,15 @@ oum_install_provider() {
         *) oum_err "Неизвестный тип источника"; return 1 ;;
     esac
     chmod 600 "$provider_tmp"
-    provider_backup=""
-    if [ -f "$provider_final" ]; then
-        provider_backup="$OUM_BACKUP_DIR/${provider_id}-$(date +%Y%m%d-%H%M%S).yaml"
-        cp "$provider_final" "$provider_backup"
-    fi
-    cp "$provider_tmp" "$provider_final" || return 1
-    chmod 600 "$provider_final"
-    relative_path="./proxy_provider/${provider_id}.yaml"
-    printf '%s\n' \
-        "Как подключить источник?" \
-        "1) Отдельный Config File (рекомендуется)" \
-        "2) Добавить в активный объединённый конфиг"
-    printf 'Выбор [1]: '
-    IFS= read -r config_mode
-    [ -n "$config_mode" ] || config_mode=1
-    case "$config_mode" in
-        1)
-            if ! ruby "$converter" standalone "$active" "$candidate" "$provider_tmp" "$source_kind" || ! oum_save_standalone_config "$candidate" "$source_kind"; then
-                if [ -n "$provider_backup" ]; then cp "$provider_backup" "$provider_final"; else rm -f "$provider_final"; fi
-                return 1
-            fi
-            # A standalone Config File contains its nodes inline and must not
-            # depend on a second file that OpenClash may clean up while switching.
-            rm -f "$provider_final"
-            ;;
-        2)
-            if ! ruby "$converter" attach "$active" "$candidate" "$provider_id" "$relative_path" "$source_kind" || ! oum_apply_openclash_candidate "$candidate" "$active"; then
-                if [ -n "$provider_backup" ]; then cp "$provider_backup" "$provider_final"; else rm -f "$provider_final"; fi
-                return 1
-            fi
-            case "$source_kind" in
-                subscription) group_name="SUBSCRIPTION" ;;
-                awg) group_name="AMNEZIA" ;;
-                reality) group_name="REALITY" ;;
-                *) group_name="OUM-SOURCES" ;;
-            esac
-            oum_ok "Источник добавлен в группу $group_name"
-            ;;
-        *)
-            if [ -n "$provider_backup" ]; then cp "$provider_backup" "$provider_final"; else rm -f "$provider_final"; fi
-            oum_err "Неверный режим"
-            return 1
-            ;;
-    esac
-    oum_log "provider installed id=$provider_id type=$source_kind mode=$config_mode"
+    ruby "$converter" standalone "$candidate" "$provider_tmp" "$source_kind" || return 1
+    chmod 600 "$candidate"
+    oum_activate_single_profile "$candidate" "$source_kind" "$subscription_url"
 }
 
 oum_import_subscription() {
     oum_header
     oum_prepare_dirs
+    oum_warn "Новый профиль Subscription полностью заменит текущий OUM-источник"
     url="$(oum_read_secret 'URL подписки (ввод скрыт): ')"
     [ -n "$url" ] || { oum_warn "Отменено"; return; }
     case "$url" in http://*|https://*) ;; *) unset url; oum_err "Нужен URL http(s)"; return 1 ;; esac
@@ -721,15 +827,17 @@ oum_import_subscription() {
         oum_err "Не удалось загрузить подписку"
         return 1
     fi
-    unset url
     chmod 600 "$input"
-    provider_id="$(oum_provider_id subscription)"
-    oum_install_provider subscription "$input" "$provider_id" "" subscription
+    oum_install_source subscription "$input" "" subscription "$url"
+    result=$?
+    unset url
+    return "$result"
 }
 
 oum_import_uri_text() {
     oum_header
     oum_prepare_dirs
+    oum_warn "Новый профиль Proxy полностью заменит текущий OUM-источник"
     oum_info "Вставьте одну или несколько ссылок VLESS/Hysteria2"
     oum_info "После последней строки введите одну точку: ."
     input="$OUM_TMP_DIR/uris.input"
@@ -740,25 +848,25 @@ oum_import_uri_text() {
         printf '%s\n' "$line" >> "$input"
     done
     [ -s "$input" ] || { oum_warn "Ничего не введено"; return; }
-    provider_id="$(oum_provider_id manual)"
-    oum_install_provider uris "$input" "$provider_id" "" reality
+    oum_install_source uris "$input" "" reality
 }
 
 oum_import_awg_file() {
     oum_header
+    oum_warn "Новый профиль AWG_Tunnel полностью заменит текущий OUM-источник"
     printf 'Путь к AWG .conf: '
     IFS= read -r input
     [ -f "$input" ] || { oum_err "Файл не найден"; return 1; }
-    printf 'Название ноды [OUM-AWG]: '
+    printf 'Название ноды [AWG_Node]: '
     IFS= read -r display_name
-    [ -n "$display_name" ] || display_name="OUM-AWG"
-    provider_id="$(oum_provider_id awg)"
-    oum_install_provider awg "$input" "$provider_id" "$display_name" awg
+    [ -n "$display_name" ] || display_name="AWG_Node"
+    oum_install_source awg "$input" "$display_name" awg
 }
 
 oum_import_awg_text() {
     oum_header
     oum_prepare_dirs
+    oum_warn "Новый профиль AWG_Tunnel полностью заменит текущий OUM-источник"
     oum_info "Вставьте AWG-конфиг целиком; после него введите одну точку: ."
     input="$OUM_TMP_DIR/awg.input"
     : > "$input"
@@ -768,44 +876,42 @@ oum_import_awg_text() {
         printf '%s\n' "$line" >> "$input"
     done
     [ -s "$input" ] || { oum_warn "Ничего не введено"; return; }
-    printf 'Название ноды [OUM-AWG]: '
+    printf 'Название ноды [AWG_Node]: '
     IFS= read -r display_name
-    [ -n "$display_name" ] || display_name="OUM-AWG"
-    provider_id="$(oum_provider_id awg)"
-    oum_install_provider awg "$input" "$provider_id" "$display_name" awg
+    [ -n "$display_name" ] || display_name="AWG_Node"
+    oum_install_source awg "$input" "$display_name" awg
 }
 
-oum_list_sources() {
+oum_show_active_source() {
     oum_header
-    oum_info "Локальные OUM providers (содержимое и ключи скрыты):"
-    found=0
-    for provider in "$OPENCLASH_DIR"/proxy_provider/oum-*.yaml; do
-        [ -f "$provider" ] || continue
-        found=1
-        printf ' • %s\n' "$(basename "$provider")"
+    source_kind="$(sed -n '1p' "$OUM_STATE_DIR/active_source" 2>/dev/null)"
+    profile="$(uci -q get openclash.config.config_path 2>/dev/null)"
+    runtime=""
+    for managed in Subscription.yaml AWG_Tunnel.yaml Proxy.yaml; do
+        pgrep -f "/etc/openclash/$managed" >/dev/null 2>&1 && runtime="$managed"
     done
-    [ "$found" -eq 1 ] || printf 'Пока нет источников.\n'
-    printf '\nОтдельные Config Files:\n'
-    found=0
-    for config_file in "$OPENCLASH_DIR"/config/oum-*.yaml; do
-        [ -f "$config_file" ] || continue
-        found=1
-        printf ' • %s\n' "$(basename "$config_file")"
-    done
-    [ "$found" -eq 1 ] || printf 'Пока нет отдельных конфигов.\n'
+    printf 'Источник: %s\n' "${source_kind:-не настроен}"
+    printf 'Выбранный профиль: %s\n' "${profile:-не настроен}"
+    printf 'Загружен ядром: %s\n' "${runtime:-не запущен}"
+    if [ -n "$profile" ] && [ "$(basename "$profile")" = "$runtime" ]; then
+        oum_ok "Выбранный и запущенный профили совпадают"
+    elif [ -n "$profile" ]; then
+        oum_err "Выбранный профиль не совпадает с запущенным"
+    fi
 }
 
 oum_sources_menu() {
     while true; do
         oum_header
         printf '%s\n' \
-            "=== Подключения и ноды ===" \
-            "1) Добавить подписку URL" \
-            "2) Вставить VLESS/Hysteria2 ссылку" \
-            "3) Вставить AWG-конфиг" \
-            "4) Импортировать AWG из файла (расширенный вариант)" \
-            "5) Показать источники и Config Files" \
+            "=== Единственное активное подключение ===" \
+            "1) Subscription — добавить подписку URL" \
+            "2) Proxy — вставить VLESS/Hysteria2/Reality" \
+            "3) AWG_Tunnel — вставить конфиг" \
+            "4) AWG_Tunnel — импортировать файл" \
+            "5) Показать активный источник" \
             "" \
+            "Добавление нового источника заменяет предыдущий." \
             "Enter — Назад"
         printf 'Выбор: '
         IFS= read -r choice
@@ -815,7 +921,7 @@ oum_sources_menu() {
             2) oum_import_uri_text; oum_pause ;;
             3) oum_import_awg_text; oum_pause ;;
             4) oum_import_awg_file; oum_pause ;;
-            5) oum_list_sources; oum_pause ;;
+            5) oum_show_active_source; oum_pause ;;
             *) oum_err "Неверный выбор"; oum_pause ;;
         esac
     done
@@ -892,10 +998,13 @@ oum_diagnostics() {
     free -m 2>/dev/null || true
     printf '\nХранилище:\n'
     df -h /overlay 2>/dev/null || true
-    printf '\nOUM providers:\n'
-    for provider in "$OPENCLASH_DIR"/proxy_provider/oum-*.yaml; do
-        [ -f "$provider" ] && printf ' • %s\n' "$(basename "$provider")"
+    printf '\nOUM active source:\n'
+    printf ' • %s\n' "$(sed -n '1p' "$OUM_STATE_DIR/active_source" 2>/dev/null || echo 'не настроен')"
+    runtime=""
+    for profile_name in Subscription.yaml AWG_Tunnel.yaml Proxy.yaml; do
+        pgrep -f "/etc/openclash/$profile_name" >/dev/null 2>&1 && runtime="$profile_name"
     done
+    printf ' • загружен ядром: %s\n' "${runtime:-не запущен}"
     printf '\nПоследние события OUM (без секретов):\n'
     tail -n 15 /var/log/oum/oum.log 2>/dev/null || printf 'Лог пока пуст.\n'
 }
@@ -943,9 +1052,10 @@ oum_quick_setup() {
         oum_header
         printf '%s\n' \
             "=== Быстрая настройка ===" \
-            "1) Настроить Wi-Fi" \
-            "2) Добавить подключение или подписку" \
-            "3) Проверить OpenClash" \
+            "1) Установить или проверить OpenClash" \
+            "2) Выбрать единственное подключение" \
+            "3) Настроить Wi-Fi" \
+            "4) Проверить активный профиль" \
             "" \
             "Ключи вводятся только в момент добавления источника." \
             "Enter — Назад"
@@ -953,9 +1063,10 @@ oum_quick_setup() {
         IFS= read -r choice
         case "$choice" in
             "") break ;;
-            1) oum_wifi_setup; oum_pause ;;
+            1) oum_install_openclash; oum_pause ;;
             2) oum_sources_menu ;;
-            3) oum_validate_active_config; oum_pause ;;
+            3) oum_wifi_setup; oum_pause ;;
+            4) oum_validate_active_config; oum_pause ;;
             *) oum_err "Неверный выбор"; oum_pause ;;
         esac
     done
@@ -963,8 +1074,10 @@ oum_quick_setup() {
 
 oum_routing_menu() {
     oum_header
-    oum_info "Профиль массовой маршрутизации будет подключён следующим тестовым изменением."
-    oum_info "Текущая версия отвечает только за безопасный импорт источников и нод."
+    oum_info "Массовая маршрутизация встроена в активный профиль."
+    oum_info "Заблокированные списки идут через PROXY, остальное — напрямую."
+    oum_info "Samsung и Google Play — DIRECT, Meta управляется группой META."
+    oum_info "Правила блокировки торрентов не добавляются."
     oum_pause
 }
 
@@ -1014,6 +1127,8 @@ oum_main_menu() {
     done
 }
 
-oum_check_root
-oum_prepare_dirs
-oum_main_menu
+if [ "${OUM_LIBRARY_MODE:-0}" != 1 ]; then
+    oum_check_root
+    oum_prepare_dirs
+    oum_main_menu
+fi

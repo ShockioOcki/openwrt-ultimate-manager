@@ -20,10 +20,13 @@ oum_diagnostics() {
     free -m 2>/dev/null || true
     printf '\nХранилище:\n'
     df -h /overlay 2>/dev/null || true
-    printf '\nOUM providers:\n'
-    for provider in "$OPENCLASH_DIR"/proxy_provider/oum-*.yaml; do
-        [ -f "$provider" ] && printf ' • %s\n' "$(basename "$provider")"
+    printf '\nOUM active source:\n'
+    printf ' • %s\n' "$(sed -n '1p' "$OUM_STATE_DIR/active_source" 2>/dev/null || echo 'не настроен')"
+    runtime=""
+    for profile_name in Subscription.yaml AWG_Tunnel.yaml Proxy.yaml; do
+        pgrep -f "/etc/openclash/$profile_name" >/dev/null 2>&1 && runtime="$profile_name"
     done
+    printf ' • загружен ядром: %s\n' "${runtime:-не запущен}"
     printf '\nПоследние события OUM (без секретов):\n'
     tail -n 15 /var/log/oum/oum.log 2>/dev/null || printf 'Лог пока пуст.\n'
 }

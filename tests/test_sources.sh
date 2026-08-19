@@ -24,6 +24,9 @@ ruby -ryaml -e '
   vless = nodes.find { |node| node["type"] == "vless" }
   abort "Reality missing" unless vless.dig("reality-opts", "short-id") == "0102030405060708"
   abort "flow missing" unless vless["flow"] == "xtls-rprx-vision"
+  abort "encryption missing" unless vless["encryption"] == "none"
+  abort "ALPN missing" unless vless["alpn"] == ["h2", "http/1.1"]
+  abort "insecure flag missing" unless vless["skip-cert-verify"] == true
   abort "Hysteria2 missing" unless nodes.any? { |node| node["type"] == "hysteria2" }
 ' "$TMP/nodes.yaml"
 
@@ -36,27 +39,27 @@ ruby -ryaml -e '
 ruby "$ROOT/helpers/source_converter.rb" uris "$ROOT/tests/fixtures/subscription-base64.txt" "$TMP/subscription.yaml"
 ruby -ryaml -e 'abort "base64 subscription failed" unless YAML.load_file(ARGV[0]).fetch("proxies").length == 2' "$TMP/subscription.yaml"
 
-ruby "$ROOT/helpers/source_converter.rb" attach "$ROOT/tests/fixtures/openclash.yaml" "$TMP/attached.yaml" oum-fixture ./proxy_provider/oum-fixture.yaml reality
-ruby -ryaml -e '
-  config = YAML.load_file(ARGV[0])
-  abort "provider missing" unless config.dig("proxy-providers", "oum-fixture", "type") == "file"
-  group = config.fetch("proxy-groups").find { |item| item["name"] == "REALITY" }
-  abort "source group missing" unless group && group.fetch("use").include?("oum-fixture")
-' "$TMP/attached.yaml"
-
-ruby "$ROOT/helpers/source_converter.rb" standalone "$ROOT/tests/fixtures/openclash.yaml" "$TMP/standalone.yaml" "$TMP/awg.yaml" awg
+ruby "$ROOT/helpers/source_converter.rb" standalone "$TMP/standalone.yaml" "$TMP/awg.yaml" awg
 ruby -ryaml -e '
   config = YAML.load_file(ARGV[0])
   abort "standalone proxies were not embedded" unless config.fetch("proxies").length == 1
   abort "standalone still depends on a provider" if config.key?("proxy-providers")
   groups = config.fetch("proxy-groups")
-  abort "AMNEZIA group missing" unless groups.any? { |item| item["name"] == "AMNEZIA" }
-  abort "PROXY does not select AMNEZIA" unless groups.find { |item| item["name"] == "PROXY" }.fetch("proxies").include?("AMNEZIA")
+  abort "AWG_Tunnel group missing" unless groups.any? { |item| item["name"] == "AWG_Tunnel" }
+  abort "PROXY does not select AWG_Tunnel" unless groups.find { |item| item["name"] == "PROXY" }.fetch("proxies").include?("AWG_Tunnel")
+  abort "unexpected AWG node rename" unless config.fetch("proxies").first["name"] == "OUM-AWG"
   abort "mass rule providers missing" unless config.fetch("rule-providers").key?("ru-blocked-domains")
   abort "mass routing missing" unless config.fetch("rules").include?("RULE-SET,google-play,DIRECT")
   abort "Samsung must be direct" unless config.fetch("rules").include?("RULE-SET,samsung,DIRECT")
   abort "Meta must use its selector" unless config.fetch("rules").include?("RULE-SET,meta-domains,META")
   abort "unexpected torrent block" if config.fetch("rules").any? { |rule| rule.downcase.include?("torrent") }
 ' "$TMP/standalone.yaml"
+
+ruby "$ROOT/helpers/source_converter.rb" awg "$ROOT/tests/fixtures/awg-v2.conf" "$TMP/awg-collision.yaml" AWG_Tunnel
+ruby "$ROOT/helpers/source_converter.rb" standalone "$TMP/collision-profile.yaml" "$TMP/awg-collision.yaml" awg
+ruby -ryaml -e '
+  config = YAML.load_file(ARGV[0])
+  abort "group/node collision remains" if config.fetch("proxies").first["name"] == "AWG_Tunnel"
+' "$TMP/collision-profile.yaml"
 
 printf 'source converter tests: OK\n'

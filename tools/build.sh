@@ -10,6 +10,7 @@ mkdir -p "$ROOT/dist"
     cat "$ROOT/src/header.sh"
     cat "$ROOT/src/core/common.sh"
     cat "$ROOT/src/core/platform.sh"
+    cat "$ROOT/src/modules/install.sh"
     printf '%s\n' 'oum_write_source_converter() {' '    destination="$1"' "    cat > \"\$destination\" <<'OUM_RUBY_EOF'"
     cat "$ROOT/helpers/source_converter.rb"
     printf '%s\n' 'OUM_RUBY_EOF' '}'

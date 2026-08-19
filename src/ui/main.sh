@@ -3,9 +3,10 @@ oum_quick_setup() {
         oum_header
         printf '%s\n' \
             "=== Быстрая настройка ===" \
-            "1) Настроить Wi-Fi" \
-            "2) Добавить подключение или подписку" \
-            "3) Проверить OpenClash" \
+            "1) Установить или проверить OpenClash" \
+            "2) Выбрать единственное подключение" \
+            "3) Настроить Wi-Fi" \
+            "4) Проверить активный профиль" \
             "" \
             "Ключи вводятся только в момент добавления источника." \
             "Enter — Назад"
@@ -13,9 +14,10 @@ oum_quick_setup() {
         IFS= read -r choice
         case "$choice" in
             "") break ;;
-            1) oum_wifi_setup; oum_pause ;;
+            1) oum_install_openclash; oum_pause ;;
             2) oum_sources_menu ;;
-            3) oum_validate_active_config; oum_pause ;;
+            3) oum_wifi_setup; oum_pause ;;
+            4) oum_validate_active_config; oum_pause ;;
             *) oum_err "Неверный выбор"; oum_pause ;;
         esac
     done
@@ -23,8 +25,10 @@ oum_quick_setup() {
 
 oum_routing_menu() {
     oum_header
-    oum_info "Профиль массовой маршрутизации будет подключён следующим тестовым изменением."
-    oum_info "Текущая версия отвечает только за безопасный импорт источников и нод."
+    oum_info "Массовая маршрутизация встроена в активный профиль."
+    oum_info "Заблокированные списки идут через PROXY, остальное — напрямую."
+    oum_info "Samsung и Google Play — DIRECT, Meta управляется группой META."
+    oum_info "Правила блокировки торрентов не добавляются."
     oum_pause
 }
 
@@ -74,6 +78,8 @@ oum_main_menu() {
     done
 }
 
-oum_check_root
-oum_prepare_dirs
-oum_main_menu
+if [ "${OUM_LIBRARY_MODE:-0}" != 1 ]; then
+    oum_check_root
+    oum_prepare_dirs
+    oum_main_menu
+fi

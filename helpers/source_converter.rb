@@ -5,9 +5,9 @@ require 'yaml'
 # Keep the converter self-contained and depend only on ruby-yaml (Psych).
 ShareURI = Struct.new(:scheme, :user, :host, :port, :query, :fragment)
 SOURCE_GROUPS = {
-  'subscription' => 'SUBSCRIPTION',
-  'awg' => 'AMNEZIA',
-  'reality' => 'REALITY'
+  'subscription' => 'Subscription',
+  'awg' => 'AWG_Tunnel',
+  'reality' => 'Proxy_Nodes'
 }.freeze
 
 MASS_RULE_PROVIDER_SOURCES = [
@@ -138,11 +138,15 @@ def parse_vless(uri, index)
     'network' => network,
     'udp' => true
   }
+  node['encryption'] = query['encryption'] unless query['encryption'].to_s.empty?
   node['flow'] = query['flow'] unless query['flow'].to_s.empty?
   node['packet-encoding'] = query['packetEncoding'] if query['packetEncoding']
   node['tls'] = true if %w[tls reality].include?(security)
   node['servername'] = query['sni'] unless query['sni'].to_s.empty?
   node['client-fingerprint'] = query['fp'] unless query['fp'].to_s.empty?
+  node['alpn'] = query['alpn'].split(',').map(&:strip).reject(&:empty?) unless query['alpn'].to_s.empty?
+  insecure = query['allowInsecure'] || query['allow_insecure'] || query['insecure']
+  node['skip-cert-verify'] = %w[1 true yes].include?(insecure.to_s.downcase) unless insecure.nil?
   if security == 'reality'
     abort 'VLESS Reality URI is missing pbk' if query['pbk'].to_s.empty?
     reality = {'public-key' => query['pbk']}
@@ -160,10 +164,16 @@ def parse_vless(uri, index)
     options = {}
     options['path'] = query['path'] if query['path']
     options['mode'] = query['mode'] if query['mode']
+    options['host'] = query['host'] if query['host']
     begin
-      options['extra'] = load_yaml_text(query['extra']) if query['extra']
+      extra = load_yaml_text(query['extra']) if query['extra']
+      if extra.is_a?(Hash)
+        options['x-padding-bytes'] = extra['xPaddingBytes'] if extra['xPaddingBytes']
+        options['no-grpc-header'] = extra['noGRPCHeader'] if extra.key?('noGRPCHeader')
+        options['headers'] = extra['headers'] if extra['headers'].is_a?(Hash)
+      end
     rescue StandardError
-      options['extra'] = query['extra']
+      warn 'WARNING: malformed XHTTP extra settings were ignored'
     end
     node['xhttp-opts'] = options
   when 'tcp'
@@ -184,7 +194,9 @@ def parse_hysteria2(uri, index)
     'password' => uri.user.to_s
   }
   node['sni'] = query['sni'] unless query['sni'].to_s.empty?
-  node['skip-cert-verify'] = %w[1 true].include?(query['insecure'].to_s.downcase) if query.key?('insecure')
+  insecure = query['allowInsecure'] || query['allow_insecure'] || query['insecure']
+  node['skip-cert-verify'] = %w[1 true yes].include?(insecure.to_s.downcase) unless insecure.nil?
+  node['alpn'] = query['alpn'].split(',').map(&:strip).reject(&:empty?) unless query['alpn'].to_s.empty?
   node
 end
 
@@ -317,24 +329,6 @@ def convert_awg(input, name)
   {'proxies' => [node]}
 end
 
-def groups(config)
-  config['proxy-groups'] = [] unless config['proxy-groups'].is_a?(Array)
-  config['proxy-groups']
-end
-
-def ensure_group(config, name, type = 'select')
-  group = groups(config).find { |item| item.is_a?(Hash) && item['name'] == name }
-  return group if group
-  group = {'name' => name, 'type' => type}
-  groups(config) << group
-  group
-end
-
-def append_unique(hash, key, value)
-  hash[key] = [] unless hash[key].is_a?(Array)
-  hash[key] << value unless hash[key].include?(value)
-end
-
 def source_group_name(kind)
   SOURCE_GROUPS.fetch(kind, 'OUM-SOURCES')
 end
@@ -350,29 +344,48 @@ def apply_mass_routing(config)
   config
 end
 
-def attach_provider(config, id, path, kind)
-  abort 'invalid provider id' unless id.match?(/\A[a-z0-9][a-z0-9_-]*\z/)
-  config['proxy-providers'] = {} unless config['proxy-providers'].is_a?(Hash)
-  config['proxy-providers'][id] = {
-    'type' => 'file',
-    'path' => path,
-    'health-check' => {'enable' => true, 'url' => 'https://www.gstatic.com/generate_204', 'interval' => 600, 'lazy' => true}
+def base_config
+  {
+    'mixed-port' => 7890,
+    'allow-lan' => true,
+    'bind-address' => '*',
+    'mode' => 'rule',
+    'log-level' => 'info',
+    'ipv6' => false,
+    'external-controller' => '127.0.0.1:9090',
+    'profile' => {'store-selected' => true, 'store-fake-ip' => true},
+    'dns' => {
+      'enable' => true,
+      'ipv6' => false,
+      'enhanced-mode' => 'fake-ip',
+      'fake-ip-range' => '198.18.0.1/16',
+      'fake-ip-filter' => ['*.lan', '*.local'],
+      'default-nameserver' => ['1.1.1.1', '8.8.8.8'],
+      'nameserver' => ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query']
+    }
   }
-  source_group = ensure_group(config, source_group_name(kind))
-  source_group['type'] = 'select'
-  append_unique(source_group, 'use', id)
-  proxy_group = ensure_group(config, 'PROXY')
-  append_unique(proxy_group, 'proxies', source_group_name(kind))
-  config
 end
 
-
-def standalone_config(config, provider_file, kind)
+def single_profile(provider_file, kind)
+  config = base_config
   group_name = source_group_name(kind)
   nodes = load_yaml(provider_file).fetch('proxies', [])
   abort 'standalone source contains no proxies' unless nodes.is_a?(Array) && !nodes.empty?
-  names = nodes.map { |node| node['name'] }.compact
-  abort 'standalone source contains unnamed proxies' unless names.length == nodes.length
+  reserved = ['PROXY', group_name, 'AUTO', 'META', 'DIRECT', 'REJECT']
+  used = reserved.each_with_object({}) { |name, out| out[name] = true }
+  nodes.each do |node|
+    original = node['name'].to_s.strip
+    abort 'standalone source contains unnamed proxies' if original.empty?
+    candidate = original
+    suffix = 1
+    while used[candidate]
+      candidate = "#{original} Node #{suffix}"
+      suffix += 1
+    end
+    node['name'] = candidate
+    used[candidate] = true
+  end
+  names = nodes.map { |node| node['name'] }
   config['proxies'] = nodes
   config.delete('proxy-providers')
   config['proxy-groups'] = [
@@ -398,14 +411,10 @@ when 'subscription'
   input, output = ARGV
   abort 'usage: subscription INPUT OUTPUT' unless input && output
   write_yaml(convert_uri_list(input, filter_subscription: true), output)
-when 'attach'
-  input, output, id, path, kind = ARGV
-  abort 'usage: attach CONFIG OUTPUT ID PATH KIND' unless input && output && id && path && kind
-  write_yaml(attach_provider(load_yaml(input), id, path, kind), output)
 when 'standalone'
-  input, output, provider_file, kind = ARGV
-  abort 'usage: standalone CONFIG OUTPUT PROVIDER_FILE KIND' unless input && output && provider_file && kind
-  write_yaml(standalone_config(load_yaml(input), provider_file, kind), output)
+  output, provider_file, kind = ARGV
+  abort 'usage: standalone OUTPUT PROVIDER_FILE KIND' unless output && provider_file && kind
+  write_yaml(single_profile(provider_file, kind), output)
 else
-  abort 'modes: awg, uris, subscription, attach, standalone'
+  abort 'modes: awg, uris, subscription, standalone'
 end
