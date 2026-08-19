@@ -4,6 +4,11 @@ require 'yaml'
 # OpenWrt's compact Ruby package normally ships without uri/cgi/base64/json.
 # Keep the converter self-contained and depend only on ruby-yaml (Psych).
 ShareURI = Struct.new(:scheme, :user, :host, :port, :query, :fragment)
+SOURCE_GROUPS = {
+  'subscription' => 'SUBSCRIPTION',
+  'awg' => 'AMNEZIA',
+  'reality' => 'REALITY'
+}.freeze
 
 def percent_decode(value)
   value.to_s.tr('+', ' ').gsub(/%([0-9a-fA-F]{2})/) { Regexp.last_match(1).to_i(16).chr }.force_encoding('UTF-8')
@@ -141,8 +146,16 @@ rescue ArgumentError
   abort 'input is neither a URI list nor a base64 URI subscription'
 end
 
-def convert_uri_list(input)
+def excluded_subscription_name?(name)
+  normalized = name.to_s.downcase
+  return true if name.include?('⬇') || name.include?('🇪🇺')
+  return true if %w[lte мобильный авто].any? { |token| normalized.include?(token) }
+  normalized.match?(/(?:\A|[\s_|+\-])ss(?:\z|[\s_|+\-])/)
+end
+
+def convert_uri_list(input, filter_subscription: false)
   nodes = []
+  filtered = 0
   decode_uri_lines(File.read(input)).each_with_index do |line, index|
     uri = parse_share_uri(line)
     node = case uri.scheme
@@ -152,11 +165,16 @@ def convert_uri_list(input)
              warn "WARNING: unsupported URI scheme #{uri.scheme.inspect}; node skipped"
              nil
            end
-    nodes << node if node
+    if node && filter_subscription && excluded_subscription_name?(node['name'])
+      filtered += 1
+    elsif node
+      nodes << node
+    end
   rescue ArgumentError => error
     warn "WARNING: malformed node #{index + 1} skipped: #{error.message}"
   end
   abort 'no supported nodes found' if nodes.empty?
+  warn "INFO: filtered #{filtered} subscription nodes by name" if filtered.positive?
   {'proxies' => nodes}
 end
 
@@ -266,7 +284,11 @@ def append_unique(hash, key, value)
   hash[key] << value unless hash[key].include?(value)
 end
 
-def attach_provider(config, id, path)
+def source_group_name(kind)
+  SOURCE_GROUPS.fetch(kind, 'OUM-SOURCES')
+end
+
+def attach_provider(config, id, path, kind)
   abort 'invalid provider id' unless id.match?(/\A[a-z0-9][a-z0-9_-]*\z/)
   config['proxy-providers'] = {} unless config['proxy-providers'].is_a?(Hash)
   config['proxy-providers'][id] = {
@@ -274,11 +296,31 @@ def attach_provider(config, id, path)
     'path' => path,
     'health-check' => {'enable' => true, 'url' => 'https://www.gstatic.com/generate_204', 'interval' => 600, 'lazy' => true}
   }
-  source_group = ensure_group(config, 'OUM-SOURCES')
+  source_group = ensure_group(config, source_group_name(kind))
   source_group['type'] = 'select'
   append_unique(source_group, 'use', id)
   proxy_group = ensure_group(config, 'PROXY')
-  append_unique(proxy_group, 'proxies', 'OUM-SOURCES')
+  append_unique(proxy_group, 'proxies', source_group_name(kind))
+  config
+end
+
+
+def standalone_config(config, id, path, kind)
+  group_name = source_group_name(kind)
+  config['proxies'] = []
+  config['proxy-providers'] = {
+    id => {
+      'type' => 'file',
+      'path' => path,
+      'health-check' => {'enable' => true, 'url' => 'https://www.gstatic.com/generate_204', 'interval' => 600, 'lazy' => true}
+    }
+  }
+  config['proxy-groups'] = [
+    {'name' => 'PROXY', 'type' => 'select', 'proxies' => [group_name, 'AUTO', 'DIRECT']},
+    {'name' => group_name, 'type' => 'select', 'use' => [id]},
+    {'name' => 'AUTO', 'type' => 'url-test', 'use' => [id], 'url' => 'https://www.gstatic.com/generate_204', 'interval' => 300},
+    {'name' => 'META', 'type' => 'select', 'proxies' => ['PROXY', 'DIRECT']}
+  ]
   config
 end
 
@@ -292,10 +334,18 @@ when 'uris'
   input, output = ARGV
   abort 'usage: uris INPUT OUTPUT' unless input && output
   write_yaml(convert_uri_list(input), output)
+when 'subscription'
+  input, output = ARGV
+  abort 'usage: subscription INPUT OUTPUT' unless input && output
+  write_yaml(convert_uri_list(input, filter_subscription: true), output)
 when 'attach'
-  input, output, id, path = ARGV
-  abort 'usage: attach CONFIG OUTPUT ID PATH' unless input && output && id && path
-  write_yaml(attach_provider(load_yaml(input), id, path), output)
+  input, output, id, path, kind = ARGV
+  abort 'usage: attach CONFIG OUTPUT ID PATH KIND' unless input && output && id && path && kind
+  write_yaml(attach_provider(load_yaml(input), id, path, kind), output)
+when 'standalone'
+  input, output, id, path, kind = ARGV
+  abort 'usage: standalone CONFIG OUTPUT ID PATH KIND' unless input && output && id && path && kind
+  write_yaml(standalone_config(load_yaml(input), id, path, kind), output)
 else
-  abort 'modes: awg, uris, attach'
+  abort 'modes: awg, uris, subscription, attach, standalone'
 end

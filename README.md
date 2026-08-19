@@ -26,8 +26,12 @@ The test build currently supports:
 - direct VLESS Reality and Hysteria2 links;
 - AmneziaWG v1/v2/v3 `.conf` import;
 - AWG upload by path or direct terminal paste;
+- single-dot (`.`) terminator for pasted AWG and URI input;
 - deliberate omission of DNS supplied by an AWG profile;
-- local Mihomo providers and the `OUM-SOURCES` proxy group;
+- local Mihomo providers without an external conversion service;
+- separate `SUBSCRIPTION`, `AMNEZIA`, and `REALITY` source groups;
+- optional standalone Config Files selectable from the OpenClash dashboard;
+- local filtering of service/LTE/mobile/auto subscription entries;
 - Mihomo validation, backup and automatic rollback;
 - basic Wi-Fi SSID/password configuration;
 - redacted diagnostics.
@@ -39,3 +43,4 @@ The files under `tests/fixtures/` contain synthetic data only. This is a test
 build and should be exercised with disposable credentials before production.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module map and roadmap.
+See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for OpenClash/Mihomo log notes.

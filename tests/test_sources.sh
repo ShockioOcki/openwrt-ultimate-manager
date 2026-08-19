@@ -27,15 +27,30 @@ ruby -ryaml -e '
   abort "Hysteria2 missing" unless nodes.any? { |node| node["type"] == "hysteria2" }
 ' "$TMP/nodes.yaml"
 
+ruby "$ROOT/helpers/source_converter.rb" subscription "$ROOT/tests/fixtures/nodes-filter.txt" "$TMP/filtered.yaml"
+ruby -ryaml -e '
+  nodes = YAML.load_file(ARGV[0]).fetch("proxies")
+  abort "subscription node filter failed" unless nodes.map { |node| node["name"] } == ["KEEP"]
+' "$TMP/filtered.yaml"
+
 ruby "$ROOT/helpers/source_converter.rb" uris "$ROOT/tests/fixtures/subscription-base64.txt" "$TMP/subscription.yaml"
 ruby -ryaml -e 'abort "base64 subscription failed" unless YAML.load_file(ARGV[0]).fetch("proxies").length == 2' "$TMP/subscription.yaml"
 
-ruby "$ROOT/helpers/source_converter.rb" attach "$ROOT/tests/fixtures/openclash.yaml" "$TMP/attached.yaml" oum-fixture ./proxy_provider/oum-fixture.yaml
+ruby "$ROOT/helpers/source_converter.rb" attach "$ROOT/tests/fixtures/openclash.yaml" "$TMP/attached.yaml" oum-fixture ./proxy_provider/oum-fixture.yaml reality
 ruby -ryaml -e '
   config = YAML.load_file(ARGV[0])
   abort "provider missing" unless config.dig("proxy-providers", "oum-fixture", "type") == "file"
-  group = config.fetch("proxy-groups").find { |item| item["name"] == "OUM-SOURCES" }
+  group = config.fetch("proxy-groups").find { |item| item["name"] == "REALITY" }
   abort "source group missing" unless group && group.fetch("use").include?("oum-fixture")
 ' "$TMP/attached.yaml"
+
+ruby "$ROOT/helpers/source_converter.rb" standalone "$ROOT/tests/fixtures/openclash.yaml" "$TMP/standalone.yaml" oum-awg ./proxy_provider/oum-awg.yaml awg
+ruby -ryaml -e '
+  config = YAML.load_file(ARGV[0])
+  abort "standalone provider isolation failed" unless config.fetch("proxy-providers").keys == ["oum-awg"]
+  groups = config.fetch("proxy-groups")
+  abort "AMNEZIA group missing" unless groups.any? { |item| item["name"] == "AMNEZIA" }
+  abort "PROXY does not select AMNEZIA" unless groups.find { |item| item["name"] == "PROXY" }.fetch("proxies").include?("AMNEZIA")
+' "$TMP/standalone.yaml"
 
 printf 'source converter tests: OK\n'

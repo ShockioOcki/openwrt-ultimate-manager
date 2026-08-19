@@ -36,11 +36,25 @@ subscription URL ─┐
 VLESS/Hysteria URI ┼─> source_converter.rb ─> local Mihomo provider
 AWG .conf ─────────┘                              │
                                                   v
-                              OpenClash group OUM-SOURCES
+                   OpenClash source groups or standalone Config Files
 ```
 
 The AWG converter deliberately ignores the `DNS` field. Router and OpenClash
 DNS policy remains independent from tunnel credentials.
+
+Subscription node names containing `⬇`, `LTE`, `🇪🇺`, `Мобильный`, the
+standalone token `SS`, or `Авто` are filtered locally. Directly pasted links
+are not filtered.
+
+Each imported source can either be attached to the active combined config or
+written as a standalone OpenClash Config File:
+
+- `oum-subscription.yaml` with group `SUBSCRIPTION`;
+- `oum-amnezia.yaml` with group `AMNEZIA`;
+- `oum-reality.yaml` with group `REALITY`.
+
+Standalone files appear in OpenClash's Config File selector and do not switch
+the active configuration automatically.
 
 ## Secret handling
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Generated from modular sources. Do not edit dist/oum-test.sh directly.
-OUM_VERSION="9.0.0-test.1"
+OUM_VERSION="9.0.0-test.2"
 OUM_STATE_DIR="/etc/oum"
 OUM_BACKUP_DIR="/root/oum-backups"
 OUM_TMP_DIR="/tmp/oum.$$"
@@ -144,6 +144,11 @@ require 'yaml'
 # OpenWrt's compact Ruby package normally ships without uri/cgi/base64/json.
 # Keep the converter self-contained and depend only on ruby-yaml (Psych).
 ShareURI = Struct.new(:scheme, :user, :host, :port, :query, :fragment)
+SOURCE_GROUPS = {
+  'subscription' => 'SUBSCRIPTION',
+  'awg' => 'AMNEZIA',
+  'reality' => 'REALITY'
+}.freeze
 
 def percent_decode(value)
   value.to_s.tr('+', ' ').gsub(/%([0-9a-fA-F]{2})/) { Regexp.last_match(1).to_i(16).chr }.force_encoding('UTF-8')
@@ -281,8 +286,16 @@ rescue ArgumentError
   abort 'input is neither a URI list nor a base64 URI subscription'
 end
 
-def convert_uri_list(input)
+def excluded_subscription_name?(name)
+  normalized = name.to_s.downcase
+  return true if name.include?('⬇') || name.include?('🇪🇺')
+  return true if %w[lte мобильный авто].any? { |token| normalized.include?(token) }
+  normalized.match?(/(?:\A|[\s_|+\-])ss(?:\z|[\s_|+\-])/)
+end
+
+def convert_uri_list(input, filter_subscription: false)
   nodes = []
+  filtered = 0
   decode_uri_lines(File.read(input)).each_with_index do |line, index|
     uri = parse_share_uri(line)
     node = case uri.scheme
@@ -292,11 +305,16 @@ def convert_uri_list(input)
              warn "WARNING: unsupported URI scheme #{uri.scheme.inspect}; node skipped"
              nil
            end
-    nodes << node if node
+    if node && filter_subscription && excluded_subscription_name?(node['name'])
+      filtered += 1
+    elsif node
+      nodes << node
+    end
   rescue ArgumentError => error
     warn "WARNING: malformed node #{index + 1} skipped: #{error.message}"
   end
   abort 'no supported nodes found' if nodes.empty?
+  warn "INFO: filtered #{filtered} subscription nodes by name" if filtered.positive?
   {'proxies' => nodes}
 end
 
@@ -406,7 +424,11 @@ def append_unique(hash, key, value)
   hash[key] << value unless hash[key].include?(value)
 end
 
-def attach_provider(config, id, path)
+def source_group_name(kind)
+  SOURCE_GROUPS.fetch(kind, 'OUM-SOURCES')
+end
+
+def attach_provider(config, id, path, kind)
   abort 'invalid provider id' unless id.match?(/\A[a-z0-9][a-z0-9_-]*\z/)
   config['proxy-providers'] = {} unless config['proxy-providers'].is_a?(Hash)
   config['proxy-providers'][id] = {
@@ -414,11 +436,31 @@ def attach_provider(config, id, path)
     'path' => path,
     'health-check' => {'enable' => true, 'url' => 'https://www.gstatic.com/generate_204', 'interval' => 600, 'lazy' => true}
   }
-  source_group = ensure_group(config, 'OUM-SOURCES')
+  source_group = ensure_group(config, source_group_name(kind))
   source_group['type'] = 'select'
   append_unique(source_group, 'use', id)
   proxy_group = ensure_group(config, 'PROXY')
-  append_unique(proxy_group, 'proxies', 'OUM-SOURCES')
+  append_unique(proxy_group, 'proxies', source_group_name(kind))
+  config
+end
+
+
+def standalone_config(config, id, path, kind)
+  group_name = source_group_name(kind)
+  config['proxies'] = []
+  config['proxy-providers'] = {
+    id => {
+      'type' => 'file',
+      'path' => path,
+      'health-check' => {'enable' => true, 'url' => 'https://www.gstatic.com/generate_204', 'interval' => 600, 'lazy' => true}
+    }
+  }
+  config['proxy-groups'] = [
+    {'name' => 'PROXY', 'type' => 'select', 'proxies' => [group_name, 'AUTO', 'DIRECT']},
+    {'name' => group_name, 'type' => 'select', 'use' => [id]},
+    {'name' => 'AUTO', 'type' => 'url-test', 'use' => [id], 'url' => 'https://www.gstatic.com/generate_204', 'interval' => 300},
+    {'name' => 'META', 'type' => 'select', 'proxies' => ['PROXY', 'DIRECT']}
+  ]
   config
 end
 
@@ -432,12 +474,20 @@ when 'uris'
   input, output = ARGV
   abort 'usage: uris INPUT OUTPUT' unless input && output
   write_yaml(convert_uri_list(input), output)
+when 'subscription'
+  input, output = ARGV
+  abort 'usage: subscription INPUT OUTPUT' unless input && output
+  write_yaml(convert_uri_list(input, filter_subscription: true), output)
 when 'attach'
-  input, output, id, path = ARGV
-  abort 'usage: attach CONFIG OUTPUT ID PATH' unless input && output && id && path
-  write_yaml(attach_provider(load_yaml(input), id, path), output)
+  input, output, id, path, kind = ARGV
+  abort 'usage: attach CONFIG OUTPUT ID PATH KIND' unless input && output && id && path && kind
+  write_yaml(attach_provider(load_yaml(input), id, path, kind), output)
+when 'standalone'
+  input, output, id, path, kind = ARGV
+  abort 'usage: standalone CONFIG OUTPUT ID PATH KIND' unless input && output && id && path && kind
+  write_yaml(standalone_config(load_yaml(input), id, path, kind), output)
 else
-  abort 'modes: awg, uris, attach'
+  abort 'modes: awg, uris, subscription, attach, standalone'
 end
 OUM_RUBY_EOF
 }
@@ -496,11 +546,47 @@ oum_apply_openclash_candidate() {
     return 1
 }
 
+oum_save_standalone_config() {
+    candidate="$1"
+    source_kind="$2"
+    core="$(oum_mihomo_core)" || { oum_err "Ядро Mihomo не найдено"; return 1; }
+    case "$source_kind" in
+        subscription) config_name="oum-subscription.yaml" ;;
+        awg) config_name="oum-amnezia.yaml" ;;
+        reality) config_name="oum-reality.yaml" ;;
+        *) config_name="oum-source.yaml" ;;
+    esac
+    target="$OPENCLASH_DIR/config/$config_name"
+    mkdir -p "$OPENCLASH_DIR/config"
+    backup=""
+    if [ -f "$target" ]; then
+        backup="$OUM_BACKUP_DIR/${config_name%.yaml}-$(date +%Y%m%d-%H%M%S).yaml"
+        cp "$target" "$backup"
+    fi
+    oum_info "Проверяем отдельный конфиг; OpenClash будет кратко остановлен"
+    /etc/init.d/openclash stop >/dev/null 2>&1 || true
+    if ! "$core" -t -d "$OPENCLASH_DIR" -f "$candidate"; then
+        /etc/init.d/openclash start >/dev/null 2>&1 || true
+        oum_err "Mihomo отклонил отдельный конфиг"
+        return 1
+    fi
+    cp "$candidate" "$target" || {
+        /etc/init.d/openclash start >/dev/null 2>&1 || true
+        return 1
+    }
+    chmod 600 "$target"
+    /etc/init.d/openclash start >/dev/null 2>&1 || true
+    oum_ok "Создан $target"
+    oum_info "Он появится в OpenClash → Config File. Активный конфиг не переключался."
+    [ -n "$backup" ] && oum_info "Предыдущая версия: $backup"
+}
+
 oum_install_provider() {
     mode="$1"
     input="$2"
     provider_id="$3"
     display_name="$4"
+    source_kind="$5"
     oum_require_runtime || return 1
     active="$(oum_openclash_config)" || { oum_err "Активный OpenClash YAML не найден"; return 1; }
     converter="$(oum_deploy_converter)" || return 1
@@ -512,6 +598,7 @@ oum_install_provider() {
     case "$mode" in
         awg) ruby "$converter" awg "$input" "$provider_tmp" "$display_name" || return 1 ;;
         uris) ruby "$converter" uris "$input" "$provider_tmp" || return 1 ;;
+        subscription) ruby "$converter" subscription "$input" "$provider_tmp" || return 1 ;;
         *) oum_err "Неизвестный тип источника"; return 1 ;;
     esac
     chmod 600 "$provider_tmp"
@@ -523,16 +610,40 @@ oum_install_provider() {
     cp "$provider_tmp" "$provider_final" || return 1
     chmod 600 "$provider_final"
     relative_path="./proxy_provider/${provider_id}.yaml"
-    if ! ruby "$converter" attach "$active" "$candidate" "$provider_id" "$relative_path"; then
-        [ -n "$provider_backup" ] && cp "$provider_backup" "$provider_final"
-        return 1
-    fi
-    if ! oum_apply_openclash_candidate "$candidate" "$active"; then
-        if [ -n "$provider_backup" ]; then cp "$provider_backup" "$provider_final"; else rm -f "$provider_final"; fi
-        return 1
-    fi
-    oum_log "provider installed id=$provider_id type=$mode"
-    oum_ok "Источник добавлен в группу OUM-SOURCES"
+    printf '%s\n' \
+        "Как подключить источник?" \
+        "1) Отдельный Config File (рекомендуется)" \
+        "2) Добавить в активный объединённый конфиг"
+    printf 'Выбор [1]: '
+    IFS= read -r config_mode
+    [ -n "$config_mode" ] || config_mode=1
+    case "$config_mode" in
+        1)
+            if ! ruby "$converter" standalone "$active" "$candidate" "$provider_id" "$relative_path" "$source_kind" || ! oum_save_standalone_config "$candidate" "$source_kind"; then
+                if [ -n "$provider_backup" ]; then cp "$provider_backup" "$provider_final"; else rm -f "$provider_final"; fi
+                return 1
+            fi
+            ;;
+        2)
+            if ! ruby "$converter" attach "$active" "$candidate" "$provider_id" "$relative_path" "$source_kind" || ! oum_apply_openclash_candidate "$candidate" "$active"; then
+                if [ -n "$provider_backup" ]; then cp "$provider_backup" "$provider_final"; else rm -f "$provider_final"; fi
+                return 1
+            fi
+            case "$source_kind" in
+                subscription) group_name="SUBSCRIPTION" ;;
+                awg) group_name="AMNEZIA" ;;
+                reality) group_name="REALITY" ;;
+                *) group_name="OUM-SOURCES" ;;
+            esac
+            oum_ok "Источник добавлен в группу $group_name"
+            ;;
+        *)
+            if [ -n "$provider_backup" ]; then cp "$provider_backup" "$provider_final"; else rm -f "$provider_final"; fi
+            oum_err "Неверный режим"
+            return 1
+            ;;
+    esac
+    oum_log "provider installed id=$provider_id type=$source_kind mode=$config_mode"
 }
 
 oum_import_subscription() {
@@ -550,24 +661,24 @@ oum_import_subscription() {
     unset url
     chmod 600 "$input"
     provider_id="$(oum_provider_id subscription)"
-    oum_install_provider uris "$input" "$provider_id" ""
+    oum_install_provider subscription "$input" "$provider_id" "" subscription
 }
 
 oum_import_uri_text() {
     oum_header
     oum_prepare_dirs
     oum_info "Вставьте одну или несколько ссылок VLESS/Hysteria2"
-    oum_info "После последней строки введите OUM-END"
+    oum_info "После последней строки введите одну точку: ."
     input="$OUM_TMP_DIR/uris.input"
     : > "$input"
     chmod 600 "$input"
     while IFS= read -r line; do
-        [ "$line" = "OUM-END" ] && break
+        [ "$line" = "." ] && break
         printf '%s\n' "$line" >> "$input"
     done
     [ -s "$input" ] || { oum_warn "Ничего не введено"; return; }
     provider_id="$(oum_provider_id manual)"
-    oum_install_provider uris "$input" "$provider_id" ""
+    oum_install_provider uris "$input" "$provider_id" "" reality
 }
 
 oum_import_awg_file() {
@@ -579,18 +690,18 @@ oum_import_awg_file() {
     IFS= read -r display_name
     [ -n "$display_name" ] || display_name="OUM-AWG"
     provider_id="$(oum_provider_id awg)"
-    oum_install_provider awg "$input" "$provider_id" "$display_name"
+    oum_install_provider awg "$input" "$provider_id" "$display_name" awg
 }
 
 oum_import_awg_text() {
     oum_header
     oum_prepare_dirs
-    oum_info "Вставьте AWG-конфиг целиком; после него введите OUM-END"
+    oum_info "Вставьте AWG-конфиг целиком; после него введите одну точку: ."
     input="$OUM_TMP_DIR/awg.input"
     : > "$input"
     chmod 600 "$input"
     while IFS= read -r line; do
-        [ "$line" = "OUM-END" ] && break
+        [ "$line" = "." ] && break
         printf '%s\n' "$line" >> "$input"
     done
     [ -s "$input" ] || { oum_warn "Ничего не введено"; return; }
@@ -598,7 +709,7 @@ oum_import_awg_text() {
     IFS= read -r display_name
     [ -n "$display_name" ] || display_name="OUM-AWG"
     provider_id="$(oum_provider_id awg)"
-    oum_install_provider awg "$input" "$provider_id" "$display_name"
+    oum_install_provider awg "$input" "$provider_id" "$display_name" awg
 }
 
 oum_list_sources() {
@@ -611,6 +722,14 @@ oum_list_sources() {
         printf ' • %s\n' "$(basename "$provider")"
     done
     [ "$found" -eq 1 ] || printf 'Пока нет источников.\n'
+    printf '\nОтдельные Config Files:\n'
+    found=0
+    for config_file in "$OPENCLASH_DIR"/config/oum-*.yaml; do
+        [ -f "$config_file" ] || continue
+        found=1
+        printf ' • %s\n' "$(basename "$config_file")"
+    done
+    [ "$found" -eq 1 ] || printf 'Пока нет отдельных конфигов.\n'
 }
 
 oum_sources_menu() {
@@ -620,9 +739,9 @@ oum_sources_menu() {
             "=== Подключения и ноды ===" \
             "1) Добавить подписку URL" \
             "2) Вставить VLESS/Hysteria2 ссылку" \
-            "3) Импортировать AWG из файла" \
-            "4) Вставить AWG-конфиг без файла" \
-            "5) Показать добавленные источники" \
+            "3) Вставить AWG-конфиг" \
+            "4) Импортировать AWG из файла (расширенный вариант)" \
+            "5) Показать источники и Config Files" \
             "" \
             "Enter — Назад"
         printf 'Выбор: '
@@ -631,8 +750,8 @@ oum_sources_menu() {
             "") break ;;
             1) oum_import_subscription; oum_pause ;;
             2) oum_import_uri_text; oum_pause ;;
-            3) oum_import_awg_file; oum_pause ;;
-            4) oum_import_awg_text; oum_pause ;;
+            3) oum_import_awg_text; oum_pause ;;
+            4) oum_import_awg_file; oum_pause ;;
             5) oum_list_sources; oum_pause ;;
             *) oum_err "Неверный выбор"; oum_pause ;;
         esac
