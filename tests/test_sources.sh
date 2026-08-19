@@ -44,13 +44,19 @@ ruby -ryaml -e '
   abort "source group missing" unless group && group.fetch("use").include?("oum-fixture")
 ' "$TMP/attached.yaml"
 
-ruby "$ROOT/helpers/source_converter.rb" standalone "$ROOT/tests/fixtures/openclash.yaml" "$TMP/standalone.yaml" oum-awg ./proxy_provider/oum-awg.yaml awg
+ruby "$ROOT/helpers/source_converter.rb" standalone "$ROOT/tests/fixtures/openclash.yaml" "$TMP/standalone.yaml" "$TMP/awg.yaml" awg
 ruby -ryaml -e '
   config = YAML.load_file(ARGV[0])
-  abort "standalone provider isolation failed" unless config.fetch("proxy-providers").keys == ["oum-awg"]
+  abort "standalone proxies were not embedded" unless config.fetch("proxies").length == 1
+  abort "standalone still depends on a provider" if config.key?("proxy-providers")
   groups = config.fetch("proxy-groups")
   abort "AMNEZIA group missing" unless groups.any? { |item| item["name"] == "AMNEZIA" }
   abort "PROXY does not select AMNEZIA" unless groups.find { |item| item["name"] == "PROXY" }.fetch("proxies").include?("AMNEZIA")
+  abort "mass rule providers missing" unless config.fetch("rule-providers").key?("ru-blocked-domains")
+  abort "mass routing missing" unless config.fetch("rules").include?("RULE-SET,google-play,DIRECT")
+  abort "Samsung must be direct" unless config.fetch("rules").include?("RULE-SET,samsung,DIRECT")
+  abort "Meta must use its selector" unless config.fetch("rules").include?("RULE-SET,meta-domains,META")
+  abort "unexpected torrent block" if config.fetch("rules").any? { |rule| rule.downcase.include?("torrent") }
 ' "$TMP/standalone.yaml"
 
 printf 'source converter tests: OK\n'

@@ -10,6 +10,57 @@ SOURCE_GROUPS = {
   'reality' => 'REALITY'
 }.freeze
 
+MASS_RULE_PROVIDER_SOURCES = [
+  ['private-domains', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/private.mrs', 2_592_000],
+  ['category-ru', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/category-ru.mrs'],
+  ['whitelist', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/whitelist.mrs'],
+  ['microsoft', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/microsoft.mrs'],
+  ['apple', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/apple.mrs'],
+  ['google-play', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/google-play.mrs'],
+  ['samsung', 'domain', 'https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/samsung.mrs'],
+  ['epicgames', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/epicgames.mrs'],
+  ['origin', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/origin.mrs'],
+  ['riot', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/riot.mrs'],
+  ['escapefromtarkov', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/escapefromtarkov.mrs'],
+  ['steam', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/steam.mrs'],
+  ['twitch', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/twitch.mrs'],
+  ['pinterest', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/pinterest.mrs'],
+  ['faceit', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/faceit.mrs'],
+  ['private-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geoip@release/mihomo/private.mrs', 2_592_000],
+  ['direct-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geoip@release/mihomo/direct.mrs'],
+  ['github', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/github.mrs'],
+  ['twitch-ads', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/twitch-ads.mrs'],
+  ['youtube', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/youtube.mrs'],
+  ['telegram', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/telegram.mrs'],
+  ['telegram-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/telegram.mrs'],
+  ['discord-domains', 'domain', 'https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/discord.mrs'],
+  ['discord-voice-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/legiz-ru/mihomo-rule-sets@main/other/discord-voice-ip-list.mrs'],
+  ['meta-domains', 'domain', 'https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/meta.mrs'],
+  ['meta-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/facebook.mrs'],
+  ['ru-blocked-domains', 'domain', 'https://cdn.jsdelivr.net/gh/legiz-ru/mihomo-rule-sets@main/ru-bundle/rule.mrs'],
+  ['ru-blocked-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/legiz-ru/mihomo-rule-sets@main/ru-bundle/rknasnblock.mrs'],
+  ['win-spy', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/win-spy.mrs'],
+  ['category-ads', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/category-ads.mrs']
+].freeze
+
+MASS_RULES = [
+  'RULE-SET,private-domains,DIRECT', 'RULE-SET,private-ips,DIRECT,no-resolve',
+  'RULE-SET,win-spy,REJECT', 'RULE-SET,category-ads,REJECT',
+  'RULE-SET,samsung,DIRECT', 'RULE-SET,google-play,DIRECT',
+  'RULE-SET,meta-domains,META', 'RULE-SET,meta-ips,META,no-resolve',
+  'RULE-SET,github,PROXY', 'RULE-SET,twitch-ads,PROXY', 'RULE-SET,youtube,PROXY',
+  'RULE-SET,telegram,PROXY', 'RULE-SET,telegram-ips,PROXY,no-resolve',
+  'RULE-SET,discord-domains,PROXY', 'RULE-SET,discord-voice-ips,PROXY,no-resolve',
+  'RULE-SET,ru-blocked-domains,PROXY', 'RULE-SET,ru-blocked-ips,PROXY,no-resolve',
+  'RULE-SET,category-ru,DIRECT', 'RULE-SET,whitelist,DIRECT',
+  'RULE-SET,microsoft,DIRECT', 'RULE-SET,apple,DIRECT',
+  'RULE-SET,epicgames,DIRECT', 'RULE-SET,riot,DIRECT',
+  'RULE-SET,escapefromtarkov,DIRECT', 'RULE-SET,steam,DIRECT',
+  'RULE-SET,origin,DIRECT', 'RULE-SET,twitch,DIRECT',
+  'RULE-SET,pinterest,DIRECT', 'RULE-SET,faceit,DIRECT',
+  'RULE-SET,direct-ips,DIRECT,no-resolve', 'MATCH,DIRECT'
+].freeze
+
 def percent_decode(value)
   value.to_s.tr('+', ' ').gsub(/%([0-9a-fA-F]{2})/) { Regexp.last_match(1).to_i(16).chr }.force_encoding('UTF-8')
 end
@@ -288,6 +339,17 @@ def source_group_name(kind)
   SOURCE_GROUPS.fetch(kind, 'OUM-SOURCES')
 end
 
+def apply_mass_routing(config)
+  config['rule-providers'] = MASS_RULE_PROVIDER_SOURCES.each_with_object({}) do |(name, behavior, url, interval), providers|
+    providers[name] = {
+      'type' => 'http', 'behavior' => behavior, 'format' => 'mrs', 'url' => url,
+      'path' => "./rule_provider/#{name}.mrs", 'interval' => interval || 86_400, 'proxy' => 'DIRECT'
+    }
+  end
+  config['rules'] = MASS_RULES.dup
+  config
+end
+
 def attach_provider(config, id, path, kind)
   abort 'invalid provider id' unless id.match?(/\A[a-z0-9][a-z0-9_-]*\z/)
   config['proxy-providers'] = {} unless config['proxy-providers'].is_a?(Hash)
@@ -305,23 +367,21 @@ def attach_provider(config, id, path, kind)
 end
 
 
-def standalone_config(config, id, path, kind)
+def standalone_config(config, provider_file, kind)
   group_name = source_group_name(kind)
-  config['proxies'] = []
-  config['proxy-providers'] = {
-    id => {
-      'type' => 'file',
-      'path' => path,
-      'health-check' => {'enable' => true, 'url' => 'https://www.gstatic.com/generate_204', 'interval' => 600, 'lazy' => true}
-    }
-  }
+  nodes = load_yaml(provider_file).fetch('proxies', [])
+  abort 'standalone source contains no proxies' unless nodes.is_a?(Array) && !nodes.empty?
+  names = nodes.map { |node| node['name'] }.compact
+  abort 'standalone source contains unnamed proxies' unless names.length == nodes.length
+  config['proxies'] = nodes
+  config.delete('proxy-providers')
   config['proxy-groups'] = [
     {'name' => 'PROXY', 'type' => 'select', 'proxies' => [group_name, 'AUTO', 'DIRECT']},
-    {'name' => group_name, 'type' => 'select', 'use' => [id]},
-    {'name' => 'AUTO', 'type' => 'url-test', 'use' => [id], 'url' => 'https://www.gstatic.com/generate_204', 'interval' => 300},
+    {'name' => group_name, 'type' => 'select', 'proxies' => names.dup},
+    {'name' => 'AUTO', 'type' => 'url-test', 'proxies' => names.dup, 'url' => 'https://www.gstatic.com/generate_204', 'interval' => 300},
     {'name' => 'META', 'type' => 'select', 'proxies' => ['PROXY', 'DIRECT']}
   ]
-  config
+  apply_mass_routing(config)
 end
 
 mode = ARGV.shift
@@ -343,9 +403,9 @@ when 'attach'
   abort 'usage: attach CONFIG OUTPUT ID PATH KIND' unless input && output && id && path && kind
   write_yaml(attach_provider(load_yaml(input), id, path, kind), output)
 when 'standalone'
-  input, output, id, path, kind = ARGV
-  abort 'usage: standalone CONFIG OUTPUT ID PATH KIND' unless input && output && id && path && kind
-  write_yaml(standalone_config(load_yaml(input), id, path, kind), output)
+  input, output, provider_file, kind = ARGV
+  abort 'usage: standalone CONFIG OUTPUT PROVIDER_FILE KIND' unless input && output && provider_file && kind
+  write_yaml(standalone_config(load_yaml(input), provider_file, kind), output)
 else
   abort 'modes: awg, uris, subscription, attach, standalone'
 end

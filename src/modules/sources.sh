@@ -126,10 +126,13 @@ oum_install_provider() {
     [ -n "$config_mode" ] || config_mode=1
     case "$config_mode" in
         1)
-            if ! ruby "$converter" standalone "$active" "$candidate" "$provider_id" "$relative_path" "$source_kind" || ! oum_save_standalone_config "$candidate" "$source_kind"; then
+            if ! ruby "$converter" standalone "$active" "$candidate" "$provider_tmp" "$source_kind" || ! oum_save_standalone_config "$candidate" "$source_kind"; then
                 if [ -n "$provider_backup" ]; then cp "$provider_backup" "$provider_final"; else rm -f "$provider_final"; fi
                 return 1
             fi
+            # A standalone Config File contains its nodes inline and must not
+            # depend on a second file that OpenClash may clean up while switching.
+            rm -f "$provider_final"
             ;;
         2)
             if ! ruby "$converter" attach "$active" "$candidate" "$provider_id" "$relative_path" "$source_kind" || ! oum_apply_openclash_candidate "$candidate" "$active"; then
