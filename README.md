@@ -68,6 +68,11 @@ The VPN widget reads the active Mihomo group, shows the current node, measures
 group latency and switches nodes without rewriting YAML or restarting
 OpenClash. It presents six quick alternatives in a three-column desktop grid,
 preferring different country flags when the provider includes them in names.
+When PassWall is installed, the same widget reads the active shunt, filters
+service/mobile entries, measures node endpoints in parallel and switches the
+shunt default node through a rollback-protected background job. Finland and
+the Netherlands are retained in the quick list when available; the complete
+filtered list remains expandable.
 
 For Subscription profiles, the dashboard also displays provider traffic and
 expiry metadata from `Subscription-Userinfo`. The URL remains on the router;

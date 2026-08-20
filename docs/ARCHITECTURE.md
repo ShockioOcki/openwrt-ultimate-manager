@@ -162,6 +162,16 @@ group, and switching validates the requested name against that group's own
 node list before issuing the API request. The OpenClash dashboard secret is
 kept in a mode-0600 curl config and removed after every request.
 
+The PassWall adapter derives selectable nodes from UCI without returning
+addresses, UUIDs or TLS credentials to the browser. Manual delay refresh runs
+bounded parallel TCP probes and caches only section IDs, integer delays and a
+timestamp under `/tmp`. Node changes update the active shunt's `default_node`
+in a background job, restart PassWall, wait for Xray and nftables, and restore
+the previous configuration on failure. PassWall 26.5.11 contains a nil-check
+ordering defect in `util_xray.lua`; the helper applies a one-line guarded
+compatibility fix only when the exact vulnerable statement is present and
+keeps the original under `/etc/oum/compat`.
+
 Subscription traffic and expiry are fetched on the router from the provider's
 `Subscription-Userinfo` response header. OUM stores only the parsed numeric
 values in `/tmp` for 30 minutes; the restricted browser session never receives

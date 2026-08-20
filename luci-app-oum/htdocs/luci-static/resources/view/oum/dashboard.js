@@ -36,7 +36,8 @@ function sortedNodes(nodes) {
 }
 
 function preferredNodes(nodeStatus) {
-	const sorted = sortedNodes(nodeStatus.nodes).filter((node) => node.name !== nodeStatus.current);
+	const currentKey = nodeStatus.current_id || nodeStatus.current;
+	const sorted = sortedNodes(nodeStatus.nodes).filter((node) => (node.id || node.name) !== currentKey);
 	const result = [], countries = new Set();
 	for (const required of [ 'FI', 'NL' ]) {
 		const node = sorted.find((candidate) => countryKey(candidate.name) === required);
@@ -194,9 +195,9 @@ return view.extend({
 						E('div', { 'class': 'oum-subscription-status oum-muted', id: 'subscription-status' }, '')
 					]),
 					E('div', { 'class': 'oum-node-head' }, [
-						E('h3', {}, 'VPN-нода'),
+						E('h3', { id: 'node-panel-title' }, 'VPN-нода'),
 						E('div', { 'class': 'oum-node-actions' }, [
-							E('a', { 'class': 'btn cbi-button', href: zashboardUrl, target: '_blank', rel: 'noreferrer' }, 'Zashboard'),
+							E('a', { 'class': 'btn cbi-button', id: 'zashboard-link', href: zashboardUrl, target: '_blank', rel: 'noreferrer' }, 'Zashboard'),
 							E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Обновить ping')
 						])
 					]),
@@ -217,6 +218,8 @@ return view.extend({
 		const allNodeList = root.querySelector('#all-node-list');
 		const nodeMessage = root.querySelector('#node-message');
 		const measureButton = root.querySelector('#measure-nodes');
+		const nodePanelTitle = root.querySelector('#node-panel-title');
+		const zashboardLink = root.querySelector('#zashboard-link');
 		const subscriptionPanel = root.querySelector('#subscription-panel');
 		const subscriptionRefresh = root.querySelector('#refresh-subscription');
 		const subscriptionStatus = root.querySelector('#subscription-status');
@@ -345,23 +348,31 @@ return view.extend({
 		const updateNodes = (fresh) => {
 			nodePanel.hidden = !fresh.available;
 			if (!fresh.available) return;
+			const isPasswall = fresh.engine === 'passwall';
+			nodePanelTitle.textContent = isPasswall ? 'Ноды PassWall' : 'VPN-нода';
+			zashboardLink.hidden = isPasswall;
+			measureButton.disabled = fresh.applying === true;
+			const delayText = (node, emptyText) => node.delay > 0 ? `${node.delay} ms` :
+				(node.tested || fresh.measured_at ? 'offline' : emptyText);
 			const makeNode = (node, isCurrent) => E('div', { 'class': 'oum-node' }, [
 				E('span', {}, node.name),
-				E('span', { 'class': 'oum-delay' }, node.delay > 0 ? `${node.delay} ms` : 'offline'),
+				E('span', { 'class': 'oum-delay' }, delayText(node, '—')),
 				E('button', {
-					'class': 'btn cbi-button', 'data-node': isCurrent ? null : node.name,
-					disabled: isCurrent ? '' : null
+					'class': 'btn cbi-button', 'data-node': isCurrent ? null : (node.id || node.name),
+					disabled: isCurrent || fresh.applying === true ? '' : null
 				}, isCurrent ? 'Активна' : 'Выбрать')
 			]);
-			const current = (fresh.nodes || []).find((node) => node.name === fresh.current);
+			const current = (fresh.nodes || []).find((node) =>
+				fresh.current_id ? node.id === fresh.current_id : node.name === fresh.current);
 			root.querySelector('#current-node').textContent = current ?
-				`${current.name} · ${current.delay > 0 ? `${current.delay} ms` : 'ping не измерен'}` : (fresh.current || 'Не выбрана');
+				`${current.name} · ${delayText(current, 'ping не измерен')}` : (fresh.current || 'Не выбрана');
 			nodeList.replaceChildren(...preferredNodes(fresh).map((node) => makeNode(node, false)));
 			if (!nodeList.children.length)
 				nodeList.appendChild(E('div', { 'class': 'oum-muted' }, 'Других нод в профиле нет.'));
 			const all = sortedNodes(fresh.nodes);
 			root.querySelector('#all-nodes-summary').textContent = `Все ноды (${all.length})`;
-			allNodeList.replaceChildren(...all.map((node) => makeNode(node, node.name === fresh.current)));
+			allNodeList.replaceChildren(...all.map((node) => makeNode(node,
+				fresh.current_id ? node.id === fresh.current_id : node.name === fresh.current)));
 		};
 
 		const showNodeMessage = (message, failed) => {
@@ -479,14 +490,32 @@ return view.extend({
 		nodePanel.addEventListener('click', (ev) => {
 			const target = ev.target.closest('[data-node]');
 			if (!target) return;
-			target.disabled = true;
+			for (const button of nodePanel.querySelectorAll('[data-node]')) button.disabled = true;
+			showNodeMessage('Переключаем ноду…', false);
 			callSelectNode(target.dataset.node).then((result) => {
 				if (!result.ok) throw new Error(result.message || 'Не удалось переключить ноду.');
+				if (result.engine === 'passwall' && result.applying === true) {
+					let attempts = 0;
+					const watch = () => new Promise((resolve) => window.setTimeout(resolve, 1000))
+						.then(callNodeStatus).then((nodes) => {
+							updateNodes(nodes);
+							if (nodes.applying === true && attempts++ < 90)
+								return watch();
+							if (nodes.applying === true)
+								throw new Error('PassWall не завершил переключение за 90 секунд.');
+							if (nodes.current_id !== result.target)
+								throw new Error('PassWall восстановил предыдущую ноду после ошибки запуска.');
+							return nodes;
+						});
+					return watch();
+				}
 				return callNodeStatus();
 			}).then((nodes) => {
 				updateNodes(nodes);
-				showNodeMessage('Нода переключена.', false);
-			}).catch((err) => showNodeMessage(err.message, true)).finally(() => { target.disabled = false; });
+				showNodeMessage(nodes.engine === 'passwall' ? 'Нода PassWall переключена.' : 'Нода переключена.', false);
+			}).catch((err) => showNodeMessage(err.message, true)).finally(() => {
+				for (const button of nodePanel.querySelectorAll('[data-node]')) button.disabled = false;
+			});
 		});
 
 		updateDashboard(dashboard);

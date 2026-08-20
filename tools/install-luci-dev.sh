@@ -20,6 +20,7 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-firstboot" /usr/libexec/oum-firstboot
 cp "$SOURCE_DIR/root/usr/libexec/oum-source-job" /usr/libexec/oum-source-job
 cp "$SOURCE_DIR/root/usr/libexec/oum-reset-first-run" /usr/libexec/oum-reset-first-run
 cp "$SOURCE_DIR/root/usr/libexec/oum-mihomo-api" /usr/libexec/oum-mihomo-api
+cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-nodes" /usr/libexec/oum-passwall-nodes
 cp "$SOURCE_DIR/root/usr/libexec/oum-device-policy" /usr/libexec/oum-device-policy
 cp "$SOURCE_DIR/root/usr/libexec/oum-policy-yaml.rb" /usr/libexec/oum-policy-yaml.rb
 cp "$SOURCE_DIR/root/usr/libexec/oum-subscription-info" /usr/libexec/oum-subscription-info
@@ -38,7 +39,7 @@ cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/settings.js" /www/luci-sta
 
 chmod 600 /etc/config/oum
 chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/oum-reset-first-run \
-	/usr/libexec/oum-mihomo-api /usr/libexec/oum-device-policy /usr/libexec/oum-policy-yaml.rb \
+	/usr/libexec/oum-mihomo-api /usr/libexec/oum-passwall-nodes /usr/libexec/oum-device-policy /usr/libexec/oum-policy-yaml.rb \
 	/usr/libexec/oum-subscription-info /usr/libexec/oum-speedtest /usr/libexec/oum-speedtest-yaml.rb \
 	/usr/libexec/oum-backup /usr/libexec/oum-backup-codec.rb /usr/libexec/oum-reset-vpn \
 	/usr/libexec/oum-system-job \

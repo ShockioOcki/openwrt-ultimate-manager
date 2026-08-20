@@ -13,6 +13,7 @@ const SYSTEM_JOB_DIR = '/tmp/oum-system-job';
 const SYSTEM_JOB_LOCK = '/tmp/oum-system-job.lock';
 const BACKUP_ENCODED = '/tmp/oum-backup.b64';
 const RESTORE_INPUT = '/tmp/oum-restore.b64';
+const PASSWALL_NODE_CACHE = '/tmp/oum-passwall-nodes.cache';
 
 function shellquote(value) {
 	return `'${replace(value ?? '', "'", "'\\''")}'`;
@@ -97,7 +98,9 @@ function systemJobStatus() {
 
 function configurationBusy() {
 	return access(SYSTEM_JOB_LOCK) || access('/tmp/oum-speedtest.lock') ||
-		access('/tmp/oum-device-policy.lock') || vpnJobStatus().state == 'running';
+		access('/tmp/oum-device-policy.lock') || access('/tmp/oum-passwall-nodes.lock') ||
+		access('/tmp/oum-passwall-nodes.start') ||
+		vpnJobStatus().state == 'running';
 }
 
 function startSystemJob(action, payload, inputPath, inputData) {
@@ -328,6 +331,76 @@ function passwallStatusData() {
 	};
 }
 
+function passwallNodeDelays() {
+	let result = { measured_at: 0, delays: {} };
+	let raw = readfile(PASSWALL_NODE_CACHE) ?? '';
+	for (let line in split(raw, '\n')) {
+		let stamp = match(line, /^timestamp ([0-9]+)$/);
+		if (stamp) {
+			result.measured_at = +stamp[1];
+			continue;
+		}
+		let pair = match(line, /^([A-Za-z0-9_]+) ([0-9]+)$/);
+		if (pair)
+			result.delays[pair[1]] = +pair[2];
+	}
+	return result;
+}
+
+function passwallNodeExcluded(name) {
+	let original = name ?? '';
+	let value = lc(original);
+	return match(original, /Мобильн|мобильн|Авто|АВТО|⬇️|🇪🇺/) ||
+		match(value, /mobile|lte|auto/) ||
+		match(value, /(^|[\s_|+\-])ss($|[\s_|+\-])/);
+}
+
+function passwallNodeStatusData() {
+	if (!passwallInstalled())
+		return { available: false, engine: 'passwall', current: '', current_id: '', nodes: [] };
+
+	const uci = cursor();
+	let global = null;
+	let sections = {};
+	uci.foreach('passwall', 'global', (section) => {
+		if (!global)
+			global = section;
+	});
+	uci.foreach('passwall', 'nodes', (section) => {
+		sections[section['.name']] = section;
+	});
+	let tcpNode = global?.tcp_node ?? '';
+	let currentId = sections[tcpNode]?.protocol == '_shunt' ?
+		(sections[tcpNode]?.default_node ?? '') : tcpNode;
+	let cached = passwallNodeDelays();
+	let nodes = [];
+	for (let identifier, section in sections) {
+		let protocol = section.protocol ?? '';
+		let label = section.remarks ?? identifier;
+		if (identifier == tcpNode || match(protocol, /^_/) || !length(section.address ?? '') ||
+			!length(section.port ?? '') || passwallNodeExcluded(label))
+			continue;
+		push(nodes, {
+			id: identifier,
+			name: label,
+			type: section.type ?? protocol,
+			delay: +(cached.delays[identifier] ?? 0),
+			tested: identifier in cached.delays
+		});
+	}
+	let current = sections[currentId]?.remarks ?? currentId;
+	return {
+		available: length(nodes) > 0,
+		engine: 'passwall',
+		applying: access('/tmp/oum-passwall-nodes.lock') || access('/tmp/oum-passwall-nodes.start') ? true : false,
+		group: sections[tcpNode]?.remarks ?? tcpNode,
+		current,
+		current_id: currentId,
+		measured_at: cached.measured_at,
+		nodes
+	};
+}
+
 function activeNodeGroup(uci) {
 	let source = uci.get('oum', 'main', 'active_source') ?? 'none';
 	if (source == 'subscription') return 'Subscription';
@@ -346,6 +419,8 @@ function readJsonFile(path) {
 }
 
 function nodeStatusData() {
+	if (passwallInstalled())
+		return passwallNodeStatusData();
 	const uci = cursor();
 	let groupName = activeNodeGroup(uci);
 	if (!groupName || !access('/usr/libexec/oum-mihomo-api'))
@@ -806,7 +881,20 @@ const methods = {
 		call: function() {
 			let current = nodeStatusData();
 			if (!current.available)
-				return failure('core_unavailable', 'OpenClash не запущен или группа нод недоступна.');
+				return failure('nodes_unavailable', 'Список нод недоступен.');
+			if (passwallInstalled()) {
+				if (!access('/usr/libexec/oum-passwall-nodes'))
+					return failure('runtime_missing', 'Компонент проверки PassWall не установлен.');
+				if (configurationBusy())
+					return failure('configuration_busy', 'Дождитесь завершения текущей операции.');
+				if (system('/usr/libexec/oum-passwall-nodes measure >/tmp/oum-passwall-nodes.log 2>&1') != 0)
+					return failure('delay_failed', 'Не удалось измерить задержку нод PassWall.');
+				let updated = passwallNodeStatusData();
+				let delays = {};
+				for (let node in updated.nodes)
+					delays[node.name] = node.delay;
+				return { ok: true, engine: 'passwall', delays };
+			}
 			if (system('/usr/libexec/oum-mihomo-api delay >/dev/null 2>&1') != 0)
 				return failure('delay_failed', 'Не удалось измерить задержку нод.');
 			let updated = nodeStatusData();
@@ -825,6 +913,25 @@ const methods = {
 			let name = request.args.name;
 			if (type(name) != 'string' || !length(name) || length(name) > 256)
 				return failure('invalid_node', 'Некорректное имя ноды.');
+			if (passwallInstalled()) {
+				if (!match(name, /^[A-Za-z0-9_]+$/))
+					return failure('invalid_node', 'Некорректный идентификатор ноды PassWall.');
+				let current = passwallNodeStatusData();
+				let selected = filter(current.nodes, (node) => node.id == name)[0];
+				if (!current.available || !selected)
+					return failure('unknown_node', 'Нода отсутствует в PassWall.');
+				if (configurationBusy())
+					return failure('configuration_busy', 'Дождитесь завершения текущей операции.');
+				if (!access('/usr/libexec/oum-passwall-nodes'))
+					return failure('runtime_missing', 'Компонент переключения PassWall не установлен.');
+				if (system('mkdir /tmp/oum-passwall-nodes.start') != 0)
+					return failure('configuration_busy', 'Другая операция PassWall уже выполняется.');
+				if (system(`(/usr/libexec/oum-passwall-nodes switch ${name}) >/tmp/oum-passwall-switch.log 2>&1 &`) != 0) {
+					system('rmdir /tmp/oum-passwall-nodes.start');
+					return failure('switch_failed', 'Не удалось запустить переключение PassWall.');
+				}
+				return { ok: true, engine: 'passwall', applying: true, target: name, current: selected.name };
+			}
 			let current = nodeStatusData();
 			if (!current.available || !length(filter(current.nodes, (node) => node.name == name)))
 				return failure('unknown_node', 'Нода отсутствует в активной группе.');
