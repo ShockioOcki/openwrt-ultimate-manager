@@ -79,6 +79,14 @@ against the same Cloudflare edge. Each test uses about 35 MB, validates that
 the two egress paths differ, and restores the byte-identical Mihomo runtime
 profile without restarting OpenClash.
 
+The Settings page can change Smart/separate Wi-Fi names and credentials or
+switch WAN between DHCP and PPPoE. Each network change keeps a one-step local
+rollback. A model-bound OUM backup contains network, Wi-Fi, firewall,
+OpenClash, routing state and the active OUM profile; it is validated before a
+restore and deliberately downloaded as an unencrypted secret-bearing file.
+Maintenance actions can clear only the VPN layer or return to the FirstRun
+wizard without changing the LAN address.
+
 Development installation on a test router is handled by
 `tools/install-luci-dev.sh`. The installer deliberately does not activate the
 temporary `FirstRun` access point; run `/usr/libexec/oum-firstboot` separately

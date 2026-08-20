@@ -9,6 +9,10 @@ const BACKUP_DIR = '/tmp/oum-setup-backup';
 const VPN_JOB_DIR = '/tmp/oum-vpn-job';
 const SUBSCRIPTION_CACHE = '/tmp/oum-subscription-info.json';
 const SPEEDTEST_DIR = '/tmp/oum-speedtest';
+const SYSTEM_JOB_DIR = '/tmp/oum-system-job';
+const SYSTEM_JOB_LOCK = '/tmp/oum-system-job.lock';
+const BACKUP_ENCODED = '/tmp/oum-backup.b64';
+const RESTORE_INPUT = '/tmp/oum-restore.b64';
 
 function shellquote(value) {
 	return `'${replace(value ?? '', "'", "'\\''")}'`;
@@ -79,6 +83,46 @@ function speedTestStatus() {
 	if (result.direct && result.vpn && length(fingerprints.direct) && length(fingerprints.vpn))
 		result.paths_separated = fingerprints.direct != fingerprints.vpn;
 	return result;
+}
+
+function systemJobStatus() {
+	let values = readKeyValues(`${SYSTEM_JOB_DIR}/status`, [ 'state', 'action', 'code', 'message' ]);
+	return {
+		state: values.state ?? 'idle',
+		action: values.action ?? '',
+		code: values.code ?? '',
+		message: values.message ?? ''
+	};
+}
+
+function configurationBusy() {
+	return access(SYSTEM_JOB_LOCK) || access('/tmp/oum-speedtest.lock') ||
+		access('/tmp/oum-device-policy.lock') || vpnJobStatus().state == 'running';
+}
+
+function startSystemJob(action, payload, inputPath, inputData) {
+	if (!access('/usr/libexec/oum-system-job'))
+		return failure('runtime_missing', 'Компонент системных настроек не установлен.');
+	if (configurationBusy())
+		return failure('configuration_busy', 'Дождитесь завершения текущей операции.');
+	if (system(`mkdir ${SYSTEM_JOB_LOCK}`) != 0)
+		return failure('configuration_busy', 'Другая операция уже выполняется.');
+	if (system(`rm -rf ${SYSTEM_JOB_DIR} && mkdir -p ${SYSTEM_JOB_DIR} && chmod 700 ${SYSTEM_JOB_DIR}`) != 0 ||
+		!writePrivate(`${SYSTEM_JOB_DIR}/request.json`, sprintf('%J', payload ?? {})) ||
+		(length(inputPath ?? '') && !writePrivate(inputPath, inputData ?? '')) ||
+		!writePrivate(`${SYSTEM_JOB_DIR}/status`, `state=running\naction=${action}\ncode=queued\nmessage=Операция поставлена в очередь.\n`)) {
+		system(`rm -rf ${SYSTEM_JOB_DIR}; rmdir ${SYSTEM_JOB_LOCK}`);
+		if (length(inputPath ?? ''))
+			system(`rm -f ${inputPath}`);
+		return failure('job_prepare', 'Не удалось подготовить операцию.');
+	}
+	if (system(`(/usr/libexec/oum-system-job ${action}) >/tmp/oum-system-job.log 2>&1 &`) != 0) {
+		system(`rmdir ${SYSTEM_JOB_LOCK}`);
+		if (length(inputPath ?? ''))
+			system(`rm -f ${inputPath}`);
+		return failure('job_start', 'Не удалось запустить операцию.');
+	}
+	return { ok: true, state: 'running', action };
 }
 
 function wirelessStations() {
@@ -163,6 +207,41 @@ function networkStatus() {
 	return result;
 }
 
+function settingsStatusData() {
+	const uci = cursor();
+	let bands = {};
+	let accessPoints = [];
+	uci.foreach('wireless', 'wifi-device', (radio) => {
+		bands[radio['.name']] = radio.band ?? '';
+	});
+	uci.foreach('wireless', 'wifi-iface', (iface) => {
+		if (iface.mode != 'ap' || iface.disabled == '1')
+			return;
+		push(accessPoints, {
+			band: bands[iface.device] ?? '',
+			ssid: iface.ssid ?? '',
+			password_set: length(iface.key ?? '') > 0
+		});
+	});
+	let ap24 = filter(accessPoints, (item) => item.band == '2g')[0] ?? accessPoints[0] ?? {};
+	let ap5 = filter(accessPoints, (item) => item.band == '5g')[0] ?? accessPoints[1] ?? ap24;
+	let wan = networkStatus();
+	wan.username = uci.get('network', 'wan', 'username') ?? '';
+	wan.password_set = length(uci.get('network', 'wan', 'password') ?? '') > 0;
+	return {
+		wifi: {
+			mode: length(ap24.ssid ?? '') && ap24.ssid == ap5.ssid ? 'smart' : 'separate',
+			ssid_24: ap24.ssid ?? '',
+			ssid_5: ap5.ssid ?? '',
+			password_set: ap24.password_set == true || ap5.password_set == true,
+			country: 'US'
+		},
+		wan,
+		rollback_wifi: access('/etc/oum/rollback/wireless') ? true : false,
+		rollback_wan: access('/etc/oum/rollback/network') ? true : false
+	};
+}
+
 function vpnReady() {
 	return system("pidof clash >/dev/null 2>&1 && nft list chain inet fw4 openclash 2>/dev/null | grep -q 'redirect to :7892'") == 0;
 }
@@ -231,7 +310,11 @@ function subscriptionStatusData(force) {
 }
 
 function validSsid(value) {
-	return type(value) == 'string' && length(value) >= 1 && length(value) <= 32;
+	return type(value) == 'string' && length(value) >= 1 && length(value) <= 32 && !match(value, /[\r\n]/);
+}
+
+function validOptionalPassword(value) {
+	return type(value) == 'string' && (!length(value) || (length(value) >= 8 && length(value) <= 63));
 }
 
 function validate(args) {
@@ -358,6 +441,121 @@ const methods = {
 		}
 	},
 
+	settingsStatus: {
+		call: function() {
+			try {
+				return settingsStatusData();
+			}
+			catch (err) {
+				return failure('settings_read_failed', `Не удалось прочитать настройки: ${err}`);
+			}
+		}
+	},
+
+	systemJobStatus: {
+		call: function() {
+			return systemJobStatus();
+		}
+	},
+
+	applyWifiSettings: {
+		args: { wifi_mode: '', ssid_24: '', ssid_5: '', wifi_password: '' },
+		call: function(request) {
+			let args = request.args;
+			if (!(args.wifi_mode in [ 'smart', 'separate' ]))
+				return failure('invalid_wifi_mode', 'Выберите режим Wi-Fi.');
+			if (!validSsid(args.ssid_24) || (args.wifi_mode == 'separate' && !validSsid(args.ssid_5)))
+				return failure('invalid_ssid', 'Имя Wi-Fi должно содержать от 1 до 32 символов без перевода строки.');
+			if (!validOptionalPassword(args.wifi_password) || match(args.wifi_password, /[\r\n]/))
+				return failure('invalid_wifi_password', 'Новый пароль Wi-Fi должен содержать от 8 до 63 символов.');
+			let current = settingsStatusData();
+			if (!length(args.wifi_password) && !current.wifi.password_set)
+				return failure('wifi_password_missing', 'Задайте пароль Wi-Fi.');
+			return startSystemJob('wifi', {
+				wifi_mode: args.wifi_mode,
+				ssid_24: args.ssid_24,
+				ssid_5: args.wifi_mode == 'smart' ? args.ssid_24 : args.ssid_5,
+				wifi_password: args.wifi_password
+			});
+		}
+	},
+
+	applyWanSettings: {
+		args: { wan_type: '', pppoe_user: '', pppoe_password: '' },
+		call: function(request) {
+			let args = request.args;
+			if (!(args.wan_type in [ 'dhcp', 'pppoe' ]))
+				return failure('invalid_wan', 'Выберите DHCP или PPPoE.');
+			if (type(args.pppoe_user) != 'string' || length(args.pppoe_user) > 128 || match(args.pppoe_user, /[\r\n]/) ||
+				type(args.pppoe_password) != 'string' || length(args.pppoe_password) > 256 || match(args.pppoe_password, /[\r\n]/))
+				return failure('invalid_pppoe', 'Некорректные данные PPPoE.');
+			if (args.wan_type == 'pppoe' && !length(args.pppoe_user))
+				return failure('invalid_pppoe', 'Введите логин PPPoE.');
+			let current = settingsStatusData();
+			if (args.wan_type == 'pppoe' && !length(args.pppoe_password) && !current.wan.password_set)
+				return failure('pppoe_password_missing', 'Введите пароль PPPoE.');
+			return startSystemJob('wan', {
+				wan_type: args.wan_type,
+				pppoe_user: args.pppoe_user,
+				pppoe_password: args.pppoe_password
+			});
+		}
+	},
+
+	rollbackSettings: {
+		args: { kind: '' },
+		call: function(request) {
+			let kind = request.args.kind ?? '';
+			if (!(kind in [ 'wifi', 'wan' ]))
+				return failure('invalid_kind', 'Неизвестный тип настроек.');
+			return startSystemJob(`rollback_${kind}`, {});
+		}
+	},
+
+	createBackup: {
+		call: function() {
+			if (!access('/usr/libexec/oum-backup') || !access('/usr/libexec/oum-backup-codec.rb'))
+				return failure('runtime_missing', 'Компонент резервного копирования не установлен.');
+			if (configurationBusy())
+				return failure('configuration_busy', 'Дождитесь завершения текущей операции.');
+			if (system(`mkdir ${SYSTEM_JOB_LOCK}`) != 0)
+				return failure('configuration_busy', 'Другая операция уже выполняется.');
+			system(`rm -f ${BACKUP_ENCODED}`);
+			if (system('/usr/libexec/oum-backup create >/tmp/oum-backup.log 2>&1') != 0) {
+				system(`rmdir ${SYSTEM_JOB_LOCK}`);
+				return failure('backup_failed', 'Не удалось создать резервную копию.');
+			}
+			let data = readfile(BACKUP_ENCODED);
+			system(`rm -f ${BACKUP_ENCODED}`);
+			system(`rmdir ${SYSTEM_JOB_LOCK}`);
+			if (!data || !length(data))
+				return failure('backup_empty', 'Резервная копия получилась пустой.');
+			return { ok: true, filename: `oum-backup-${time()}.oum`, data };
+		}
+	},
+
+	restoreBackup: {
+		args: { data: '' },
+		call: function(request) {
+			let data = request.args.data;
+			if (type(data) != 'string' || length(data) < 32 || length(data) > 4194304 || !match(data, /^[A-Za-z0-9+\/=\r\n]+$/))
+				return failure('invalid_backup', 'Файл резервной копии повреждён или слишком велик.');
+			return startSystemJob('restore', {}, RESTORE_INPUT, data);
+		}
+	},
+
+	resetVpn: {
+		call: function() {
+			return startSystemJob('reset_vpn', {});
+		}
+	},
+
+	resetFirstRun: {
+		call: function() {
+			return startSystemJob('reset_all', {});
+		}
+	},
+
 	vpnJobStatus: {
 		call: function() {
 			return vpnJobStatus();
@@ -407,6 +605,8 @@ const methods = {
 				return failure('invalid_mode', 'Выберите прямое соединение или VPN.');
 			if (!access('/usr/libexec/oum-speedtest') || !access('/usr/libexec/oum-speedtest-yaml.rb'))
 				return failure('runtime_missing', 'Компонент теста скорости не установлен.');
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
 			if (access('/tmp/oum-speedtest.lock'))
 				return failure('test_running', 'Другой тест скорости уже выполняется.');
 			if (vpnJobStatus().state == 'running' || access('/tmp/oum-device-policy.lock'))
@@ -431,6 +631,8 @@ const methods = {
 	setVpnEnabled: {
 		args: { enabled: false },
 		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
 			if (access('/tmp/oum-speedtest.lock'))
 				return failure('speedtest_running', 'Дождитесь завершения теста скорости.');
 			let enabled = request.args.enabled;
@@ -451,6 +653,8 @@ const methods = {
 	setDevicePolicy: {
 		args: { mac: '', policy: 'default' },
 		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
 			if (access('/tmp/oum-speedtest.lock'))
 				return failure('speedtest_running', 'Дождитесь завершения теста скорости.');
 			let mac = uc(request.args.mac ?? '');
@@ -535,6 +739,8 @@ const methods = {
 	startVpnImport: {
 		args: { vpn_type: '', payload: '' },
 		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
 			if (access('/tmp/oum-speedtest.lock'))
 				return failure('speedtest_running', 'Дождитесь завершения теста скорости.');
 			let kind = request.args.vpn_type;
@@ -575,6 +781,8 @@ const methods = {
 			vpn_type: 'none'
 		},
 		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
 			let phase = 'validation';
 			try {
 				let check = validate(request.args);

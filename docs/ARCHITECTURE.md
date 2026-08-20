@@ -159,3 +159,29 @@ measures latency plus fixed-size download/upload transfers, then restores the
 exact backup. DIRECT and VPN result files contain only rates, latency, time and
 a one-way hash used to confirm that the egress paths differ; the public IP is
 never returned to LuCI or written to disk.
+
+## Settings and recovery
+
+The restricted `/oum/settings` page uses dedicated RPC methods rather than
+generic UCI access. Wi-Fi, WAN, restore and reset requests share one atomic
+system-job lock and are mutually exclusive with VPN import, device-policy
+updates and speed tests. Password fields are write-only: status responses show
+only whether a secret exists, and an empty field preserves the current value.
+
+Wi-Fi and WAN changes save the immediately preceding UCI file under
+`/etc/oum/rollback/` before committing and reloading the service. The user can
+restore that one-step snapshot from the same page. Wi-Fi is always normalized
+to country `US`, WPA2/WPA3 mixed mode and enabled AP interfaces.
+
+OUM backups use an allowlisted archive containing the required UCI configs,
+the one active OUM profile, custom routing rules and non-secret state markers.
+Restore rejects a different board, links, unexpected paths, oversized expanded
+content, invalid UCI and malformed YAML before writing `/etc`. Apply failures
+restore a private runtime snapshot. The downloaded `.oum` file is base64
+transport around a gzip archive, not encryption, so the UI warns that it must
+be stored as a credential-bearing file.
+
+`resetVpn` removes only OUM-managed profiles, subscription metadata and device
+policies. `resetFirstRun` delegates to the existing recovery helper, which also
+locks password login and brings back the temporary FirstRun access point while
+leaving the LAN address untouched.

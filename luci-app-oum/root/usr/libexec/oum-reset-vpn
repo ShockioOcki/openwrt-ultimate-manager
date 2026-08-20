@@ -1,0 +1,31 @@
+#!/bin/sh
+
+set -eu
+
+[ ! -d /tmp/oum-speedtest.lock ] || { echo 'speed test is running' >&2; exit 1; }
+/etc/init.d/openclash stop >/dev/null 2>&1 || true
+/etc/init.d/openclash disable >/dev/null 2>&1 || true
+
+for profile in Subscription.yaml AWG_Tunnel.yaml Proxy.yaml \
+	oum-subscription.yaml oum-amnezia.yaml oum-reality.yaml oum.yaml; do
+	rm -f "/etc/openclash/config/$profile" "/etc/openclash/$profile"
+done
+rm -f /etc/openclash/proxy_provider/oum-*.yaml
+
+uci -q delete openclash.oum_subscription_info || true
+uci -q delete openclash.config.config_path || true
+uci -q set openclash.config.enable='0'
+uci -q commit openclash
+
+for section in $(uci -q show oum | sed -n "s/^oum\.\([^.=]*\)=device$/\1/p"); do
+	uci -q delete "oum.$section" || true
+done
+uci -q set oum.main.active_source='none'
+uci -q set oum.main.pending_source='none'
+uci -q commit oum
+/usr/libexec/oum-device-policy reset >/dev/null 2>&1 || true
+
+rm -f /etc/oum/active_source /etc/oum/active_profile /etc/oum/proxy_backend
+rm -rf /tmp/oum-vpn-job /tmp/oum-mihomo-api /tmp/oum-speedtest
+rm -f /tmp/oum-vpn-job.log /tmp/oum-speedtest.log /tmp/oum-speedtest-start.log \
+	/tmp/oum-subscription-info.json /tmp/oum-subscription-info.log
