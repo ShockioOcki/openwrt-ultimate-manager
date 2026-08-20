@@ -19,3 +19,5 @@ jobs:
         run: ./tests/syntax.sh
       - name: Converter fixtures
         run: ./tests/test_sources.sh
+      - name: Device policy YAML
+        run: ruby ./tests/test_policy_yaml.rb

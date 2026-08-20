@@ -8,6 +8,8 @@ const callDashboardStatus = rpc.declare({ object: 'oum', method: 'dashboardStatu
 const callNodeStatus = rpc.declare({ object: 'oum', method: 'nodeStatus', expect: { '': {} } });
 const callMeasureNodeDelays = rpc.declare({ object: 'oum', method: 'measureNodeDelays', expect: { '': {} } });
 const callSelectNode = rpc.declare({ object: 'oum', method: 'selectNode', params: [ 'name' ], expect: { '': {} } });
+const callSetVpnEnabled = rpc.declare({ object: 'oum', method: 'setVpnEnabled', params: [ 'enabled' ], expect: { '': {} } });
+const callSetDevicePolicy = rpc.declare({ object: 'oum', method: 'setDevicePolicy', params: [ 'mac', 'policy' ], expect: { '': {} } });
 const callVpnJobStatus = rpc.declare({ object: 'oum', method: 'vpnJobStatus', expect: { '': {} } });
 const callStartVpnImport = rpc.declare({
 	object: 'oum', method: 'startVpnImport', params: [ 'vpn_type', 'payload' ], expect: { '': {} }
@@ -66,6 +68,14 @@ function sourceChoice(value, title, description, checked) {
 	]);
 }
 
+function policySelect(client) {
+	return E('select', { 'class': 'oum-policy', 'data-mac': client.mac }, [
+		E('option', { value: 'default', selected: client.policy === 'default' ? '' : null }, 'По общим правилам'),
+		E('option', { value: 'direct', selected: client.policy === 'direct' ? '' : null }, 'Всегда напрямую'),
+		E('option', { value: 'vpn', selected: client.policy === 'vpn' ? '' : null }, 'Полностью через VPN')
+	]);
+}
+
 return view.extend({
 	load() { return Promise.all([ callStatus(), callDashboardStatus(), callVpnJobStatus(), callNodeStatus() ]); },
 
@@ -87,12 +97,12 @@ return view.extend({
 		const root = E('div', { 'class': 'oum-dashboard' }, [
 			E('style', {}, `
 				.oum-dashboard{max-width:1050px;margin:0 auto}.oum-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
-				.oum-card,.oum-panel{border:1px solid #ccd3dc;border-radius:12px;padding:16px}.oum-card small{display:block;opacity:.7;margin-bottom:8px}.oum-card strong{font-size:1.1rem}
+				.oum-card,.oum-panel{border:1px solid #ccd3dc;border-radius:12px;padding:16px}.oum-card small{display:block;opacity:.7;margin-bottom:8px}.oum-card strong{font-size:1.1rem}.oum-vpn-card-row{display:flex;align-items:center;justify-content:space-between;gap:8px}.oum-vpn-card-row button{padding:4px 9px}.oum-card-message{font-size:.82em;margin-top:7px;min-height:1.2em}
 				.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}
 				.oum-source-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}
 				.oum-input{margin:18px 0}.oum-input label{display:block;font-weight:600;margin-bottom:7px}.oum-input input,.oum-input textarea{width:100%;box-sizing:border-box}.oum-input textarea{min-height:180px;font-family:monospace}
 				.oum-job{padding:12px;border-radius:8px;background:#eef4fa;margin:14px 0}.oum-job[data-state="failed"]{background:#ffe9e7}.oum-job[data-state="success"]{background:#e6f7eb}
-				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}
+				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:#c0392b}
 				.oum-muted{opacity:.68}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
 				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:#eef4fa;margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}
 				.oum-node{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-delay{min-width:70px;text-align:right}
@@ -106,15 +116,23 @@ return view.extend({
 				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
 				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, '') ]),
 				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Температура'), E('strong', { id: 'thermal-state' }, '—'), E('div', { 'class': 'oum-muted' }, 'Максимум по датчикам') ]),
-				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'VPN-профиль'), E('strong', { id: 'active-source' }, sourceNames[dashboard.active_source] || dashboard.active_source) ])
+				E('div', { 'class': 'oum-card' }, [
+					E('small', {}, 'VPN-профиль'),
+					E('div', { 'class': 'oum-vpn-card-row' }, [
+						E('strong', { id: 'active-source' }, sourceNames[dashboard.active_source] || dashboard.active_source),
+						E('button', { 'class': 'btn cbi-button', id: 'vpn-toggle' }, '')
+					]),
+					E('div', { 'class': 'oum-card-message oum-muted', id: 'vpn-control-message' }, '')
+				])
 			]),
 			E('div', { 'class': 'oum-panels' }, [
 				E('section', { 'class': 'oum-panel' }, [
 					E('h3', {}, 'Подключённые устройства'),
 					E('table', { 'class': 'oum-clients' }, [
-						E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'IP-адрес'), E('th', {}, 'Подключение'), E('th', { 'class': 'optional' }, 'MAC') ])),
+						E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'IP-адрес'), E('th', {}, 'Подключение'), E('th', { 'class': 'optional' }, 'MAC'), E('th', {}, 'Маршрутизация') ])),
 						E('tbody', { id: 'client-list' })
-					])
+					]),
+					E('div', { 'class': 'oum-policy-message oum-muted', id: 'policy-message' }, 'Режим применяется к выбранному устройству и сохраняется после перезагрузки.')
 				]),
 				E('section', { 'class': 'oum-panel', id: 'node-panel', hidden: '' }, [
 					E('div', { 'class': 'oum-node-head' }, [
@@ -164,6 +182,11 @@ return view.extend({
 		const allNodeList = root.querySelector('#all-node-list');
 		const nodeMessage = root.querySelector('#node-message');
 		const measureButton = root.querySelector('#measure-nodes');
+		const vpnToggle = root.querySelector('#vpn-toggle');
+		const vpnControlMessage = root.querySelector('#vpn-control-message');
+		const policyMessage = root.querySelector('#policy-message');
+		let vpnEnabled = dashboard.vpn_enabled === true;
+		let vpnWatchTimer = null;
 
 		const updateDashboard = (fresh) => {
 			root.querySelector('#wan-state').textContent = fresh.wan?.up ? 'Подключён' : 'Нет соединения';
@@ -173,14 +196,20 @@ return view.extend({
 			root.querySelector('#wifi-detail').textContent = ssids.length ? ssids.join(' · ') : 'Wi-Fi выключен';
 			root.querySelector('#thermal-state').textContent = fresh.thermal?.maximum != null ? `${Math.round(fresh.thermal.maximum)} °C` : 'Нет данных';
 			root.querySelector('#active-source').textContent = sourceNames[fresh.active_source] || fresh.active_source;
+			vpnEnabled = fresh.vpn_enabled === true;
+			vpnToggle.textContent = vpnEnabled ? 'Отключить' : 'Включить';
+			vpnToggle.disabled = fresh.active_source === 'none' || (vpnEnabled && fresh.vpn_ready !== true);
+			vpnControlMessage.textContent = !vpnEnabled ? 'VPN выключен' :
+				(fresh.vpn_ready === true ? 'VPN работает' : 'VPN запускается…');
 			const body = root.querySelector('#client-list');
 			body.replaceChildren(...(fresh.clients || []).map((client) => E('tr', {}, [
 				E('td', {}, client.name), E('td', {}, client.ip),
 				E('td', {}, client.medium === 'wifi' ? 'Wi-Fi' : 'Кабель'),
-				E('td', { 'class': 'optional' }, client.mac)
+				E('td', { 'class': 'optional' }, client.mac),
+				E('td', {}, policySelect(client))
 			])));
 			if (!fresh.clients?.length)
-				body.appendChild(E('tr', {}, E('td', { colspan: 4, 'class': 'oum-muted' }, 'Нет активных DHCP-клиентов')));
+				body.appendChild(E('tr', {}, E('td', { colspan: 5, 'class': 'oum-muted' }, 'Нет активных DHCP-клиентов')));
 		};
 
 		const updateNodes = (fresh) => {
@@ -277,6 +306,56 @@ return view.extend({
 				measureButton.disabled = false;
 				measureButton.textContent = 'Обновить ping';
 			});
+		});
+
+		vpnToggle.addEventListener('click', (ev) => {
+			ev.preventDefault();
+			vpnToggle.disabled = true;
+			vpnControlMessage.textContent = vpnEnabled ? 'Отключаем VPN…' : 'Запускаем VPN…';
+			callSetVpnEnabled(!vpnEnabled).then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Не удалось изменить состояние VPN.');
+				vpnEnabled = result.enabled === true;
+				vpnToggle.textContent = vpnEnabled ? 'Отключить' : 'Включить';
+				vpnControlMessage.textContent = result.message || 'Состояние изменено.';
+				let attempts = 0;
+				const wanted = vpnEnabled;
+				const watch = () => callDashboardStatus().then((fresh) => {
+					updateDashboard(fresh);
+					const ready = wanted ? fresh.vpn_ready === true : fresh.vpn_ready !== true;
+					if (!ready)
+						vpnToggle.disabled = true;
+					if (!ready && attempts++ < 45)
+						vpnWatchTimer = window.setTimeout(watch, 1000);
+					else if (!ready) {
+						vpnControlMessage.textContent = 'Сервис не подтвердил готовность.';
+						vpnToggle.disabled = false;
+					}
+				}).catch((err) => {
+					vpnControlMessage.textContent = err.message;
+					vpnToggle.disabled = false;
+				});
+				if (vpnWatchTimer) window.clearTimeout(vpnWatchTimer);
+				return watch();
+			}).catch((err) => {
+				vpnControlMessage.textContent = err.message;
+				vpnToggle.disabled = false;
+			});
+		});
+
+		root.querySelector('#client-list').addEventListener('change', (ev) => {
+			const target = ev.target.closest('[data-mac]');
+			if (!target) return;
+			target.disabled = true;
+			policyMessage.dataset.state = 'idle';
+			policyMessage.textContent = 'Сохраняем режим и обновляем маршрутизацию…';
+			callSetDevicePolicy(target.dataset.mac, target.value).then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Не удалось изменить маршрутизацию.');
+				policyMessage.textContent = result.message || 'Настройка сохранена.';
+			}).catch((err) => {
+				policyMessage.dataset.state = 'failed';
+				policyMessage.textContent = err.message;
+				return callDashboardStatus().then(updateDashboard);
+			}).finally(() => { target.disabled = false; });
 		});
 
 		nodePanel.addEventListener('click', (ev) => {

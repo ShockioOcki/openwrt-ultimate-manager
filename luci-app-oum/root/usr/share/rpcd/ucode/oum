@@ -56,9 +56,14 @@ function wirelessStations() {
 	return stations;
 }
 
-function connectedClients() {
+function connectedClients(uci) {
 	let result = [];
 	let stations = wirelessStations();
+	let policies = {};
+	uci.foreach('oum', 'device', (device) => {
+		if (match(device.mac ?? '', /^[0-9A-Fa-f:]{17}$/))
+			policies[uc(device.mac)] = device.policy ?? 'default';
+	});
 	let leases = readfile('/tmp/dhcp.leases') ?? '';
 	for (let line in split(leases, '\n')) {
 		let fields = match(line, /^(\d+)\s+([0-9A-Fa-f:]{17})\s+(\S+)\s+(\S+)/);
@@ -70,7 +75,8 @@ function connectedClients() {
 			mac,
 			ip: fields[3],
 			medium: stations[mac] ? 'wifi' : 'ethernet',
-			expires: +fields[1]
+			expires: +fields[1],
+			policy: policies[mac] ?? 'default'
 		});
 	}
 	return result;
@@ -113,6 +119,10 @@ function networkStatus() {
 	result.proto = status.proto ?? '';
 	result.ipv4 = status['ipv4-address']?.[0]?.address ?? '';
 	return result;
+}
+
+function vpnReady() {
+	return system("pidof clash >/dev/null 2>&1 && nft list chain inet fw4 openclash 2>/dev/null | grep -q 'redirect to :7892'") == 0;
 }
 
 function activeNodeGroup(uci) {
@@ -295,10 +305,69 @@ const methods = {
 			return {
 				wan: networkStatus(),
 				wifi: wifiStatus(uci),
-				clients: connectedClients(),
+				clients: connectedClients(uci),
 				thermal: thermalStatus(),
-				active_source: uci.get('oum', 'main', 'active_source') ?? 'none'
+				active_source: uci.get('oum', 'main', 'active_source') ?? 'none',
+				vpn_enabled: uci.get('openclash', 'config', 'enable') == '1',
+				vpn_ready: vpnReady()
 			};
+		}
+	},
+
+	setVpnEnabled: {
+		args: { enabled: false },
+		call: function(request) {
+			let enabled = request.args.enabled;
+			if (type(enabled) != 'bool')
+				return failure('invalid_state', 'Некорректное состояние VPN.');
+			const uci = cursor();
+			if (enabled && (uci.get('oum', 'main', 'active_source') ?? 'none') == 'none')
+				return failure('profile_missing', 'Сначала добавьте защищённое подключение.');
+			uci.set('openclash', 'config', 'enable', enabled ? '1' : '0');
+			if (!uci.commit('openclash'))
+				return failure('commit_failed', 'Не удалось сохранить состояние VPN.');
+			let action = enabled ? 'restart' : 'stop';
+			system(`(/etc/init.d/openclash ${action}) >/tmp/oum-vpn-control.log 2>&1 &`);
+			return { ok: true, enabled, message: enabled ? 'VPN запускается…' : 'VPN отключается…' };
+		}
+	},
+
+	setDevicePolicy: {
+		args: { mac: '', policy: 'default' },
+		call: function(request) {
+			let mac = uc(request.args.mac ?? '');
+			let policy = request.args.policy ?? 'default';
+			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
+				return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
+			if (!(policy in [ 'default', 'direct', 'vpn' ]))
+				return failure('invalid_policy', 'Неизвестный режим маршрутизации.');
+
+			const uci = cursor();
+			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
+			if (!client)
+				return failure('client_offline', 'Устройство должно быть подключено к роутеру.');
+			let section = null;
+			uci.foreach('oum', 'device', (device) => {
+				if (uc(device.mac ?? '') == mac)
+					section = device['.name'];
+			});
+			if (policy == 'default') {
+				if (section)
+					uci.delete('oum', section);
+			}
+			else {
+				if (!section)
+					section = uci.add('oum', 'device');
+				uci.set('oum', section, 'mac', mac);
+				uci.set('oum', section, 'ip', client.ip);
+				uci.set('oum', section, 'name', client.name);
+				uci.set('oum', section, 'policy', policy);
+			}
+			if (!uci.commit('oum'))
+				return failure('commit_failed', 'Не удалось сохранить режим устройства.');
+			if (system('(/usr/libexec/oum-device-policy apply) >/tmp/oum-device-policy-start.log 2>&1 &') != 0)
+				return failure('apply_failed', 'Не удалось применить режим устройства.');
+			return { ok: true, mac, policy, message: 'Настройка сохранена и применяется…' };
 		}
 	},
 

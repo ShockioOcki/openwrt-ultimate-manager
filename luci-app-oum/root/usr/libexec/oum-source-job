@@ -87,4 +87,5 @@ case "$kind" in
 		;;
 esac
 
+/usr/libexec/oum-device-policy sync >/tmp/oum-device-policy-start.log 2>&1 || true
 rm -f "$input"

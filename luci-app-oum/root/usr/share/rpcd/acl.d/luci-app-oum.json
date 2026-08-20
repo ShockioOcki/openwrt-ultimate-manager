@@ -11,7 +11,7 @@
 		},
 		"write": {
 			"ubus": {
-				"oum": [ "applySetup", "startVpnImport", "selectNode" ]
+				"oum": [ "applySetup", "startVpnImport", "selectNode", "setVpnEnabled", "setDevicePolicy" ]
 			},
 			"uci": [ "oum" ]
 		}

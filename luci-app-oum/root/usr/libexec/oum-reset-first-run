@@ -2,6 +2,13 @@
 
 set -eu
 
+waited=0
+while [ -d /tmp/oum-device-policy.lock ] && [ "$waited" -lt 60 ]; do
+	sleep 1
+	waited=$((waited + 1))
+done
+[ ! -d /tmp/oum-device-policy.lock ] || rmdir /tmp/oum-device-policy.lock 2>/dev/null || true
+
 /etc/init.d/openclash stop >/dev/null 2>&1 || true
 /etc/init.d/openclash disable >/dev/null 2>&1 || true
 
@@ -16,6 +23,12 @@ uci -q delete openclash.oum_subscription_info || true
 uci -q delete openclash.config.config_path || true
 uci -q set openclash.config.enable='0'
 uci -q commit openclash
+
+for section in $(uci -q show oum | sed -n "s/^oum\.\([^.=]*\)=device$/\1/p"); do
+	uci -q delete "oum.$section" || true
+done
+uci -q commit oum
+/usr/libexec/oum-device-policy reset >/dev/null 2>&1 || true
 
 rm -f /etc/oum/active_source /etc/oum/active_profile /etc/oum/proxy_backend
 rm -rf /tmp/oum-vpn-job

@@ -10,7 +10,7 @@ RESPONSE="$WORK_DIR/response.json"
 REQUEST="$WORK_DIR/request.json"
 trap 'rm -f "$CURL_CONFIG" "$REQUEST"' EXIT INT TERM
 
-case "$ACTION" in list|delay|switch) ;; *) exit 2 ;; esac
+case "$ACTION" in list|delay|switch|reload) ;; *) exit 2 ;; esac
 
 source_kind="$(uci -q get oum.main.active_source || echo none)"
 case "$source_kind" in
@@ -53,6 +53,17 @@ case "$ACTION" in
 	switch)
 		[ -s "$REQUEST" ] || exit 5
 		url="http://127.0.0.1:${port}/proxies/${group}"
+		curl --config "$CURL_CONFIG" --request PUT --data-binary "@$REQUEST" "$url"
+		;;
+	reload)
+		profile="$(uci -q get openclash.config.config_path || true)"
+		case "$profile" in /etc/openclash/config/*.yaml|/etc/openclash/config/*.yml) ;; *) exit 6 ;; esac
+		profile="/etc/openclash/$(basename "$profile")"
+		case "$profile" in /etc/openclash/*.yaml|/etc/openclash/*.yml) ;; *) exit 6 ;; esac
+		[ -f "$profile" ] || exit 6
+		case "$profile" in *[!A-Za-z0-9_./-]*) exit 6 ;; esac
+		printf '{"path":"%s","payload":""}\n' "$profile" > "$REQUEST"
+		url="http://127.0.0.1:${port}/configs?force=true"
 		curl --config "$CURL_CONFIG" --request PUT --data-binary "@$REQUEST" "$url"
 		;;
 esac
