@@ -10,6 +10,7 @@ const callMeasureNodeDelays = rpc.declare({ object: 'oum', method: 'measureNodeD
 const callSelectNode = rpc.declare({ object: 'oum', method: 'selectNode', params: [ 'name' ], expect: { '': {} } });
 const callSetVpnEnabled = rpc.declare({ object: 'oum', method: 'setVpnEnabled', params: [ 'enabled' ], expect: { '': {} } });
 const callSetDevicePolicy = rpc.declare({ object: 'oum', method: 'setDevicePolicy', params: [ 'mac', 'policy' ], expect: { '': {} } });
+const callRefreshSubscriptionInfo = rpc.declare({ object: 'oum', method: 'refreshSubscriptionInfo', expect: { '': {} } });
 const callVpnJobStatus = rpc.declare({ object: 'oum', method: 'vpnJobStatus', expect: { '': {} } });
 const callStartVpnImport = rpc.declare({
 	object: 'oum', method: 'startVpnImport', params: [ 'vpn_type', 'payload' ], expect: { '': {} }
@@ -76,6 +77,17 @@ function policySelect(client) {
 	]);
 }
 
+function formatBytes(value) {
+	let amount = Math.max(0, Number(value) || 0);
+	const units = [ 'Б', 'КБ', 'МБ', 'ГБ', 'ТБ' ];
+	let unit = 0;
+	while (amount >= 1024 && unit < units.length - 1) {
+		amount /= 1024;
+		unit++;
+	}
+	return `${amount.toFixed(unit > 1 ? 1 : 0)} ${units[unit]}`;
+}
+
 return view.extend({
 	load() { return Promise.all([ callStatus(), callDashboardStatus(), callVpnJobStatus(), callNodeStatus() ]); },
 
@@ -93,6 +105,8 @@ return view.extend({
 
 		let selected = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
+		const dashboardHost = window.location.hostname.includes(':') ? `[${window.location.hostname}]` : window.location.hostname;
+		const zashboardUrl = `http://${dashboardHost}:9090/ui/zashboard/`;
 
 		const root = E('div', { 'class': 'oum-dashboard' }, [
 			E('style', {}, `
@@ -105,6 +119,7 @@ return view.extend({
 				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:#c0392b}
 				.oum-muted{opacity:.68}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
 				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:#eef4fa;margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}
+				.oum-node-actions,.oum-subscription-head{display:flex;align-items:center;gap:8px}.oum-subscription{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #d8dde5}.oum-subscription-head{justify-content:space-between}.oum-subscription-head h3{margin:0}.oum-subscription-progress{height:9px;border-radius:999px;background:#dce3ea;overflow:hidden;margin:13px 0 8px}.oum-subscription-progress>span{display:block;height:100%;background:#32b67a;transition:width .3s}.oum-subscription-data{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}.oum-subscription-status{margin-top:7px;font-size:.85em}
 				.oum-node{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-delay{min-width:70px;text-align:right}
 				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
 				.oum-node-all{margin-top:13px}.oum-node-all>summary,.oum-protected>summary{cursor:pointer;font-weight:600}.oum-node-all>summary{padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
@@ -135,9 +150,24 @@ return view.extend({
 					E('div', { 'class': 'oum-policy-message oum-muted', id: 'policy-message' }, 'Режим применяется к выбранному устройству и сохраняется после перезагрузки.')
 				]),
 				E('section', { 'class': 'oum-panel', id: 'node-panel', hidden: '' }, [
+					E('div', { 'class': 'oum-subscription', id: 'subscription-panel', hidden: '' }, [
+						E('div', { 'class': 'oum-subscription-head' }, [
+							E('h3', {}, 'Подписка'),
+							E('button', { 'class': 'btn cbi-button', id: 'refresh-subscription' }, 'Обновить')
+						]),
+						E('div', { 'class': 'oum-subscription-progress', id: 'subscription-progress' }, E('span', {})),
+						E('div', { 'class': 'oum-subscription-data' }, [
+							E('strong', { id: 'subscription-traffic' }, '—'),
+							E('strong', { id: 'subscription-expire' }, '—')
+						]),
+						E('div', { 'class': 'oum-subscription-status oum-muted', id: 'subscription-status' }, '')
+					]),
 					E('div', { 'class': 'oum-node-head' }, [
 						E('h3', {}, 'VPN-нода'),
-						E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Обновить ping')
+						E('div', { 'class': 'oum-node-actions' }, [
+							E('a', { 'class': 'btn cbi-button', href: zashboardUrl, target: '_blank', rel: 'noreferrer' }, 'Zashboard'),
+							E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Обновить ping')
+						])
 					]),
 					E('div', { 'class': 'oum-current-node', id: 'current-node' }, 'Нет активной ноды'),
 					E('div', { 'class': 'oum-node-message oum-muted', id: 'node-message' }),
@@ -182,11 +212,47 @@ return view.extend({
 		const allNodeList = root.querySelector('#all-node-list');
 		const nodeMessage = root.querySelector('#node-message');
 		const measureButton = root.querySelector('#measure-nodes');
+		const subscriptionPanel = root.querySelector('#subscription-panel');
+		const subscriptionRefresh = root.querySelector('#refresh-subscription');
+		const subscriptionStatus = root.querySelector('#subscription-status');
 		const vpnToggle = root.querySelector('#vpn-toggle');
 		const vpnControlMessage = root.querySelector('#vpn-control-message');
 		const policyMessage = root.querySelector('#policy-message');
 		let vpnEnabled = dashboard.vpn_enabled === true;
 		let vpnWatchTimer = null;
+
+		const updateSubscription = (fresh) => {
+			const info = fresh.subscription || {};
+			subscriptionPanel.hidden = fresh.active_source !== 'subscription';
+			if (subscriptionPanel.hidden) return;
+			subscriptionRefresh.disabled = info.refreshing === true;
+			if (!info.available) {
+				root.querySelector('#subscription-progress').hidden = true;
+				root.querySelector('#subscription-traffic').textContent = 'Данные о трафике недоступны';
+				root.querySelector('#subscription-expire').textContent = '';
+				subscriptionStatus.textContent = info.refreshing ? 'Получаем данные у провайдера…' : 'Провайдер не передал сведения о подписке.';
+				return;
+			}
+
+			const used = Number(info.upload || 0) + Number(info.download || 0);
+			const total = Number(info.total || 0);
+			const percent = total > 0 ? Math.min(100, Math.max(0, used / total * 100)) : 0;
+			const progress = root.querySelector('#subscription-progress');
+			progress.hidden = total <= 0;
+			progress.firstElementChild.style.width = `${percent}%`;
+			root.querySelector('#subscription-traffic').textContent = total > 0 ?
+				`${formatBytes(used)} из ${formatBytes(total)}` : `${formatBytes(used)} использовано`;
+
+			const expires = Number(info.expire || 0);
+			if (expires > 0) {
+				const days = Math.max(0, Math.ceil((expires - Date.now() / 1000) / 86400));
+				const date = new Date(expires * 1000).toLocaleDateString('ru-RU');
+				root.querySelector('#subscription-expire').textContent = `Осталось ${days} дн. · до ${date}`;
+			} else {
+				root.querySelector('#subscription-expire').textContent = 'Без ограничения срока';
+			}
+			subscriptionStatus.textContent = info.refreshing ? 'Обновляем данные…' : 'Данные подписки обновляются автоматически каждые 30 минут.';
+		};
 
 		const updateDashboard = (fresh) => {
 			root.querySelector('#wan-state').textContent = fresh.wan?.up ? 'Подключён' : 'Нет соединения';
@@ -201,6 +267,7 @@ return view.extend({
 			vpnToggle.disabled = fresh.active_source === 'none' || (vpnEnabled && fresh.vpn_ready !== true);
 			vpnControlMessage.textContent = !vpnEnabled ? 'VPN выключен' :
 				(fresh.vpn_ready === true ? 'VPN работает' : 'VPN запускается…');
+			updateSubscription(fresh);
 			const body = root.querySelector('#client-list');
 			body.replaceChildren(...(fresh.clients || []).map((client) => E('tr', {}, [
 				E('td', {}, client.name), E('td', {}, client.ip),
@@ -305,6 +372,25 @@ return view.extend({
 			}).catch((err) => showNodeMessage(err.message, true)).finally(() => {
 				measureButton.disabled = false;
 				measureButton.textContent = 'Обновить ping';
+			});
+		});
+
+		subscriptionRefresh.addEventListener('click', (ev) => {
+			ev.preventDefault();
+			subscriptionRefresh.disabled = true;
+			subscriptionStatus.textContent = 'Обновляем данные подписки…';
+			callRefreshSubscriptionInfo().then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Не удалось обновить данные подписки.');
+				let attempts = 0;
+				const watch = () => callDashboardStatus().then((fresh) => {
+					updateDashboard(fresh);
+					if (fresh.subscription?.refreshing === true && attempts++ < 15)
+						return new Promise((resolve) => window.setTimeout(resolve, 1000)).then(watch);
+				});
+				return watch();
+			}).catch((err) => {
+				subscriptionStatus.textContent = err.message;
+				subscriptionRefresh.disabled = false;
 			});
 		});
 

@@ -67,6 +67,13 @@ group latency and switches nodes without rewriting YAML or restarting
 OpenClash. It prefers up to five low-latency alternatives from different
 country flags when the provider includes flags in node names.
 
+For Subscription profiles, the dashboard also displays provider traffic and
+expiry metadata from `Subscription-Userinfo`. The URL remains on the router;
+the browser receives only numeric counters from a private 30-minute cache.
+Per-device selectors can keep a DHCP client on the normal rule set, force it
+through the VPN or bypass the VPN. Runtime rules are hot-reloaded into Mihomo
+without rewriting the downloaded source profile.
+
 Development installation on a test router is handled by
 `tools/install-luci-dev.sh`. The installer deliberately does not activate the
 temporary `FirstRun` access point; run `/usr/libexec/oum-firstboot` separately

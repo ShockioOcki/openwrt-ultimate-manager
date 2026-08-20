@@ -1,0 +1,69 @@
+#!/bin/sh
+
+set -eu
+
+TEMP_PREFIX="${OUM_SUBSCRIPTION_TEMP_PREFIX:-/tmp/oum-subscription-info}"
+LOCK_DIR="${TEMP_PREFIX}.lock"
+CACHE="${OUM_SUBSCRIPTION_CACHE:-/tmp/oum-subscription-info.json}"
+HEADERS="${TEMP_PREFIX}.headers"
+OUTPUT="${TEMP_PREFIX}.output"
+
+mkdir "$LOCK_DIR" 2>/dev/null || exit 0
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true; rm -f "$HEADERS" "$OUTPUT"' EXIT INT TERM
+
+now="$(date +%s)"
+active="$(uci -q get oum.main.active_source || echo none)"
+url="$(uci -q get openclash.oum_subscription_info.url || true)"
+
+write_unavailable() {
+	printf '{"available":false,"checked_at":%s}\n' "$now" > "$OUTPUT"
+	chmod 600 "$OUTPUT"
+	mv "$OUTPUT" "$CACHE"
+}
+
+if [ "$active" != subscription ] || [ -z "$url" ]; then
+	write_unavailable
+	exit 0
+fi
+
+case "$url" in
+	http://*|https://*) ;;
+	*) write_unavailable; exit 0 ;;
+esac
+
+fetch_headers() {
+	user_agent="$1"
+	: > "$HEADERS"
+	curl -sSLI -X GET --connect-timeout 5 --max-time 12 --retry 1 \
+		-H "User-Agent: $user_agent" -D "$HEADERS" -o /dev/null "$url" 2>/dev/null
+}
+
+fetch_headers Clash || fetch_headers Quantumultx || {
+	write_unavailable
+	exit 0
+}
+
+header="$(awk 'tolower($0) ~ /^subscription-userinfo:/ { line = tolower($0) } END { sub(/\r$/, "", line); print line }' "$HEADERS")"
+if [ -z "$header" ]; then
+	write_unavailable
+	exit 0
+fi
+header="${header#*:}"
+
+field() {
+	printf '%s\n' "$header" | tr ';' '\n' | sed -n "s/^[[:space:]]*$1=\([0-9][0-9]*\)[[:space:]]*$/\1/p" | tail -1
+}
+
+upload="$(field upload)"
+download="$(field download)"
+total="$(field total)"
+expire="$(field expire)"
+
+for value in "$upload" "$download" "$total" "$expire"; do
+	case "$value" in ''|*[!0-9]*) write_unavailable; exit 0 ;; esac
+done
+
+printf '{"available":true,"checked_at":%s,"upload":%s,"download":%s,"total":%s,"expire":%s}\n' \
+	"$now" "$upload" "$download" "$total" "$expire" > "$OUTPUT"
+chmod 600 "$OUTPUT"
+mv "$OUTPUT" "$CACHE"

@@ -144,3 +144,13 @@ it never returns proxy credentials. Delay measurements use the active OUM
 group, and switching validates the requested name against that group's own
 node list before issuing the API request. The OpenClash dashboard secret is
 kept in a mode-0600 curl config and removed after every request.
+
+Subscription traffic and expiry are fetched on the router from the provider's
+`Subscription-Userinfo` response header. OUM stores only the parsed numeric
+values in `/tmp` for 30 minutes; the restricted browser session never receives
+the subscription URL. Manual refresh uses the same lock-protected helper.
+
+Device routing policies are stored in anonymous `oum` UCI sections and paired
+with stable DHCP reservations. OUM maintains a marked block in OpenClash's
+custom rules for persistence, while a validated runtime copy is hot-reloaded
+through Mihomo so policy changes do not require a full OpenClash restart.

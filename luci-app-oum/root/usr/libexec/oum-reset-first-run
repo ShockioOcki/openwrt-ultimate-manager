@@ -33,6 +33,7 @@ uci -q commit oum
 rm -f /etc/oum/active_source /etc/oum/active_profile /etc/oum/proxy_backend
 rm -rf /tmp/oum-vpn-job
 rm -rf /tmp/oum-mihomo-api
+rm -f /tmp/oum-subscription-info.json /tmp/oum-subscription-info.log
 rm -f /tmp/oum-vpn-job.log
 
 uci set oum.main.setup_complete='0'

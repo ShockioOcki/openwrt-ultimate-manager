@@ -7,6 +7,7 @@ import { connect } from 'ubus';
 const CONFIGS = [ 'network', 'wireless', 'rpcd', 'oum' ];
 const BACKUP_DIR = '/tmp/oum-setup-backup';
 const VPN_JOB_DIR = '/tmp/oum-vpn-job';
+const SUBSCRIPTION_CACHE = '/tmp/oum-subscription-info.json';
 
 function shellquote(value) {
 	return `'${replace(value ?? '', "'", "'\\''")}'`;
@@ -165,6 +166,29 @@ function nodeStatusData() {
 	return { available: true, group: groupName, current: group.now ?? '', nodes };
 }
 
+function subscriptionStatusData(force) {
+	const uci = cursor();
+	if ((uci.get('oum', 'main', 'active_source') ?? 'none') != 'subscription')
+		return { available: false, refreshing: false };
+
+	let cached = readJsonFile(SUBSCRIPTION_CACHE);
+	let checked = +(cached?.checked_at ?? 0);
+	let stale = !checked || time() - checked > 1800;
+	let running = access('/tmp/oum-subscription-info.lock') ? true : false;
+	if ((force || stale) && access('/usr/libexec/oum-subscription-info'))
+		system('(/usr/libexec/oum-subscription-info) >/tmp/oum-subscription-info.log 2>&1 &');
+
+	return {
+		available: cached?.available == true,
+		refreshing: force || stale || running,
+		checked_at: checked,
+		upload: +(cached?.upload ?? 0),
+		download: +(cached?.download ?? 0),
+		total: +(cached?.total ?? 0),
+		expire: +(cached?.expire ?? 0)
+	};
+}
+
 function validSsid(value) {
 	return type(value) == 'string' && length(value) >= 1 && length(value) <= 32;
 }
@@ -309,8 +333,22 @@ const methods = {
 				thermal: thermalStatus(),
 				active_source: uci.get('oum', 'main', 'active_source') ?? 'none',
 				vpn_enabled: uci.get('openclash', 'config', 'enable') == '1',
-				vpn_ready: vpnReady()
+				vpn_ready: vpnReady(),
+				subscription: subscriptionStatusData(false)
 			};
+		}
+	},
+
+	refreshSubscriptionInfo: {
+		call: function() {
+			const uci = cursor();
+			if ((uci.get('oum', 'main', 'active_source') ?? 'none') != 'subscription')
+				return failure('not_subscription', 'Сейчас активна не подписка.');
+			if (!access('/usr/libexec/oum-subscription-info'))
+				return failure('runtime_missing', 'Компонент проверки подписки не установлен.');
+			system(`rm -f ${SUBSCRIPTION_CACHE}`);
+			subscriptionStatusData(true);
+			return { ok: true, message: 'Обновляем данные подписки…' };
 		}
 	},
 
