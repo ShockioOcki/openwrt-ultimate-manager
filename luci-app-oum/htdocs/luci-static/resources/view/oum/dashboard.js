@@ -1,7 +1,6 @@
 'use strict';
 'require view';
 'require rpc';
-'require ui';
 'require poll';
 
 const callStatus = rpc.declare({ object: 'oum', method: 'status', expect: { '': {} } });
@@ -18,19 +17,35 @@ const sourceNames = { none: 'Не настроено', subscription: 'Subscripti
 
 function countryKey(name) {
 	const flag = String(name).match(/[\u{1F1E6}-\u{1F1FF}]{2}/u);
-	if (flag) return flag[0];
+	if (flag)
+		return Array.from(flag[0]).map((symbol) =>
+			String.fromCharCode(65 + symbol.codePointAt(0) - 0x1F1E6)).join('');
+	const normalized = String(name).toLowerCase();
+	if (/(?:финлянд|finland|helsinki)/.test(normalized)) return 'FI';
+	if (/(?:нидерланд|netherland|holland|amsterdam)/.test(normalized)) return 'NL';
 	const code = String(name).match(/(?:^|[\s_|+\-])([A-Z]{2})(?:$|[\s_|+\-])/);
 	return code ? code[1] : '';
 }
 
-function preferredNodes(nodeStatus) {
-	const sorted = (nodeStatus.nodes || []).filter((node) => node.name !== nodeStatus.current).sort((a, b) => {
+function sortedNodes(nodes) {
+	return (nodes || []).slice().sort((a, b) => {
 		const ad = a.delay > 0 ? a.delay : Number.MAX_SAFE_INTEGER;
 		const bd = b.delay > 0 ? b.delay : Number.MAX_SAFE_INTEGER;
 		return ad - bd || a.name.localeCompare(b.name);
 	});
+}
+
+function preferredNodes(nodeStatus) {
+	const sorted = sortedNodes(nodeStatus.nodes).filter((node) => node.name !== nodeStatus.current);
 	const result = [], countries = new Set();
+	for (const required of [ 'FI', 'NL' ]) {
+		const node = sorted.find((candidate) => countryKey(candidate.name) === required);
+		if (!node) continue;
+		result.push(node);
+		countries.add(required);
+	}
 	for (const node of sorted) {
+		if (result.includes(node)) continue;
 		const country = countryKey(node.name);
 		if (country && countries.has(country)) continue;
 		result.push(node);
@@ -79,8 +94,11 @@ return view.extend({
 				.oum-job{padding:12px;border-radius:8px;background:#eef4fa;margin:14px 0}.oum-job[data-state="failed"]{background:#ffe9e7}.oum-job[data-state="success"]{background:#e6f7eb}
 				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}
 				.oum-muted{opacity:.68}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
-				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:#eef4fa;margin:10px 0 14px}.oum-node-list{display:grid;gap:8px}
+				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:#eef4fa;margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}
 				.oum-node{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-delay{min-width:70px;text-align:right}
+				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
+				.oum-node-all{margin-top:13px}.oum-node-all>summary,.oum-protected>summary{cursor:pointer;font-weight:600}.oum-node-all>summary{padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
+				.oum-protected{margin-bottom:14px}.oum-protected>summary{font-size:1.15rem}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:2px}
 				@media(max-width:850px){.oum-cards{grid-template-columns:1fr 1fr}}@media(max-width:700px){.oum-cards,.oum-sources{grid-template-columns:1fr}.oum-clients .optional{display:none}}
 			`),
 			E('h2', {}, 'OUM'),
@@ -104,24 +122,35 @@ return view.extend({
 						E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Обновить ping')
 					]),
 					E('div', { 'class': 'oum-current-node', id: 'current-node' }, 'Нет активной ноды'),
-					E('div', { 'class': 'oum-node-list', id: 'node-list' })
+					E('div', { 'class': 'oum-node-message oum-muted', id: 'node-message' }),
+					E('div', { 'class': 'oum-node-title' }, 'Быстрый доступ'),
+					E('div', { 'class': 'oum-node-list', id: 'node-list' }),
+					E('details', { 'class': 'oum-node-all' }, [
+						E('summary', { id: 'all-nodes-summary' }, 'Все ноды'),
+						E('div', { 'class': 'oum-node-list', id: 'all-node-list' })
+					])
 				])
 			]),
-			E('section', { 'class': 'oum-panel' }, [
-				E('h3', {}, 'Защищённое подключение'),
-				E('p', {}, 'Новый источник полностью заменяет предыдущий OUM-профиль. При ошибке старый профиль восстанавливается.'),
-				E('div', { 'class': 'oum-sources' }, [
-					sourceChoice('subscription', 'Subscription', 'Ссылка на набор серверов', selected === 'subscription'),
-					sourceChoice('awg', 'AWG Tunnel', 'Конфигурация AmneziaWG', selected === 'awg'),
-					sourceChoice('proxy', 'Proxy', 'VLESS Reality или Hysteria2', selected === 'proxy')
-				]),
-				E('div', { 'class': 'oum-input' }, [
-					E('label', { id: 'source-label' }, ''),
-					E('input', { id: 'subscription-input', type: 'url', autocomplete: 'off', spellcheck: 'false' }),
-					E('textarea', { id: 'config-input', autocomplete: 'off', spellcheck: 'false', hidden: '' })
-				]),
-				E('div', { 'class': 'oum-job', id: 'job-status', 'data-state': initialJob.state || 'idle' }, initialJob.message || 'Готово к добавлению подключения.'),
-				E('button', { 'class': 'btn cbi-button-action', id: 'import-source' }, 'Проверить и активировать')
+			E('details', {
+				'class': 'oum-panel oum-protected',
+				open: status.pending_source !== 'none' && status.active_source === 'none' ? '' : null
+			}, [
+				E('summary', {}, 'Защищённое подключение'),
+				E('div', { 'class': 'oum-protected-content' }, [
+					E('p', {}, 'Новый источник полностью заменяет предыдущий OUM-профиль. При ошибке старый профиль восстанавливается.'),
+					E('div', { 'class': 'oum-sources' }, [
+						sourceChoice('subscription', 'Subscription', 'Ссылка на набор серверов', selected === 'subscription'),
+						sourceChoice('awg', 'AWG Tunnel', 'Конфигурация AmneziaWG', selected === 'awg'),
+						sourceChoice('proxy', 'Proxy', 'VLESS Reality или Hysteria2', selected === 'proxy')
+					]),
+					E('div', { 'class': 'oum-input' }, [
+						E('label', { id: 'source-label' }, ''),
+						E('input', { id: 'subscription-input', type: 'url', autocomplete: 'off', spellcheck: 'false' }),
+						E('textarea', { id: 'config-input', autocomplete: 'off', spellcheck: 'false', hidden: '' })
+					]),
+					E('div', { 'class': 'oum-job', id: 'job-status', 'data-state': initialJob.state || 'idle' }, initialJob.message || 'Готово к добавлению подключения.'),
+					E('button', { 'class': 'btn cbi-button-action', id: 'import-source' }, 'Проверить и активировать')
+				])
 			])
 		]);
 
@@ -132,6 +161,8 @@ return view.extend({
 		const label = root.querySelector('#source-label');
 		const nodePanel = root.querySelector('#node-panel');
 		const nodeList = root.querySelector('#node-list');
+		const allNodeList = root.querySelector('#all-node-list');
+		const nodeMessage = root.querySelector('#node-message');
 		const measureButton = root.querySelector('#measure-nodes');
 
 		const updateDashboard = (fresh) => {
@@ -155,16 +186,28 @@ return view.extend({
 		const updateNodes = (fresh) => {
 			nodePanel.hidden = !fresh.available;
 			if (!fresh.available) return;
+			const makeNode = (node, isCurrent) => E('div', { 'class': 'oum-node' }, [
+				E('span', {}, node.name),
+				E('span', { 'class': 'oum-delay' }, node.delay > 0 ? `${node.delay} ms` : 'offline'),
+				E('button', {
+					'class': 'btn cbi-button', 'data-node': isCurrent ? null : node.name,
+					disabled: isCurrent ? '' : null
+				}, isCurrent ? 'Активна' : 'Выбрать')
+			]);
 			const current = (fresh.nodes || []).find((node) => node.name === fresh.current);
 			root.querySelector('#current-node').textContent = current ?
 				`${current.name} · ${current.delay > 0 ? `${current.delay} ms` : 'ping не измерен'}` : (fresh.current || 'Не выбрана');
-			nodeList.replaceChildren(...preferredNodes(fresh).map((node) => E('div', { 'class': 'oum-node' }, [
-				E('span', {}, node.name),
-				E('span', { 'class': 'oum-delay' }, node.delay > 0 ? `${node.delay} ms` : 'offline'),
-				E('button', { 'class': 'btn cbi-button', 'data-node': node.name }, 'Выбрать')
-			])));
+			nodeList.replaceChildren(...preferredNodes(fresh).map((node) => makeNode(node, false)));
 			if (!nodeList.children.length)
 				nodeList.appendChild(E('div', { 'class': 'oum-muted' }, 'Других нод в профиле нет.'));
+			const all = sortedNodes(fresh.nodes);
+			root.querySelector('#all-nodes-summary').textContent = `Все ноды (${all.length})`;
+			allNodeList.replaceChildren(...all.map((node) => makeNode(node, node.name === fresh.current)));
+		};
+
+		const showNodeMessage = (message, failed) => {
+			nodeMessage.textContent = message || '';
+			nodeMessage.dataset.state = failed ? 'failed' : 'idle';
 		};
 
 		const updateInput = () => {
@@ -203,8 +246,10 @@ return view.extend({
 		button.addEventListener('click', (ev) => {
 			ev.preventDefault();
 			const payload = (selected === 'subscription' ? urlInput.value : configInput.value).trim();
-			if (!payload)
-				return ui.addNotification(null, E('p', {}, 'Введите данные подключения.'), 'warning');
+			if (!payload) {
+				showJob({ state: 'failed', message: 'Введите данные подключения.' });
+				return;
+			}
 			button.disabled = true;
 			showJob({ state: 'running', message: 'Запускаем безопасный импорт…' });
 			callStartVpnImport(selected, payload).then((result) => {
@@ -225,20 +270,26 @@ return view.extend({
 			callMeasureNodeDelays().then((result) => {
 				if (!result.ok) throw new Error(result.message || 'Не удалось измерить ping.');
 				return callNodeStatus();
-			}).then(updateNodes).catch((err) => ui.addNotification(null, E('p', {}, err.message), 'warning')).finally(() => {
+			}).then((nodes) => {
+				updateNodes(nodes);
+				showNodeMessage('Ping нод обновлён.', false);
+			}).catch((err) => showNodeMessage(err.message, true)).finally(() => {
 				measureButton.disabled = false;
 				measureButton.textContent = 'Обновить ping';
 			});
 		});
 
-		nodeList.addEventListener('click', (ev) => {
+		nodePanel.addEventListener('click', (ev) => {
 			const target = ev.target.closest('[data-node]');
 			if (!target) return;
 			target.disabled = true;
 			callSelectNode(target.dataset.node).then((result) => {
 				if (!result.ok) throw new Error(result.message || 'Не удалось переключить ноду.');
 				return callNodeStatus();
-			}).then(updateNodes).catch((err) => ui.addNotification(null, E('p', {}, err.message), 'warning')).finally(() => { target.disabled = false; });
+			}).then((nodes) => {
+				updateNodes(nodes);
+				showNodeMessage('Нода переключена.', false);
+			}).catch((err) => showNodeMessage(err.message, true)).finally(() => { target.disabled = false; });
 		});
 
 		updateInput();

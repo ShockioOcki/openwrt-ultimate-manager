@@ -3,6 +3,7 @@
 		"description": "Access the simplified OUM router manager",
 		"read": {
 			"ubus": {
+				"luci": [ "getFeatures" ],
 				"oum": [ "status", "dashboardStatus", "nodeStatus", "measureNodeDelays", "vpnJobStatus" ],
 				"session": [ "access" ]
 			},
