@@ -57,6 +57,11 @@ AmneziaWG configurations and VLESS/Hysteria2 links through a background job.
 It reuses the terminal build's validated single-profile pipeline and reports
 progress without retaining submitted credentials in LuCI.
 
+The first dashboard widgets show live WAN addressing, enabled SSIDs, named
+DHCP clients with Wi-Fi/Ethernet classification, router temperature and the
+active OUM VPN source. They refresh without running external connectivity or
+speed tests.
+
 Development installation on a test router is handled by
 `tools/install-luci-dev.sh`. The installer deliberately does not activate the
 temporary `FirstRun` access point; run `/usr/libexec/oum-firstboot` separately

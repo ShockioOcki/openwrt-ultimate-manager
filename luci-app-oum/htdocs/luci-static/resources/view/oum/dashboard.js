@@ -2,8 +2,10 @@
 'require view';
 'require rpc';
 'require ui';
+'require poll';
 
 const callStatus = rpc.declare({ object: 'oum', method: 'status', expect: { '': {} } });
+const callDashboardStatus = rpc.declare({ object: 'oum', method: 'dashboardStatus', expect: { '': {} } });
 const callVpnJobStatus = rpc.declare({ object: 'oum', method: 'vpnJobStatus', expect: { '': {} } });
 const callStartVpnImport = rpc.declare({
 	object: 'oum', method: 'startVpnImport', params: [ 'vpn_type', 'payload' ], expect: { '': {} }
@@ -19,11 +21,12 @@ function sourceChoice(value, title, description, checked) {
 }
 
 return view.extend({
-	load() { return Promise.all([ callStatus(), callVpnJobStatus() ]); },
+	load() { return Promise.all([ callStatus(), callDashboardStatus(), callVpnJobStatus() ]); },
 
 	render(data) {
 		const status = data[0];
-		const initialJob = data[1];
+		const dashboard = data[1];
+		const initialJob = data[2];
 		if (!status.setup_complete)
 			return E('div', {}, [
 				E('h2', {}, 'OUM'),
@@ -36,19 +39,31 @@ return view.extend({
 
 		const root = E('div', { 'class': 'oum-dashboard' }, [
 			E('style', {}, `
-				.oum-dashboard{max-width:960px;margin:0 auto}.oum-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0}
+				.oum-dashboard{max-width:1050px;margin:0 auto}.oum-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
 				.oum-card,.oum-panel{border:1px solid #ccd3dc;border-radius:12px;padding:16px}.oum-card small{display:block;opacity:.7;margin-bottom:8px}.oum-card strong{font-size:1.1rem}
 				.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}
 				.oum-source-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}
 				.oum-input{margin:18px 0}.oum-input label{display:block;font-weight:600;margin-bottom:7px}.oum-input input,.oum-input textarea{width:100%;box-sizing:border-box}.oum-input textarea{min-height:180px;font-family:monospace}
 				.oum-job{padding:12px;border-radius:8px;background:#eef4fa;margin:14px 0}.oum-job[data-state="failed"]{background:#ffe9e7}.oum-job[data-state="success"]{background:#e6f7eb}
-				@media(max-width:700px){.oum-cards,.oum-sources{grid-template-columns:1fr}}
+				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}
+				.oum-muted{opacity:.68}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
+				@media(max-width:850px){.oum-cards{grid-template-columns:1fr 1fr}}@media(max-width:700px){.oum-cards,.oum-sources{grid-template-columns:1fr}.oum-clients .optional{display:none}}
 			`),
 			E('h2', {}, 'OUM'),
 			E('div', { 'class': 'oum-cards' }, [
-				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Интернет'), E('strong', {}, 'Настроен') ]),
-				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'VPN-профиль'), E('strong', { id: 'active-source' }, sourceNames[status.active_source] || status.active_source) ]),
-				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Регион Wi-Fi'), E('strong', {}, status.country || 'US') ])
+				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
+				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, '') ]),
+				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Температура'), E('strong', { id: 'thermal-state' }, '—'), E('div', { 'class': 'oum-muted' }, 'Максимум по датчикам') ]),
+				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'VPN-профиль'), E('strong', { id: 'active-source' }, sourceNames[dashboard.active_source] || dashboard.active_source) ])
+			]),
+			E('div', { 'class': 'oum-panels' }, [
+				E('section', { 'class': 'oum-panel' }, [
+					E('h3', {}, 'Подключённые устройства'),
+					E('table', { 'class': 'oum-clients' }, [
+						E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'IP-адрес'), E('th', {}, 'Подключение'), E('th', { 'class': 'optional' }, 'MAC') ])),
+						E('tbody', { id: 'client-list' })
+					])
+				])
 			]),
 			E('section', { 'class': 'oum-panel' }, [
 				E('h3', {}, 'Защищённое подключение'),
@@ -73,6 +88,24 @@ return view.extend({
 		const urlInput = root.querySelector('#subscription-input');
 		const configInput = root.querySelector('#config-input');
 		const label = root.querySelector('#source-label');
+
+		const updateDashboard = (fresh) => {
+			root.querySelector('#wan-state').textContent = fresh.wan?.up ? 'Подключён' : 'Нет соединения';
+			root.querySelector('#wan-detail').textContent = fresh.wan?.ipv4 ? `${fresh.wan.ipv4} · ${String(fresh.wan.proto || '').toUpperCase()}` : String(fresh.wan?.proto || '').toUpperCase();
+			root.querySelector('#client-count').textContent = String(fresh.clients?.length || 0);
+			const ssids = Array.from(new Set((fresh.wifi || []).map((item) => item.ssid)));
+			root.querySelector('#wifi-detail').textContent = ssids.length ? ssids.join(' · ') : 'Wi-Fi выключен';
+			root.querySelector('#thermal-state').textContent = fresh.thermal?.maximum != null ? `${Math.round(fresh.thermal.maximum)} °C` : 'Нет данных';
+			root.querySelector('#active-source').textContent = sourceNames[fresh.active_source] || fresh.active_source;
+			const body = root.querySelector('#client-list');
+			body.replaceChildren(...(fresh.clients || []).map((client) => E('tr', {}, [
+				E('td', {}, client.name), E('td', {}, client.ip),
+				E('td', {}, client.medium === 'wifi' ? 'Wi-Fi' : 'Кабель'),
+				E('td', { 'class': 'optional' }, client.mac)
+			])));
+			if (!fresh.clients?.length)
+				body.appendChild(E('tr', {}, E('td', { colspan: 4, 'class': 'oum-muted' }, 'Нет активных DHCP-клиентов')));
+		};
 
 		const updateInput = () => {
 			selected = root.querySelector('[name="vpn_source"]:checked')?.value || 'subscription';
@@ -125,6 +158,8 @@ return view.extend({
 		});
 
 		updateInput();
+		updateDashboard(dashboard);
+		poll.add(() => callDashboardStatus().then(updateDashboard), 10);
 		if (initialJob.state === 'running') watchJob(); else showJob(initialJob);
 		return root;
 	},
@@ -133,4 +168,3 @@ return view.extend({
 	handleSave: null,
 	handleReset: null
 });
-

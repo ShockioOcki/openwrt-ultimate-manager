@@ -1,7 +1,8 @@
 'use strict';
 
-import { access, glob, open, popen, readfile } from 'fs';
+import { access, basename, dirname, glob, open, popen, readfile } from 'fs';
 import { cursor } from 'uci';
+import { connect } from 'ubus';
 
 const CONFIGS = [ 'network', 'wireless', 'rpcd', 'oum' ];
 const BACKUP_DIR = '/tmp/oum-setup-backup';
@@ -35,6 +36,82 @@ function vpnJobStatus() {
 		if (pair)
 			result[pair[1]] = pair[2];
 	}
+	return result;
+}
+
+function wirelessStations() {
+	let stations = {};
+	for (let path in glob('/sys/class/net/*/wireless')) {
+		let device = basename(dirname(path));
+		let process = popen(`/usr/bin/iwinfo ${device} assoclist 2>/dev/null`);
+		if (!process)
+			continue;
+		for (let line = process.read('line'); length(line); line = process.read('line')) {
+			let mac = match(line, /^([0-9A-Fa-f:]{17})\s/);
+			if (mac)
+				stations[uc(mac[1])] = true;
+		}
+		process.close();
+	}
+	return stations;
+}
+
+function connectedClients() {
+	let result = [];
+	let stations = wirelessStations();
+	let leases = readfile('/tmp/dhcp.leases') ?? '';
+	for (let line in split(leases, '\n')) {
+		let fields = match(line, /^(\d+)\s+([0-9A-Fa-f:]{17})\s+(\S+)\s+(\S+)/);
+		if (!fields)
+			continue;
+		let mac = uc(fields[2]);
+		push(result, {
+			name: fields[4] == '*' ? 'Неизвестное устройство' : fields[4],
+			mac,
+			ip: fields[3],
+			medium: stations[mac] ? 'wifi' : 'ethernet',
+			expires: +fields[1]
+		});
+	}
+	return result;
+}
+
+function thermalStatus() {
+	let sensors = [];
+	let maximum = null;
+	for (let path in glob('/sys/class/thermal/thermal_zone*/temp')) {
+		let directory = dirname(path);
+		let raw = +trim(readfile(path) ?? '0');
+		if (!raw)
+			continue;
+		let value = raw > 1000 ? raw / 1000 : raw;
+		let name = trim(readfile(`${directory}/type`) ?? basename(directory));
+		push(sensors, { name, value });
+		if (maximum == null || value > maximum)
+			maximum = value;
+	}
+	return { maximum, sensors };
+}
+
+function wifiStatus(uci) {
+	let networks = [];
+	uci.foreach('wireless', 'wifi-iface', (iface) => {
+		if (iface.mode == 'ap' && iface.disabled != '1' && length(iface.ssid ?? ''))
+			push(networks, { ssid: iface.ssid, device: iface.device ?? '' });
+	});
+	return networks;
+}
+
+function networkStatus() {
+	let result = { up: false, ipv4: '', device: '', proto: '' };
+	let bus = connect();
+	let status = bus?.call('network.interface.wan', 'status');
+	if (!status)
+		return result;
+	result.up = status.up == true;
+	result.device = status.l3_device ?? status.device ?? '';
+	result.proto = status.proto ?? '';
+	result.ipv4 = status['ipv4-address']?.[0]?.address ?? '';
 	return result;
 }
 
@@ -169,6 +246,19 @@ const methods = {
 	vpnJobStatus: {
 		call: function() {
 			return vpnJobStatus();
+		}
+	},
+
+	dashboardStatus: {
+		call: function() {
+			const uci = cursor();
+			return {
+				wan: networkStatus(),
+				wifi: wifiStatus(uci),
+				clients: connectedClients(),
+				thermal: thermalStatus(),
+				active_source: uci.get('oum', 'main', 'active_source') ?? 'none'
+			};
 		}
 	},
 

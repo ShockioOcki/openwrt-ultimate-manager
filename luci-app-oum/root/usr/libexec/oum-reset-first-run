@@ -1,0 +1,32 @@
+#!/bin/sh
+
+set -eu
+
+/etc/init.d/openclash stop >/dev/null 2>&1 || true
+/etc/init.d/openclash disable >/dev/null 2>&1 || true
+
+for profile in \
+	Subscription.yaml AWG_Tunnel.yaml Proxy.yaml \
+	oum-subscription.yaml oum-amnezia.yaml oum-reality.yaml oum.yaml; do
+	rm -f "/etc/openclash/config/$profile" "/etc/openclash/$profile"
+done
+rm -f /etc/openclash/proxy_provider/oum-*.yaml
+
+uci -q delete openclash.oum_subscription_info || true
+uci -q delete openclash.config.config_path || true
+uci -q set openclash.config.enable='0'
+uci -q commit openclash
+
+rm -f /etc/oum/active_source /etc/oum/active_profile /etc/oum/proxy_backend
+rm -rf /tmp/oum-vpn-job
+rm -f /tmp/oum-vpn-job.log
+
+uci set oum.main.setup_complete='0'
+uci set oum.main.setup_step='internet'
+uci set oum.main.active_source='none'
+uci set oum.main.pending_source='none'
+uci commit oum
+
+/bin/busybox passwd -l root >/dev/null
+/usr/libexec/oum-firstboot
+

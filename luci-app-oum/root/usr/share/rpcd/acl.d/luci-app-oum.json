@@ -3,7 +3,7 @@
 		"description": "Access the simplified OUM router manager",
 		"read": {
 			"ubus": {
-				"oum": [ "status", "vpnJobStatus" ],
+				"oum": [ "status", "dashboardStatus", "vpnJobStatus" ],
 				"session": [ "access" ]
 			},
 			"uci": [ "oum" ]

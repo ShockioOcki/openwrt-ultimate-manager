@@ -30,6 +30,7 @@ luci-app-oum/
 └── root/
     ├── etc/config/oum
     ├── usr/libexec/oum-firstboot
+    ├── usr/libexec/oum-reset-first-run
     └── usr/share/{luci,rpcd}/
 ```
 
@@ -83,11 +84,11 @@ OpenClash overwrite OUM's routing policy.
 
 ## Roadmap
 
-1. Complete clean-router installation and source replacement tests.
-2. Connect existing NAS/SQM/GearUP modules to the new menu.
-3. Connect the wizard's VPN step to the existing single-profile source pipeline.
-4. Add dashboard widgets and the optional USB/NAS flow.
-5. Promote the test build to the stable `oum.sh` only after router testing.
+1. Complete repeated clean-router first-run and source replacement tests.
+2. Add controlled direct/VPN speed tests without automatic background traffic.
+3. Add VPN node health, selection and per-device routing controls.
+4. Connect the optional USB/NAS flow and existing service modules.
+5. Package the runtime assets and promote the test build only after router testing.
 
 ## LuCI first-run architecture
 
@@ -124,3 +125,15 @@ LuCI polls a small status file and never receives the submitted secret again.
 The input file is removed on success, validation failure, download failure or
 termination. A new Subscription, AWG Tunnel or Proxy still replaces the old
 OUM profile only after Mihomo validation and successful OpenClash startup.
+
+`dashboardStatus` is a read-only rpcd method. It combines netifd WAN state,
+enabled wireless SSIDs, DHCP leases, current wireless associations and thermal
+zone readings. The browser refreshes these values every ten seconds. Client
+names come from DHCP leases; unknown names are displayed explicitly rather
+than guessed from MAC vendors.
+
+`oum-reset-first-run` is a test and recovery helper. It removes only
+OUM-managed OpenClash profiles and state, disables OpenClash, locks root
+password authentication and restores the temporary FirstRun network and
+restricted admin login. It does not factory-reset OpenWrt or change the LAN
+address.
