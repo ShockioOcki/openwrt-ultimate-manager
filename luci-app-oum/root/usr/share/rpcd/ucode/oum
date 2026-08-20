@@ -207,6 +207,19 @@ function networkStatus() {
 	return result;
 }
 
+function capabilityStatus() {
+	let usbNetwork = system("for path in /sys/class/net/*/device; do target=$(readlink -f \"$path\") || continue; case \"$target\" in */usb*/*) exit 0;; esac; done; exit 1") == 0;
+	let mobileControl = length(glob('/dev/cdc-wdm*')) > 0 || length(glob('/dev/ttyUSB*')) > 0;
+	return {
+		mesh_driver: system("iw list 2>/dev/null | grep -q 'mesh point'") == 0,
+		mesh_runtime: system("apk info 2>/dev/null | grep -Eq '^wpad($|-(mesh-)?(mbedtls|openssl|wolfssl)$)'") == 0,
+		usb_host: length(glob('/sys/bus/usb/devices/usb*')) > 0,
+		usb_storage: length(glob('/sys/class/block/sd*')) > 0,
+		usb_network: usbNetwork,
+		usb_modem: mobileControl
+	};
+}
+
 function settingsStatusData() {
 	const uci = cursor();
 	let bands = {};
@@ -237,6 +250,7 @@ function settingsStatusData() {
 			country: 'US'
 		},
 		wan,
+		capabilities: capabilityStatus(),
 		rollback_wifi: access('/etc/oum/rollback/wireless') ? true : false,
 		rollback_wan: access('/etc/oum/rollback/network') ? true : false
 	};
@@ -430,12 +444,14 @@ const methods = {
 	status: {
 		call: function() {
 			const uci = cursor();
+			const capabilities = capabilityStatus();
 			return {
 				setup_complete: uci.get('oum', 'main', 'setup_complete') == '1',
 				setup_step: uci.get('oum', 'main', 'setup_step') ?? 'internet',
 				active_source: uci.get('oum', 'main', 'active_source') ?? 'none',
 				pending_source: uci.get('oum', 'main', 'pending_source') ?? 'none',
-				usb_present: length(glob('/sys/class/block/sd*')) > 0,
+				usb_present: capabilities.usb_storage,
+				capabilities,
 				country: 'US'
 			};
 		}

@@ -94,6 +94,11 @@ return view.extend({
 			]);
 		const wifi = settings.wifi || {};
 		const wan = settings.wan || {};
+		const capabilities = settings.capabilities || {};
+		const meshState = !capabilities.mesh_driver ? 'Режим 802.11s не поддерживается радиодрайвером.' :
+			(capabilities.mesh_runtime ? 'Mesh поддерживается и программный компонент установлен.' : 'Радиомодуль поддерживает Mesh. Для включения потребуется безопасная установка wpad-mesh.');
+		const usbState = !capabilities.usb_host ? 'USB-контроллер не обнаружен.' :
+			[ capabilities.usb_storage ? 'накопитель' : '', capabilities.usb_network ? 'сетевое устройство' : '', capabilities.usb_modem ? 'модем' : '' ].filter(Boolean).join(', ') || 'USB-порт доступен, подключённых устройств нет.';
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
 		const root = E('div', { 'class': 'oum-settings' }, [
@@ -102,9 +107,10 @@ return view.extend({
 				.oum-setting-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.oum-setting-choice{display:flex;gap:9px;padding:12px;border:1px solid #ccd3dc;border-radius:9px;cursor:pointer}.oum-setting-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-setting-choice span{display:flex;flex-direction:column;gap:4px}.oum-setting-choice small,.oum-help{opacity:.7;line-height:1.45}
 				.oum-setting-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-setting-field{margin:11px 0}.oum-setting-field label{display:block;font-weight:600;margin-bottom:6px}.oum-setting-field input{width:100%;box-sizing:border-box}.oum-setting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.oum-job-state{padding:11px 13px;border-radius:8px;background:#eef4fa;margin:0 0 16px}.oum-job-state[data-state="failed"]{background:#ffe9e7}.oum-job-state[data-state="success"]{background:#e6f7eb}
 				.oum-maintenance{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.oum-maintenance-card{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
+				.oum-capability-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-capability{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-capability h4{margin:0 0 8px}.oum-capability-state{line-height:1.45}
 				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:14px}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}
 				.oum-vpn-input{margin:18px 0}.oum-vpn-input label{display:block;font-weight:600;margin-bottom:7px}.oum-vpn-input input,.oum-vpn-input textarea{width:100%;box-sizing:border-box}.oum-vpn-input textarea{min-height:180px;font-family:monospace}.oum-vpn-job{padding:12px;border-radius:8px;background:#eef4fa;margin:14px 0}.oum-vpn-job[data-state="failed"]{background:#ffe9e7}.oum-vpn-job[data-state="success"]{background:#e6f7eb}
-				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
+				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
 			`),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('h2', {}, 'Настройки OUM'),
@@ -146,6 +152,22 @@ return view.extend({
 						E('button', { 'class': 'btn cbi-button-action', id: 'apply-wan', 'data-system-action': '' }, 'Применить подключение'),
 						E('button', { 'class': 'btn', id: 'rollback-wan', disabled: settings.rollback_wan ? null : '', 'data-system-action': '' }, 'Вернуть предыдущие')
 					])
+				])
+			]),
+			E('details', { 'class': 'oum-settings-panel oum-protected' }, [
+				E('summary', {}, 'Расширение сети'),
+				E('div', { 'class': 'oum-protected-content' }, [
+					E('div', { 'class': 'oum-capability-grid' }, [
+						E('div', { 'class': 'oum-capability' }, [
+							E('h4', {}, 'Mesh'),
+							E('div', { 'class': 'oum-capability-state' }, meshState)
+						]),
+						E('div', { 'class': 'oum-capability' }, [
+							E('h4', {}, 'USB и 4G'),
+							E('div', { 'class': 'oum-capability-state' }, usbState)
+						])
+					]),
+					E('p', { 'class': 'oum-help' }, 'OUM только определяет возможности. Кнопки настройки появятся после проверки Mesh и USB-оборудования.')
 				])
 			]),
 			E('details', {
