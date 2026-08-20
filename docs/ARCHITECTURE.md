@@ -109,6 +109,12 @@ requires replacing it with an eight-character-or-longer password before it can
 finish. The final Wi-Fi password is also at least eight characters because
 shorter keys are invalid for WPA2/WPA3 Personal.
 
+An empty OpenWrt root password is locked during bootstrap so it cannot bypass
+the restricted OUM account through LuCI or SSH. Completing the wizard sets the
+same user-selected management password for both the restricted `admin` login
+and the emergency `root` account. SSH public-key authentication remains usable
+while the password is locked.
+
 The current prototype records the selected VPN source type but deliberately
 does not yet accept or persist credentials. Import will be connected to the
 existing atomic single-profile pipeline rather than implemented a second time

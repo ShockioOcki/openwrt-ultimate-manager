@@ -48,6 +48,8 @@ function backupConfigs() {
 	for (let name in CONFIGS)
 		if (access(`/etc/config/${name}`) && system(`cp /etc/config/${name} ${BACKUP_DIR}/${name}`) != 0)
 			return false;
+	if (system(`cp /etc/shadow ${BACKUP_DIR}/shadow`) != 0)
+		return false;
 	return true;
 }
 
@@ -55,6 +57,13 @@ function restoreConfigs() {
 	for (let name in CONFIGS)
 		if (access(`${BACKUP_DIR}/${name}`))
 			system(`cp ${BACKUP_DIR}/${name} /etc/config/${name}`);
+	if (access(`${BACKUP_DIR}/shadow`))
+		system(`cp ${BACKUP_DIR}/shadow /etc/shadow`);
+}
+
+function setRootPassword(password) {
+	let quoted = shellquote(password);
+	return system(`(echo ${quoted}; sleep 1; echo ${quoted}) | /bin/busybox passwd root >/dev/null 2>&1`) == 0;
 }
 
 function setAdminPassword(uci, password) {
@@ -171,6 +180,10 @@ const methods = {
 				if (!setAdminPassword(uci, request.args.admin_password)) {
 					restoreConfigs();
 					return failure('password_failed', 'Не удалось изменить пароль панели.');
+				}
+				if (!setRootPassword(request.args.admin_password)) {
+					restoreConfigs();
+					return failure('root_password_failed', 'Не удалось защитить системную учётную запись.');
 				}
 
 				phase = 'commit';

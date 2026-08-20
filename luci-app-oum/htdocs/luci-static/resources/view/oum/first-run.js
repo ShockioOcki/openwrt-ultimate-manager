@@ -176,9 +176,11 @@ return view.extend({
 			).then((result) => {
 				if (!result.ok) throw new Error(result.message || 'Не удалось применить настройки.');
 				ui.showModal('Настройка завершена', [
-					E('p', {}, 'Подключитесь к новой Wi-Fi сети и войдите в OUM с новым паролем admin.'),
-					E('p', {}, 'Если изменился адрес сети, откройте адрес шлюза, выданный вашему устройству.')
+					E('p', {}, 'Подключитесь к новой Wi-Fi сети. Через несколько секунд откроется повторный вход — используйте admin и новый пароль.'),
+					E('p', {}, 'Если изменился адрес сети, откройте адрес шлюза, выданный вашему устройству.'),
+					E('p', { 'class': 'spinning' }, 'Перезапускаем панель управления…')
 				]);
+				window.setTimeout(() => window.location.assign(L.url('oum', 'dashboard')), 7000);
 			}).catch((err) => ui.showModal('Ошибка', [ E('p', {}, err.message), E('button', { 'class': 'btn', 'click': ui.hideModal }, 'Закрыть') ]));
 		});
 
@@ -190,4 +192,3 @@ return view.extend({
 	handleSave: null,
 	handleReset: null
 });
-

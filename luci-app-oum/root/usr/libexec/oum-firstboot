@@ -4,6 +4,12 @@ set -eu
 
 [ "$(uci -q get oum.main.setup_complete || echo 0)" = "1" ] && exit 0
 
+# A clean OpenWrt image commonly has an empty root password. Leaving it empty
+# would bypass the restricted OUM account through LuCI and SSH. Lock password
+# authentication until the wizard installs the user-selected final password.
+root_hash="$(awk -F: '$1 == "root" { print $2 }' /etc/shadow)"
+[ -n "$root_hash" ] || /bin/busybox passwd -l root >/dev/null
+
 uci -q batch <<'EOF'
 set rpcd.oum_admin=login
 set rpcd.oum_admin.username='admin'
@@ -31,4 +37,3 @@ uci commit rpcd
 uci commit wireless
 /etc/init.d/rpcd restart
 wifi reload
-
