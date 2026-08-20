@@ -43,5 +43,16 @@
 			"acl": [ "luci-app-oum" ],
 			"uci": { "oum": true }
 		}
+	},
+	"oum/logout": {
+		"firstchild_ineligible": true,
+		"action": {
+			"type": "function",
+			"module": "luci.controller.oum",
+			"function": "action_logout"
+		},
+		"depends": {
+			"acl": [ "luci-app-oum" ]
+		}
 	}
 }

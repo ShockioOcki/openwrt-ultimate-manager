@@ -98,7 +98,7 @@ return view.extend({
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
 		const root = E('div', { 'class': 'oum-settings' }, [
 			E('style', {}, `
-				.oum-settings{max-width:1000px;margin:0 auto}.oum-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.oum-settings-panel{border:1px solid #ccd3dc;border-radius:12px;padding:18px;margin-bottom:16px}.oum-settings-panel h3{margin-top:0}
+				.oum-settings{max-width:1000px;margin:0 auto}.oum-page-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-page-head h2{margin:0}.oum-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.oum-settings-panel{border:1px solid #ccd3dc;border-radius:12px;padding:18px;margin-bottom:16px}.oum-settings-panel h3{margin-top:0}
 				.oum-setting-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.oum-setting-choice{display:flex;gap:9px;padding:12px;border:1px solid #ccd3dc;border-radius:9px;cursor:pointer}.oum-setting-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-setting-choice span{display:flex;flex-direction:column;gap:4px}.oum-setting-choice small,.oum-help{opacity:.7;line-height:1.45}
 				.oum-setting-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-setting-field{margin:11px 0}.oum-setting-field label{display:block;font-weight:600;margin-bottom:6px}.oum-setting-field input{width:100%;box-sizing:border-box}.oum-setting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.oum-job-state{padding:11px 13px;border-radius:8px;background:#eef4fa;margin:0 0 16px}.oum-job-state[data-state="failed"]{background:#ffe9e7}.oum-job-state[data-state="success"]{background:#e6f7eb}
 				.oum-maintenance{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.oum-maintenance-card{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
@@ -106,7 +106,10 @@ return view.extend({
 				.oum-vpn-input{margin:18px 0}.oum-vpn-input label{display:block;font-weight:600;margin-bottom:7px}.oum-vpn-input input,.oum-vpn-input textarea{width:100%;box-sizing:border-box}.oum-vpn-input textarea{min-height:180px;font-family:monospace}.oum-vpn-job{padding:12px;border-radius:8px;background:#eef4fa;margin:14px 0}.oum-vpn-job[data-state="failed"]{background:#ffe9e7}.oum-vpn-job[data-state="success"]{background:#e6f7eb}
 				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
 			`),
-			E('h2', {}, 'Настройки OUM'),
+			E('div', { 'class': 'oum-page-head' }, [
+				E('h2', {}, 'Настройки OUM'),
+				E('a', { 'class': 'btn cbi-button', href: L.url('oum', 'logout') }, 'Выйти')
+			]),
 			E('p', { 'class': 'oum-help' }, 'Пароли не показываются в браузере. Оставьте поле пароля пустым, чтобы сохранить действующий.'),
 			E('div', { id: 'system-job', 'class': 'oum-job-state', 'data-state': initialJob.state || 'idle' }, initialJob.message || 'Системные операции не выполняются.'),
 			E('div', { 'class': 'oum-settings-grid' }, [

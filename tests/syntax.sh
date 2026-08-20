@@ -26,6 +26,7 @@ sh -n "$ROOT/tests/test_login_default.sh"
 sh -n "$ROOT/luci-app-oum/root/etc/uci-defaults/90_oum_firstboot"
 sh -n "$ROOT/luci-app-oum/root/etc/uci-defaults/91_oum_login_default"
 python3 -m json.tool "$ROOT/luci-app-oum/root/usr/share/luci/menu.d/luci-app-oum.json" >/dev/null
+grep -Fq "action_logout" "$ROOT/luci-app-oum/root/usr/share/ucode/luci/controller/oum.uc"
 python3 -m json.tool "$ROOT/luci-app-oum/root/usr/share/rpcd/acl.d/luci-app-oum.json" >/dev/null
 if command -v node >/dev/null 2>&1; then
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/first-run.js"
