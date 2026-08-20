@@ -1,0 +1,195 @@
+'use strict';
+
+import { access, glob, open, popen, readfile } from 'fs';
+import { cursor } from 'uci';
+
+const CONFIGS = [ 'network', 'wireless', 'rpcd', 'oum' ];
+const BACKUP_DIR = '/tmp/oum-setup-backup';
+
+function shellquote(value) {
+	return `'${replace(value ?? '', "'", "'\\''")}'`;
+}
+
+function failure(code, message) {
+	return { ok: false, code, message };
+}
+
+function validSsid(value) {
+	return type(value) == 'string' && length(value) >= 1 && length(value) <= 32;
+}
+
+function validate(args) {
+	if (!(args.wan_type in [ 'dhcp', 'pppoe' ]))
+		return failure('invalid_wan', 'Выберите DHCP или PPPoE.');
+
+	if (args.wan_type == 'pppoe' && (!length(args.pppoe_user ?? '') || !length(args.pppoe_password ?? '')))
+		return failure('invalid_pppoe', 'Для PPPoE нужны логин и пароль провайдера.');
+
+	if (!(args.wifi_mode in [ 'smart', 'separate' ]))
+		return failure('invalid_wifi_mode', 'Выберите режим Wi-Fi.');
+
+	if (!validSsid(args.ssid_24) || !validSsid(args.ssid_5))
+		return failure('invalid_ssid', 'Имя Wi-Fi должно содержать от 1 до 32 символов.');
+
+	if (type(args.wifi_password) != 'string' || length(args.wifi_password) < 8 || length(args.wifi_password) > 63)
+		return failure('invalid_wifi_password', 'Пароль Wi-Fi должен содержать от 8 до 63 символов.');
+
+	if (type(args.admin_password) != 'string' || length(args.admin_password) < 8)
+		return failure('invalid_admin_password', 'Новый пароль панели должен содержать минимум 8 символов.');
+
+	if (!(args.vpn_type in [ 'none', 'subscription', 'awg', 'proxy' ]))
+		return failure('invalid_vpn', 'Неизвестный тип VPN.');
+
+	return { ok: true };
+}
+
+function backupConfigs() {
+	system(`rm -rf ${BACKUP_DIR} && mkdir -p ${BACKUP_DIR}`);
+	for (let name in CONFIGS)
+		if (access(`/etc/config/${name}`) && system(`cp /etc/config/${name} ${BACKUP_DIR}/${name}`) != 0)
+			return false;
+	return true;
+}
+
+function restoreConfigs() {
+	for (let name in CONFIGS)
+		if (access(`${BACKUP_DIR}/${name}`))
+			system(`cp ${BACKUP_DIR}/${name} /etc/config/${name}`);
+}
+
+function setAdminPassword(uci, password) {
+	let proc = popen(`/usr/sbin/uhttpd -m ${shellquote(password)} 2>/dev/null`);
+	if (!proc)
+		return false;
+
+	let hash = trim(proc.read('all'));
+	let rc = proc.close();
+	if (rc != 0 || !match(hash, /^\$1\$/))
+		return false;
+
+	let found = false;
+	uci.foreach('rpcd', 'login', (section) => {
+		if (section.username == 'admin') {
+			uci.set('rpcd', section['.name'], 'password', hash);
+			found = true;
+		}
+	});
+
+	if (!found) {
+		let section = uci.add('rpcd', 'login');
+		uci.set('rpcd', section, 'username', 'admin');
+		uci.set('rpcd', section, 'password', hash);
+		uci.set('rpcd', section, 'read', [ 'luci-app-oum' ]);
+		uci.set('rpcd', section, 'write', [ 'luci-app-oum' ]);
+	}
+
+	return true;
+}
+
+function configureWan(uci, args) {
+	uci.set('network', 'wan', 'proto', args.wan_type);
+	if (args.wan_type == 'pppoe') {
+		uci.set('network', 'wan', 'username', args.pppoe_user);
+		uci.set('network', 'wan', 'password', args.pppoe_password);
+	}
+	else {
+		uci.delete('network', 'wan', 'username');
+		uci.delete('network', 'wan', 'password');
+	}
+}
+
+function configureWifi(uci, args) {
+	let radios = {};
+	uci.foreach('wireless', 'wifi-device', (radio) => {
+		uci.set('wireless', radio['.name'], 'country', 'US');
+		radios[radio['.name']] = radio.band ?? '';
+	});
+
+	uci.foreach('wireless', 'wifi-iface', (iface) => {
+		if (iface.mode != 'ap' || !(iface.device in radios))
+			return;
+
+		let ssid = radios[iface.device] == '2g' ? args.ssid_24 : args.ssid_5;
+		uci.set('wireless', iface['.name'], 'network', 'lan');
+		uci.set('wireless', iface['.name'], 'ssid', ssid);
+		uci.set('wireless', iface['.name'], 'encryption', 'sae-mixed');
+		uci.set('wireless', iface['.name'], 'key', args.wifi_password);
+		uci.set('wireless', iface['.name'], 'disabled', '0');
+	});
+}
+
+const methods = {
+	status: {
+		call: function() {
+			const uci = cursor();
+			return {
+				setup_complete: uci.get('oum', 'main', 'setup_complete') == '1',
+				setup_step: uci.get('oum', 'main', 'setup_step') ?? 'internet',
+				active_source: uci.get('oum', 'main', 'active_source') ?? 'none',
+				usb_present: length(glob('/sys/class/block/sd*')) > 0,
+				country: 'US'
+			};
+		}
+	},
+
+	applySetup: {
+		args: {
+			wan_type: 'dhcp',
+			pppoe_user: '',
+			pppoe_password: '',
+			wifi_mode: 'smart',
+			ssid_24: '',
+			ssid_5: '',
+			wifi_password: '',
+			admin_password: '',
+			vpn_type: 'none'
+		},
+		call: function(request) {
+			let phase = 'validation';
+			try {
+				let check = validate(request.args);
+				if (!check.ok)
+					return check;
+
+				phase = 'backup';
+				if (!backupConfigs())
+					return failure('backup_failed', 'Не удалось создать резервную копию настроек.');
+
+				const uci = cursor();
+				phase = 'wan';
+				configureWan(uci, request.args);
+				phase = 'wifi';
+				configureWifi(uci, request.args);
+
+				phase = 'state';
+				uci.set('oum', 'main', 'wifi_country', 'US');
+				uci.set('oum', 'main', 'active_source', request.args.vpn_type);
+				uci.set('oum', 'main', 'setup_step', 'complete');
+				uci.set('oum', 'main', 'setup_complete', '1');
+
+				phase = 'admin_password';
+				if (!setAdminPassword(uci, request.args.admin_password)) {
+					restoreConfigs();
+					return failure('password_failed', 'Не удалось изменить пароль панели.');
+				}
+
+				phase = 'commit';
+				for (let name in CONFIGS) {
+					if (!uci.commit(name)) {
+						restoreConfigs();
+						return failure('commit_failed', `Не удалось сохранить ${name}. Настройки восстановлены.`);
+					}
+				}
+
+				system("(sleep 2; /etc/init.d/network reload; /sbin/wifi reload; /etc/init.d/rpcd restart) >/tmp/oum-apply.log 2>&1 &");
+				return { ok: true, reconnect: true };
+			}
+			catch (err) {
+				restoreConfigs();
+				return failure('internal_error', `Внутренняя ошибка (${phase}): ${err}`);
+			}
+		}
+	}
+};
+
+return { oum: methods };

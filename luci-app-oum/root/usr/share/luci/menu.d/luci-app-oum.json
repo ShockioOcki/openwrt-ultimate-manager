@@ -1,0 +1,37 @@
+{
+	"oum": {
+		"title": "OUM",
+		"order": 1,
+		"action": {
+			"type": "firstchild"
+		},
+		"auth": {
+			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ],
+			"login": true
+		}
+	},
+	"oum/setup": {
+		"title": "Первичная настройка",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "oum/first-run"
+		},
+		"depends": {
+			"acl": [ "luci-app-oum" ]
+		}
+	},
+	"oum/dashboard": {
+		"title": "Главная",
+		"order": 2,
+		"action": {
+			"type": "view",
+			"path": "oum/dashboard"
+		},
+		"depends": {
+			"acl": [ "luci-app-oum" ],
+			"uci": { "oum": true }
+		}
+	}
+}
+

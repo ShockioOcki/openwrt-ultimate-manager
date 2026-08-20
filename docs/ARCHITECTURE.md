@@ -21,9 +21,16 @@ src/
 helpers/
 └── source_converter.rb
 tools/
-└── build.sh
+├── build.sh
+└── install-luci-dev.sh
 dist/
 └── oum-test.sh
+luci-app-oum/
+├── htdocs/luci-static/resources/view/oum/
+└── root/
+    ├── etc/config/oum
+    ├── usr/libexec/oum-firstboot
+    └── usr/share/{luci,rpcd}/
 ```
 
 `tools/build.sh` concatenates the shell modules and embeds the Ruby source
@@ -78,5 +85,31 @@ OpenClash overwrite OUM's routing policy.
 
 1. Complete clean-router installation and source replacement tests.
 2. Connect existing NAS/SQM/GearUP modules to the new menu.
-3. Add `luci-app-oum` with restricted rpcd ACL permissions.
-4. Promote the test build to the stable `oum.sh` only after router testing.
+3. Connect the wizard's VPN step to the existing single-profile source pipeline.
+4. Add dashboard widgets and the optional USB/NAS flow.
+5. Promote the test build to the stable `oum.sh` only after router testing.
+
+## LuCI first-run architecture
+
+The first prototype uses a top-level `/cgi-bin/luci/oum` tree, separate from
+the full root administration tree. The temporary `admin` account receives
+only the `luci-app-oum` rpcd access group. That group can read OUM status and
+invoke the narrowly scoped setup transaction; it cannot call the generic file
+executor or edit `network`, `wireless`, `rpcd`, or OpenClash UCI directly.
+
+The `oum` ucode rpcd object validates the complete request before writing,
+backs up all affected UCI files, applies WAN and Wi-Fi changes, updates the
+restricted login hash and commits the transaction. A runtime failure restores
+the backup. Network, Wi-Fi and rpcd reload only after all commits succeed.
+
+Until setup is complete, `oum-firstboot` provides the temporary dual-band
+`FirstRun` network with WPA2/WPA3 mixed encryption, password `admin123` and
+country code `US`. The temporary panel login is `admin/admin`; the wizard
+requires replacing it with an eight-character-or-longer password before it can
+finish. The final Wi-Fi password is also at least eight characters because
+shorter keys are invalid for WPA2/WPA3 Personal.
+
+The current prototype records the selected VPN source type but deliberately
+does not yet accept or persist credentials. Import will be connected to the
+existing atomic single-profile pipeline rather than implemented a second time
+inside LuCI.

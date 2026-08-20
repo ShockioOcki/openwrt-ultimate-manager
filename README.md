@@ -44,3 +44,15 @@ build and should be exercised with disposable credentials before production.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module map and roadmap.
 See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for OpenClash/Mihomo log notes.
+
+## LuCI first-run prototype
+
+The `luci-app-oum/` directory contains the first installable prototype of the
+simplified OUM interface for OpenWrt 25.12. It provides a restricted `admin`
+login and a four-step first-run wizard for WAN, Wi-Fi, VPN mode selection and
+replacement of the temporary panel password.
+
+Development installation on a test router is handled by
+`tools/install-luci-dev.sh`. The installer deliberately does not activate the
+temporary `FirstRun` access point; run `/usr/libexec/oum-firstboot` separately
+after taking a backup and confirming that changing Wi-Fi is safe.

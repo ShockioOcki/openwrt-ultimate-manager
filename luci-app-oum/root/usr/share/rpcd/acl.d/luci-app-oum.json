@@ -1,0 +1,18 @@
+{
+	"luci-app-oum": {
+		"description": "Access the simplified OUM router manager",
+		"read": {
+			"ubus": {
+				"oum": [ "status" ]
+			},
+			"uci": [ "oum" ]
+		},
+		"write": {
+			"ubus": {
+				"oum": [ "applySetup" ]
+			},
+			"uci": [ "oum" ]
+		}
+	}
+}
+
