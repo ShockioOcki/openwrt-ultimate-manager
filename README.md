@@ -52,7 +52,7 @@ simplified OUM interface for OpenWrt 25.12. It provides a restricted `admin`
 login and a four-step first-run wizard for WAN, Wi-Fi, VPN mode selection and
 replacement of the temporary panel password.
 
-After the network reconnect, the dashboard can import Subscription URLs,
+After the network reconnect, the Settings page can import Subscription URLs,
 AmneziaWG configurations and VLESS/Hysteria2 links through a background job.
 It reuses the terminal build's validated single-profile pipeline and reports
 progress without retaining submitted credentials in LuCI.
@@ -79,9 +79,10 @@ against the same Cloudflare edge. Each test uses about 35 MB, validates that
 the two egress paths differ, and restores the byte-identical Mihomo runtime
 profile without restarting OpenClash.
 
-The Settings page can change Smart/separate Wi-Fi names and credentials or
-switch WAN between DHCP and PPPoE. Each network change keeps a one-step local
-rollback. A model-bound OUM backup contains network, Wi-Fi, firewall,
+The Settings page owns protected-source replacement as well as Smart/separate
+Wi-Fi credentials and switching WAN between DHCP and PPPoE. Each network
+change keeps a one-step local rollback. A model-bound OUM backup contains
+network, Wi-Fi, firewall,
 OpenClash, routing state and the active OUM profile; it is validated before a
 restore and deliberately downloaded as an unencrypted secret-bearing file.
 Maintenance actions can clear only the VPN layer or return to the FirstRun

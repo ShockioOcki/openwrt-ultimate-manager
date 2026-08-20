@@ -121,10 +121,11 @@ and the emergency `root` account. SSH public-key authentication remains usable
 while the password is locked.
 
 The wizard records the selected VPN source and applies WAN and Wi-Fi first.
-After the network reload and login, the dashboard displays the matching input
-form. `startVpnImport` writes the secret to a mode-0600 temporary file and
-starts `oum-source-job`; the job sources the same generated OUM runtime used by
-the terminal interface and calls the existing atomic single-profile pipeline.
+After the network reload and login, the Settings page displays the matching
+protected-connection form. `startVpnImport` writes the secret to a mode-0600
+temporary file and starts `oum-source-job`; the job sources the same generated
+OUM runtime used by the terminal interface and calls the existing atomic
+single-profile pipeline.
 LuCI polls a small status file and never receives the submitted secret again.
 The input file is removed on success, validation failure, download failure or
 termination. A new Subscription, AWG Tunnel or Proxy still replaces the old
