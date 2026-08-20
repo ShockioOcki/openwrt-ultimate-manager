@@ -137,3 +137,10 @@ OUM-managed OpenClash profiles and state, disables OpenClash, locks root
 password authentication and restores the temporary FirstRun network and
 restricted admin login. It does not factory-reset OpenWrt or change the LAN
 address.
+
+Node selection uses Mihomo's loopback-only external-controller API. The
+read-only RPC exposes node names, types, current selection and delay history;
+it never returns proxy credentials. Delay measurements use the active OUM
+group, and switching validates the requested name against that group's own
+node list before issuing the API request. The OpenClash dashboard secret is
+kept in a mode-0600 curl config and removed after every request.

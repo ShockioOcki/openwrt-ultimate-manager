@@ -3,14 +3,14 @@
 		"description": "Access the simplified OUM router manager",
 		"read": {
 			"ubus": {
-				"oum": [ "status", "dashboardStatus", "vpnJobStatus" ],
+				"oum": [ "status", "dashboardStatus", "nodeStatus", "measureNodeDelays", "vpnJobStatus" ],
 				"session": [ "access" ]
 			},
 			"uci": [ "oum" ]
 		},
 		"write": {
 			"ubus": {
-				"oum": [ "applySetup", "startVpnImport" ]
+				"oum": [ "applySetup", "startVpnImport", "selectNode" ]
 			},
 			"uci": [ "oum" ]
 		}

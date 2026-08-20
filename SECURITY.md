@@ -21,3 +21,8 @@ LuCI VPN input is written only to `/tmp/oum-vpn-job/input` with mode `0600`.
 The background importer must remove this file on every exit path. Status files
 may contain a phase and a user-facing error code but never a URL, URI, private
 key or configuration body.
+
+Mihomo node operations are restricted to the active OUM group. The dashboard
+API secret must not be returned to the browser or passed in process arguments;
+the local helper reads it from UCI, writes a mode-0600 curl configuration and
+removes that configuration on exit.

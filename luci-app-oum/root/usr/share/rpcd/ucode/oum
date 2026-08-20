@@ -115,6 +115,46 @@ function networkStatus() {
 	return result;
 }
 
+function activeNodeGroup(uci) {
+	let source = uci.get('oum', 'main', 'active_source') ?? 'none';
+	if (source == 'subscription') return 'Subscription';
+	if (source == 'awg') return 'AWG_Tunnel';
+	if (source == 'proxy') return 'Proxy_Nodes';
+	return null;
+}
+
+function readJsonFile(path) {
+	let file = open(path, 'r');
+	if (!file)
+		return null;
+	let value = json(file);
+	file.close();
+	return value;
+}
+
+function nodeStatusData() {
+	const uci = cursor();
+	let groupName = activeNodeGroup(uci);
+	if (!groupName || !access('/usr/libexec/oum-mihomo-api'))
+		return { available: false, group: '', current: '', nodes: [] };
+	if (system('/usr/libexec/oum-mihomo-api list >/dev/null 2>&1') != 0)
+		return { available: false, group: groupName, current: '', nodes: [] };
+	let response = readJsonFile('/tmp/oum-mihomo-api/response.json');
+	let proxies = response?.proxies ?? {};
+	let group = proxies[groupName];
+	if (!group || type(group.all) != 'array')
+		return { available: false, group: groupName, current: '', nodes: [] };
+
+	let nodes = [];
+	for (let name in group.all) {
+		let proxy = proxies[name] ?? {};
+		let history = proxy.history ?? [];
+		let delay = length(history) ? +(history[-1]?.delay ?? 0) : 0;
+		push(nodes, { name, type: proxy.type ?? '', delay });
+	}
+	return { available: true, group: groupName, current: group.now ?? '', nodes };
+}
+
 function validSsid(value) {
 	return type(value) == 'string' && length(value) >= 1 && length(value) <= 32;
 }
@@ -259,6 +299,49 @@ const methods = {
 				thermal: thermalStatus(),
 				active_source: uci.get('oum', 'main', 'active_source') ?? 'none'
 			};
+		}
+	},
+
+	nodeStatus: {
+		call: function() {
+			return nodeStatusData();
+		}
+	},
+
+	measureNodeDelays: {
+		call: function() {
+			let current = nodeStatusData();
+			if (!current.available)
+				return failure('core_unavailable', 'OpenClash не запущен или группа нод недоступна.');
+			if (system('/usr/libexec/oum-mihomo-api delay >/dev/null 2>&1') != 0)
+				return failure('delay_failed', 'Не удалось измерить задержку нод.');
+			let updated = nodeStatusData();
+			if (!updated.available)
+				return failure('delay_read_failed', 'Не удалось прочитать результаты измерения.');
+			let delays = {};
+			for (let node in updated.nodes)
+				delays[node.name] = node.delay;
+			return { ok: true, delays };
+		}
+	},
+
+	selectNode: {
+		args: { name: '' },
+		call: function(request) {
+			let name = request.args.name;
+			if (type(name) != 'string' || !length(name) || length(name) > 256)
+				return failure('invalid_node', 'Некорректное имя ноды.');
+			let current = nodeStatusData();
+			if (!current.available || !length(filter(current.nodes, (node) => node.name == name)))
+				return failure('unknown_node', 'Нода отсутствует в активной группе.');
+			if (!writePrivate('/tmp/oum-mihomo-api/request.json', sprintf('%J', { name })))
+				return failure('request_write', 'Не удалось подготовить переключение.');
+			if (system('/usr/libexec/oum-mihomo-api switch >/dev/null 2>&1') != 0)
+				return failure('switch_failed', 'Mihomo отклонил переключение ноды.');
+			let updated = nodeStatusData();
+			if (updated.current != name)
+				return failure('switch_unconfirmed', 'Mihomo не подтвердил новую ноду.');
+			return { ok: true, current: name };
 		}
 	},
 

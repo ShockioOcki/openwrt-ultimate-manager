@@ -6,12 +6,43 @@
 
 const callStatus = rpc.declare({ object: 'oum', method: 'status', expect: { '': {} } });
 const callDashboardStatus = rpc.declare({ object: 'oum', method: 'dashboardStatus', expect: { '': {} } });
+const callNodeStatus = rpc.declare({ object: 'oum', method: 'nodeStatus', expect: { '': {} } });
+const callMeasureNodeDelays = rpc.declare({ object: 'oum', method: 'measureNodeDelays', expect: { '': {} } });
+const callSelectNode = rpc.declare({ object: 'oum', method: 'selectNode', params: [ 'name' ], expect: { '': {} } });
 const callVpnJobStatus = rpc.declare({ object: 'oum', method: 'vpnJobStatus', expect: { '': {} } });
 const callStartVpnImport = rpc.declare({
 	object: 'oum', method: 'startVpnImport', params: [ 'vpn_type', 'payload' ], expect: { '': {} }
 });
 
 const sourceNames = { none: 'Не настроено', subscription: 'Subscription', awg: 'AWG Tunnel', proxy: 'Proxy' };
+
+function countryKey(name) {
+	const flag = String(name).match(/[\u{1F1E6}-\u{1F1FF}]{2}/u);
+	if (flag) return flag[0];
+	const code = String(name).match(/(?:^|[\s_|+\-])([A-Z]{2})(?:$|[\s_|+\-])/);
+	return code ? code[1] : '';
+}
+
+function preferredNodes(nodeStatus) {
+	const sorted = (nodeStatus.nodes || []).filter((node) => node.name !== nodeStatus.current).sort((a, b) => {
+		const ad = a.delay > 0 ? a.delay : Number.MAX_SAFE_INTEGER;
+		const bd = b.delay > 0 ? b.delay : Number.MAX_SAFE_INTEGER;
+		return ad - bd || a.name.localeCompare(b.name);
+	});
+	const result = [], countries = new Set();
+	for (const node of sorted) {
+		const country = countryKey(node.name);
+		if (country && countries.has(country)) continue;
+		result.push(node);
+		if (country) countries.add(country);
+		if (result.length === 5) return result;
+	}
+	for (const node of sorted) {
+		if (!result.includes(node)) result.push(node);
+		if (result.length === 5) break;
+	}
+	return result;
+}
 
 function sourceChoice(value, title, description, checked) {
 	return E('label', { 'class': 'oum-source-choice' }, [
@@ -21,12 +52,13 @@ function sourceChoice(value, title, description, checked) {
 }
 
 return view.extend({
-	load() { return Promise.all([ callStatus(), callDashboardStatus(), callVpnJobStatus() ]); },
+	load() { return Promise.all([ callStatus(), callDashboardStatus(), callVpnJobStatus(), callNodeStatus() ]); },
 
 	render(data) {
 		const status = data[0];
 		const dashboard = data[1];
 		const initialJob = data[2];
+		const initialNodes = data[3];
 		if (!status.setup_complete)
 			return E('div', {}, [
 				E('h2', {}, 'OUM'),
@@ -47,6 +79,8 @@ return view.extend({
 				.oum-job{padding:12px;border-radius:8px;background:#eef4fa;margin:14px 0}.oum-job[data-state="failed"]{background:#ffe9e7}.oum-job[data-state="success"]{background:#e6f7eb}
 				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}
 				.oum-muted{opacity:.68}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
+				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:#eef4fa;margin:10px 0 14px}.oum-node-list{display:grid;gap:8px}
+				.oum-node{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-delay{min-width:70px;text-align:right}
 				@media(max-width:850px){.oum-cards{grid-template-columns:1fr 1fr}}@media(max-width:700px){.oum-cards,.oum-sources{grid-template-columns:1fr}.oum-clients .optional{display:none}}
 			`),
 			E('h2', {}, 'OUM'),
@@ -63,6 +97,14 @@ return view.extend({
 						E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'IP-адрес'), E('th', {}, 'Подключение'), E('th', { 'class': 'optional' }, 'MAC') ])),
 						E('tbody', { id: 'client-list' })
 					])
+				]),
+				E('section', { 'class': 'oum-panel', id: 'node-panel', hidden: '' }, [
+					E('div', { 'class': 'oum-node-head' }, [
+						E('h3', {}, 'VPN-нода'),
+						E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Обновить ping')
+					]),
+					E('div', { 'class': 'oum-current-node', id: 'current-node' }, 'Нет активной ноды'),
+					E('div', { 'class': 'oum-node-list', id: 'node-list' })
 				])
 			]),
 			E('section', { 'class': 'oum-panel' }, [
@@ -88,6 +130,9 @@ return view.extend({
 		const urlInput = root.querySelector('#subscription-input');
 		const configInput = root.querySelector('#config-input');
 		const label = root.querySelector('#source-label');
+		const nodePanel = root.querySelector('#node-panel');
+		const nodeList = root.querySelector('#node-list');
+		const measureButton = root.querySelector('#measure-nodes');
 
 		const updateDashboard = (fresh) => {
 			root.querySelector('#wan-state').textContent = fresh.wan?.up ? 'Подключён' : 'Нет соединения';
@@ -105,6 +150,21 @@ return view.extend({
 			])));
 			if (!fresh.clients?.length)
 				body.appendChild(E('tr', {}, E('td', { colspan: 4, 'class': 'oum-muted' }, 'Нет активных DHCP-клиентов')));
+		};
+
+		const updateNodes = (fresh) => {
+			nodePanel.hidden = !fresh.available;
+			if (!fresh.available) return;
+			const current = (fresh.nodes || []).find((node) => node.name === fresh.current);
+			root.querySelector('#current-node').textContent = current ?
+				`${current.name} · ${current.delay > 0 ? `${current.delay} ms` : 'ping не измерен'}` : (fresh.current || 'Не выбрана');
+			nodeList.replaceChildren(...preferredNodes(fresh).map((node) => E('div', { 'class': 'oum-node' }, [
+				E('span', {}, node.name),
+				E('span', { 'class': 'oum-delay' }, node.delay > 0 ? `${node.delay} ms` : 'offline'),
+				E('button', { 'class': 'btn cbi-button', 'data-node': node.name }, 'Выбрать')
+			])));
+			if (!nodeList.children.length)
+				nodeList.appendChild(E('div', { 'class': 'oum-muted' }, 'Других нод в профиле нет.'));
 		};
 
 		const updateInput = () => {
@@ -127,8 +187,9 @@ return view.extend({
 			if (job.state === 'running')
 				window.setTimeout(watchJob, 2000);
 			else if (job.state === 'success')
-				callStatus().then((fresh) => {
+				Promise.all([ callStatus(), callNodeStatus() ]).then(([fresh, nodes]) => {
 					root.querySelector('#active-source').textContent = sourceNames[fresh.active_source] || fresh.active_source;
+					updateNodes(nodes);
 				});
 		}).catch((err) => {
 			showJob({ state: 'failed', message: err.message });
@@ -157,9 +218,36 @@ return view.extend({
 			});
 		});
 
+		measureButton.addEventListener('click', (ev) => {
+			ev.preventDefault();
+			measureButton.disabled = true;
+			measureButton.textContent = 'Измеряем…';
+			callMeasureNodeDelays().then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Не удалось измерить ping.');
+				return callNodeStatus();
+			}).then(updateNodes).catch((err) => ui.addNotification(null, E('p', {}, err.message), 'warning')).finally(() => {
+				measureButton.disabled = false;
+				measureButton.textContent = 'Обновить ping';
+			});
+		});
+
+		nodeList.addEventListener('click', (ev) => {
+			const target = ev.target.closest('[data-node]');
+			if (!target) return;
+			target.disabled = true;
+			callSelectNode(target.dataset.node).then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Не удалось переключить ноду.');
+				return callNodeStatus();
+			}).then(updateNodes).catch((err) => ui.addNotification(null, E('p', {}, err.message), 'warning')).finally(() => { target.disabled = false; });
+		});
+
 		updateInput();
 		updateDashboard(dashboard);
-		poll.add(() => callDashboardStatus().then(updateDashboard), 10);
+		updateNodes(initialNodes);
+		poll.add(() => Promise.all([ callDashboardStatus(), callNodeStatus() ]).then(([fresh, nodes]) => {
+			updateDashboard(fresh);
+			updateNodes(nodes);
+		}), 10);
 		if (initialJob.state === 'running') watchJob(); else showJob(initialJob);
 		return root;
 	},

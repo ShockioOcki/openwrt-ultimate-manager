@@ -62,6 +62,11 @@ DHCP clients with Wi-Fi/Ethernet classification, router temperature and the
 active OUM VPN source. They refresh without running external connectivity or
 speed tests.
 
+The VPN widget reads the active Mihomo group, shows the current node, measures
+group latency and switches nodes without rewriting YAML or restarting
+OpenClash. It prefers up to five low-latency alternatives from different
+country flags when the provider includes flags in node names.
+
 Development installation on a test router is handled by
 `tools/install-luci-dev.sh`. The installer deliberately does not activate the
 temporary `FirstRun` access point; run `/usr/libexec/oum-firstboot` separately
