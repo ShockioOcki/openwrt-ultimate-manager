@@ -3,7 +3,8 @@
 		"description": "Access the simplified OUM router manager",
 		"read": {
 			"ubus": {
-				"oum": [ "status" ]
+				"oum": [ "status" ],
+				"session": [ "access" ]
 			},
 			"uci": [ "oum" ]
 		},
@@ -15,4 +16,3 @@
 		}
 	}
 }
-
