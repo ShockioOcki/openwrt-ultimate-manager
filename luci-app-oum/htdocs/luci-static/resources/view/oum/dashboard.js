@@ -109,7 +109,7 @@ return view.extend({
 				.oum-node{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-node>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-delay{min-width:70px;text-align:right}
 				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
 				.oum-node-all{margin-top:13px}.oum-node-all>summary{cursor:pointer;font-weight:600;padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
-				.oum-passwall-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.oum-passwall-state{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-passwall-state small{display:block;opacity:.68;margin-bottom:5px}.oum-passwall-state strong[data-ok="false"]{color:#c0392b}.oum-passwall-route{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.oum-passwall-route>div{background:#eef4fa;border-radius:9px;padding:12px}.oum-passwall-versions{margin-top:12px}.oum-passwall-rules{margin-top:8px}
+				.oum-passwall-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.oum-passwall-state{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-passwall-state small{display:block;opacity:.68;margin-bottom:5px}.oum-passwall-state strong[data-ok="false"]{color:#c0392b}.oum-passwall-route{background:#eef4fa;border-radius:9px;padding:12px;margin-top:12px}.oum-passwall-route small{display:block;margin-bottom:4px}.oum-passwall-versions{margin-top:12px}.oum-passwall-rules{margin-top:8px}.oum-node-controls[data-engine="passwall"]{border-top:1px solid #d8dde5;margin-top:16px;padding-top:14px}
 				@media(max-width:900px){.oum-cards,.oum-passwall-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-speed-grid,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route{grid-template-columns:1fr}.oum-clients .optional{display:none}}
 			`),
 			E('div', { 'class': 'oum-page-head' }, [
@@ -163,24 +163,6 @@ return view.extend({
 					]),
 					E('div', { 'class': 'oum-speed-status oum-muted', id: 'speed-status' }, '')
 				]),
-				E('section', { 'class': 'oum-panel', id: 'passwall-panel', hidden: '' }, [
-					E('div', { 'class': 'oum-node-head' }, [
-						E('h3', {}, 'PassWall'),
-						E('span', { 'class': 'oum-muted', id: 'passwall-version' }, '')
-					]),
-					E('div', { 'class': 'oum-passwall-grid' }, [
-						E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Xray'), E('strong', { id: 'passwall-xray' }, '—') ]),
-						E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'DNS'), E('strong', { id: 'passwall-dns' }, '—') ]),
-						E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Маршрутизация'), E('strong', { id: 'passwall-firewall' }, '—') ]),
-						E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'GeoSite / GeoIP'), E('strong', { id: 'passwall-geo' }, '—') ])
-					]),
-					E('div', { 'class': 'oum-passwall-route' }, [
-						E('div', {}, [ E('small', { 'class': 'oum-muted' }, 'Профиль маршрутизации'), E('strong', { id: 'passwall-profile' }, '—') ]),
-						E('div', {}, [ E('small', { 'class': 'oum-muted' }, 'Основная нода'), E('strong', { id: 'passwall-node' }, '—') ])
-					]),
-					E('div', { 'class': 'oum-passwall-rules oum-muted', id: 'passwall-rules' }, ''),
-					E('div', { 'class': 'oum-passwall-versions oum-muted', id: 'passwall-versions' }, '')
-				]),
 				E('section', { 'class': 'oum-panel', id: 'node-panel', hidden: '' }, [
 					E('div', { 'class': 'oum-subscription', id: 'subscription-panel', hidden: '' }, [
 						E('div', { 'class': 'oum-subscription-head' }, [
@@ -194,26 +176,44 @@ return view.extend({
 						]),
 						E('div', { 'class': 'oum-subscription-status oum-muted', id: 'subscription-status' }, '')
 					]),
-					E('div', { 'class': 'oum-node-head' }, [
-						E('h3', { id: 'node-panel-title' }, 'VPN-нода'),
-						E('div', { 'class': 'oum-node-actions' }, [
-							E('a', { 'class': 'btn cbi-button', id: 'zashboard-link', href: zashboardUrl, target: '_blank', rel: 'noreferrer' }, 'Zashboard'),
-							E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Обновить ping')
-						])
+					E('div', { id: 'passwall-panel', hidden: '' }, [
+						E('div', { 'class': 'oum-node-head' }, [
+							E('h3', {}, 'PassWall'),
+							E('span', { 'class': 'oum-muted', id: 'passwall-version' }, '')
+						]),
+						E('div', { 'class': 'oum-passwall-grid' }, [
+							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Xray'), E('strong', { id: 'passwall-xray' }, '—') ]),
+							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'DNS'), E('strong', { id: 'passwall-dns' }, '—') ]),
+							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Маршрутизация'), E('strong', { id: 'passwall-firewall' }, '—') ]),
+							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'GeoSite / GeoIP'), E('strong', { id: 'passwall-geo' }, '—') ])
+						]),
+						E('div', { 'class': 'oum-passwall-route' }, [ E('small', { 'class': 'oum-muted' }, 'Профиль маршрутизации'), E('strong', { id: 'passwall-profile' }, '—') ]),
+						E('div', { 'class': 'oum-passwall-rules oum-muted', id: 'passwall-rules' }, ''),
+						E('div', { 'class': 'oum-passwall-versions oum-muted', id: 'passwall-versions' }, '')
 					]),
-					E('div', { 'class': 'oum-current-node', id: 'current-node' }, 'Нет активной ноды'),
-					E('div', { 'class': 'oum-node-message oum-muted', id: 'node-message' }),
-					E('div', { 'class': 'oum-node-title' }, 'Быстрый доступ'),
-					E('div', { 'class': 'oum-node-list oum-node-quick', id: 'node-list' }),
-					E('details', { 'class': 'oum-node-all' }, [
-						E('summary', { id: 'all-nodes-summary' }, 'Все ноды'),
-						E('div', { 'class': 'oum-node-list oum-node-all-grid', id: 'all-node-list' })
+					E('div', { 'class': 'oum-node-controls', id: 'node-controls' }, [
+						E('div', { 'class': 'oum-node-head' }, [
+							E('h3', { id: 'node-panel-title' }, 'VPN-нода'),
+							E('div', { 'class': 'oum-node-actions' }, [
+								E('a', { 'class': 'btn cbi-button', id: 'zashboard-link', href: zashboardUrl, target: '_blank', rel: 'noreferrer' }, 'Zashboard'),
+								E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Обновить ping')
+							])
+						]),
+						E('div', { 'class': 'oum-current-node', id: 'current-node' }, 'Нет активной ноды'),
+						E('div', { 'class': 'oum-node-message oum-muted', id: 'node-message' }),
+						E('div', { 'class': 'oum-node-title' }, 'Быстрый доступ'),
+						E('div', { 'class': 'oum-node-list oum-node-quick', id: 'node-list' }),
+						E('details', { 'class': 'oum-node-all' }, [
+							E('summary', { id: 'all-nodes-summary' }, 'Все ноды'),
+							E('div', { 'class': 'oum-node-list oum-node-all-grid', id: 'all-node-list' })
+						])
 					])
 				])
 			])
 		]);
 
 		const nodePanel = root.querySelector('#node-panel');
+		const nodeControls = root.querySelector('#node-controls');
 		const nodeList = root.querySelector('#node-list');
 		const allNodeList = root.querySelector('#all-node-list');
 		const nodeMessage = root.querySelector('#node-message');
@@ -232,6 +232,9 @@ return view.extend({
 		let vpnEngine = dashboard.vpn_engine || 'openclash';
 		let vpnWatchTimer = null;
 		let speedWatchTimer = null;
+		let passwallInstalled = dashboard.passwall?.installed === true;
+		let nodesAvailable = initialNodes.available === true;
+		const updateVpnPanelVisibility = () => { nodePanel.hidden = !(passwallInstalled || nodesAvailable); };
 
 		const updateSpeed = (fresh) => {
 			for (const mode of [ 'direct', 'vpn' ]) {
@@ -327,7 +330,9 @@ return view.extend({
 
 		const updatePasswall = (state) => {
 			const panel = root.querySelector('#passwall-panel');
-			panel.hidden = state.installed !== true;
+			passwallInstalled = state.installed === true;
+			panel.hidden = !passwallInstalled;
+			updateVpnPanelVisibility();
 			if (panel.hidden) return;
 			const health = [ [ 'xray', state.xray ], [ 'dns', state.dns ], [ 'firewall', state.firewall ], [ 'geo', state.geo_ready ] ];
 			for (const [ name, ok ] of health) {
@@ -336,7 +341,6 @@ return view.extend({
 				element.dataset.ok = ok ? 'true' : 'false';
 			}
 			root.querySelector('#passwall-profile').textContent = state.profile || 'Не выбран';
-			root.querySelector('#passwall-node').textContent = state.selected_node || 'Не выбрана';
 			const rules = state.rules || [];
 			root.querySelector('#passwall-rules').textContent = rules.length ?
 				`Правила: ${rules.map((rule) => rule.label).join(' · ')}` : 'Shunt-правила не найдены.';
@@ -346,11 +350,15 @@ return view.extend({
 		};
 
 		const updateNodes = (fresh) => {
-			nodePanel.hidden = !fresh.available;
+			nodesAvailable = fresh.available === true;
+			nodeControls.hidden = !nodesAvailable;
+			updateVpnPanelVisibility();
 			if (!fresh.available) return;
 			const isPasswall = fresh.engine === 'passwall';
-			nodePanelTitle.textContent = isPasswall ? 'Ноды PassWall' : 'VPN-нода';
+			nodeControls.dataset.engine = isPasswall ? 'passwall' : 'openclash';
+			nodePanelTitle.textContent = isPasswall ? 'Выбор ноды' : 'VPN-нода';
 			zashboardLink.hidden = isPasswall;
+			zashboardLink.style.display = isPasswall ? 'none' : '';
 			measureButton.disabled = fresh.applying === true;
 			const delayText = (node, emptyText) => node.delay > 0 ? `${node.delay} ms` :
 				(node.tested || fresh.measured_at ? 'offline' : emptyText);
