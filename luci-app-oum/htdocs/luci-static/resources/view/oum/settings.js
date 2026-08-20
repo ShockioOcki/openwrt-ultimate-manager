@@ -137,7 +137,7 @@ return view.extend({
 					]),
 					E('div', { 'class': 'oum-maintenance-card oum-danger' }, [
 						E('h4', {}, 'Сброс'),
-						E('p', { 'class': 'oum-help' }, 'Можно удалить только VPN либо вернуть мастер первого запуска.'),
+						E('p', { 'class': 'oum-help' }, 'Можно удалить только VPN либо заново открыть мастер первоначальной настройки.'),
 						E('div', { 'class': 'oum-setting-actions' }, [
 							E('button', { 'class': 'btn cbi-button-negative', id: 'reset-vpn', 'data-system-action': '' }, 'Сбросить VPN'),
 							E('button', { 'class': 'btn cbi-button-negative', id: 'reset-all', 'data-system-action': '' }, 'Первый запуск')
@@ -230,7 +230,6 @@ return view.extend({
 		root.querySelector('#reset-all').addEventListener('click', async () => {
 			if (await confirmation('Вернуть первый запуск?', 'VPN будет удалён, появится временная сеть FirstRun и потребуется войти как admin/admin. Текущий LAN-адрес не меняется.', 'Вернуть мастер', true)) start(callResetFirstRun());
 		});
-
 		updateWanFields();
 		updateWifiFields();
 		if (initialJob.state === 'running') watchJob();

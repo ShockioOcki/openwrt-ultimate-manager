@@ -3,7 +3,8 @@
 		"title": "OUM",
 		"order": 1,
 		"action": {
-			"type": "firstchild"
+			"type": "alias",
+			"path": "oum/dashboard"
 		},
 		"auth": {
 			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ],
@@ -11,8 +12,7 @@
 		}
 	},
 	"oum/setup": {
-		"title": "Первичная настройка",
-		"order": 1,
+		"firstchild_ineligible": true,
 		"action": {
 			"type": "view",
 			"path": "oum/first-run"

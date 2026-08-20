@@ -96,6 +96,12 @@ only the `luci-app-oum` rpcd access group. That group can read OUM status and
 invoke the narrowly scoped setup transaction; it cannot call the generic file
 executor or edit `network`, `wireless`, `rpcd`, or OpenClash UCI directly.
 
+The first-run view remains a direct recovery route but is not shown as a
+persistent navigation tab. A clean router reaches it from the dashboard setup
+gate, and an already configured router can deliberately return to it only with
+the Settings page's destructive «Первый запуск» action. Routine WAN and Wi-Fi
+changes therefore have one home instead of being duplicated in the wizard.
+
 The `oum` ucode rpcd object validates the complete request before writing,
 backs up all affected UCI files, applies WAN and Wi-Fi changes, updates the
 restricted login hash and commits the transaction. A runtime failure restores

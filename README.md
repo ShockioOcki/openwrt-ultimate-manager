@@ -64,8 +64,8 @@ speed tests.
 
 The VPN widget reads the active Mihomo group, shows the current node, measures
 group latency and switches nodes without rewriting YAML or restarting
-OpenClash. It prefers up to five low-latency alternatives from different
-country flags when the provider includes flags in node names.
+OpenClash. It presents six quick alternatives in a three-column desktop grid,
+preferring different country flags when the provider includes them in names.
 
 For Subscription profiles, the dashboard also displays provider traffic and
 expiry metadata from `Subscription-Userinfo`. The URL remains on the router;

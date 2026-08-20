@@ -55,11 +55,11 @@ function preferredNodes(nodeStatus) {
 		if (country && countries.has(country)) continue;
 		result.push(node);
 		if (country) countries.add(country);
-		if (result.length === 5) return result;
+		if (result.length === 6) return result;
 	}
 	for (const node of sorted) {
 		if (!result.includes(node)) result.push(node);
-		if (result.length === 5) break;
+		if (result.length === 6) break;
 	}
 	return result;
 }
@@ -121,14 +121,14 @@ return view.extend({
 				.oum-job{padding:12px;border-radius:8px;background:#eef4fa;margin:14px 0}.oum-job[data-state="failed"]{background:#ffe9e7}.oum-job[data-state="success"]{background:#e6f7eb}
 				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:#c0392b}
 				.oum-muted{opacity:.68}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
-				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:#eef4fa;margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}
+				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:#eef4fa;margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}.oum-node-quick{grid-template-columns:repeat(3,minmax(0,1fr))}
 				.oum-node-actions,.oum-subscription-head{display:flex;align-items:center;gap:8px}.oum-subscription{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #d8dde5}.oum-subscription-head{justify-content:space-between}.oum-subscription-head h3{margin:0}.oum-subscription-progress{height:9px;border-radius:999px;background:#dce3ea;overflow:hidden;margin:13px 0 8px}.oum-subscription-progress>span{display:block;height:100%;background:#32b67a;transition:width .3s}.oum-subscription-data{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}.oum-subscription-status{margin-top:7px;font-size:.85em}
 				.oum-speed-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-speed-card{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-speed-card h4{margin:0 0 12px}.oum-speed-values{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.oum-speed-values small{display:block;opacity:.68;margin-bottom:4px}.oum-speed-values strong{font-size:1.05rem}.oum-speed-card button{width:100%}.oum-speed-status{min-height:1.4em;margin-top:10px}.oum-speed-status[data-state="failed"]{color:#c0392b}
-				.oum-node{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-delay{min-width:70px;text-align:right}
+				.oum-node{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-node>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-delay{min-width:70px;text-align:right}
 				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
 				.oum-node-all{margin-top:13px}.oum-node-all>summary,.oum-protected>summary{cursor:pointer;font-weight:600}.oum-node-all>summary{padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
 				.oum-protected{margin-bottom:14px}.oum-protected>summary{font-size:1.15rem}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:2px}
-				@media(max-width:850px){.oum-cards{grid-template-columns:1fr 1fr}}@media(max-width:700px){.oum-cards,.oum-sources,.oum-speed-grid{grid-template-columns:1fr}.oum-clients .optional{display:none}}
+				@media(max-width:900px){.oum-cards{grid-template-columns:1fr 1fr}.oum-node-quick{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-sources,.oum-speed-grid,.oum-node-quick{grid-template-columns:1fr}.oum-clients .optional{display:none}}
 			`),
 			E('h2', {}, 'OUM'),
 			E('div', { 'class': 'oum-cards' }, [
@@ -201,7 +201,7 @@ return view.extend({
 					E('div', { 'class': 'oum-current-node', id: 'current-node' }, 'Нет активной ноды'),
 					E('div', { 'class': 'oum-node-message oum-muted', id: 'node-message' }),
 					E('div', { 'class': 'oum-node-title' }, 'Быстрый доступ'),
-					E('div', { 'class': 'oum-node-list', id: 'node-list' }),
+					E('div', { 'class': 'oum-node-list oum-node-quick', id: 'node-list' }),
 					E('details', { 'class': 'oum-node-all' }, [
 						E('summary', { id: 'all-nodes-summary' }, 'Все ноды'),
 						E('div', { 'class': 'oum-node-list', id: 'all-node-list' })
