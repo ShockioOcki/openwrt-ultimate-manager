@@ -256,8 +256,76 @@ function settingsStatusData() {
 	};
 }
 
+function passwallInstalled() {
+	return access('/etc/init.d/passwall') && access('/etc/config/passwall');
+}
+
 function vpnReady() {
+	if (passwallInstalled())
+		return system("pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1") == 0;
 	return system("pidof clash >/dev/null 2>&1 && nft list chain inet fw4 openclash 2>/dev/null | grep -q 'redirect to :7892'") == 0;
+}
+
+function packageVersion(name) {
+	let process = popen(`/usr/bin/apk list --installed ${name} 2>/dev/null | cut -d' ' -f1`);
+	if (!process)
+		return '';
+	let value = trim(process.read('line'));
+	process.close();
+	return replace(value, `${name}-`, '');
+}
+
+function passwallStatusData() {
+	if (!passwallInstalled())
+		return { installed: false, enabled: false, ready: false };
+
+	const uci = cursor();
+	let global = null;
+	let nodes = {};
+	let rules = [];
+	uci.foreach('passwall', 'global', (section) => {
+		if (!global)
+			global = section;
+	});
+	uci.foreach('passwall', 'nodes', (section) => {
+		nodes[section['.name']] = section;
+	});
+	uci.foreach('passwall', 'shunt_rules', (section) => {
+		push(rules, {
+			name: section['.name'],
+			label: section.remarks ?? section['.name'],
+			has_sources: length(trim(section.source ?? '')) > 0
+		});
+	});
+
+	let nodeLabel = (identifier) => {
+		if (identifier == '_direct') return 'Напрямую';
+		if (identifier == '_blackhole') return 'Блокировка';
+		if (identifier == '_default') return 'По умолчанию';
+		return nodes[identifier]?.remarks ?? identifier ?? 'Не выбран';
+	};
+	let tcpNode = global?.tcp_node ?? '';
+	let selected = nodes[tcpNode]?.default_node ?? tcpNode;
+	let geoSite = access('/usr/share/v2ray/geosite.dat');
+	let geoIp = access('/usr/share/v2ray/geoip.dat');
+
+	return {
+		installed: true,
+		enabled: global?.enabled == '1',
+		ready: vpnReady(),
+		xray: system('pidof xray >/dev/null 2>&1') == 0,
+		dns: system("ps w | grep -q '[d]nsmasq_default'") == 0,
+		firewall: system('nft list table inet passwall >/dev/null 2>&1') == 0,
+		geo_ready: geoSite && geoIp,
+		profile: nodeLabel(tcpNode),
+		selected_node: nodeLabel(selected),
+		rules,
+		versions: {
+			passwall: packageVersion('luci-app-passwall'),
+			xray: packageVersion('xray-core'),
+			haproxy: packageVersion('haproxy')
+		}
+	};
 }
 
 function activeNodeGroup(uci) {
@@ -587,15 +655,19 @@ const methods = {
 	dashboardStatus: {
 		call: function() {
 			const uci = cursor();
+			const passwall = passwallStatusData();
+			const engine = passwall.installed ? 'passwall' : 'openclash';
 			return {
 				wan: networkStatus(),
 				wifi: wifiStatus(uci),
 				clients: connectedClients(uci),
 				thermal: thermalStatus(),
 				active_source: uci.get('oum', 'main', 'active_source') ?? 'none',
-				vpn_enabled: uci.get('openclash', 'config', 'enable') == '1',
+				vpn_engine: engine,
+				vpn_enabled: engine == 'passwall' ? passwall.enabled : uci.get('openclash', 'config', 'enable') == '1',
 				vpn_ready: vpnReady(),
-				subscription: subscriptionStatusData(false)
+				passwall,
+				subscription: engine == 'openclash' ? subscriptionStatusData(false) : { available: false, refreshing: false }
 			};
 		}
 	},
@@ -655,6 +727,21 @@ const methods = {
 			if (type(enabled) != 'bool')
 				return failure('invalid_state', 'Некорректное состояние VPN.');
 			const uci = cursor();
+			if (passwallInstalled()) {
+				let globalSection = null;
+				uci.foreach('passwall', 'global', (section) => {
+					if (!globalSection)
+						globalSection = section['.name'];
+				});
+				if (!globalSection)
+					return failure('passwall_config_missing', 'Не найдена глобальная настройка PassWall.');
+				uci.set('passwall', globalSection, 'enabled', enabled ? '1' : '0');
+				if (!uci.commit('passwall'))
+					return failure('commit_failed', 'Не удалось сохранить состояние PassWall.');
+				let action = enabled ? 'restart' : 'stop';
+				system(`(/etc/init.d/passwall ${action}) >/tmp/oum-vpn-control.log 2>&1 &`);
+				return { ok: true, enabled, engine: 'passwall', message: enabled ? 'PassWall запускается…' : 'PassWall отключается…' };
+			}
 			if (enabled && (uci.get('oum', 'main', 'active_source') ?? 'none') == 'none')
 				return failure('profile_missing', 'Сначала добавьте защищённое подключение.');
 			uci.set('openclash', 'config', 'enable', enabled ? '1' : '0');
