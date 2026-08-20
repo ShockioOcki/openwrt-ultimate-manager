@@ -168,20 +168,32 @@ return view.extend({
 			if (step < 4) { step++; update(); return; }
 
 			const smart = selected('wifi_mode') === 'smart';
-			ui.showModal('Применяем настройки', [ E('p', { 'class': 'spinning' }, 'Сеть и Wi-Fi будут перезапущены…') ]);
-			callApplySetup(
-				selected('wan_type'), value('pppoe_user'), value('pppoe_password'), selected('wifi_mode'),
-				value('ssid_24'), smart ? value('ssid_24') : value('ssid_5'), value('wifi_password'),
-				value('admin_password'), selected('vpn_type')
-			).then((result) => {
-				if (!result.ok) throw new Error(result.message || 'Не удалось применить настройки.');
-				ui.showModal('Настройка завершена', [
-					E('p', {}, 'Подключитесь к новой Wi-Fi сети. Через несколько секунд откроется повторный вход — используйте admin и новый пароль.'),
-					E('p', {}, 'Если изменился адрес сети, откройте адрес шлюза, выданный вашему устройству.'),
-					E('p', { 'class': 'spinning' }, 'Перезапускаем панель управления…')
-				]);
-				window.setTimeout(() => window.location.assign(L.url('oum', 'dashboard')), 7000);
-			}).catch((err) => ui.showModal('Ошибка', [ E('p', {}, err.message), E('button', { 'class': 'btn', 'click': ui.hideModal }, 'Закрыть') ]));
+			const networkNames = smart ? `«${value('ssid_24')}»` : `«${value('ssid_24')}» или «${value('ssid_5')}»`;
+			const apply = () => {
+				ui.showModal('Применяем настройки', [ E('p', { 'class': 'spinning' }, 'Сеть и Wi-Fi будут перезапущены…') ]);
+				callApplySetup(
+					selected('wan_type'), value('pppoe_user'), value('pppoe_password'), selected('wifi_mode'),
+					value('ssid_24'), smart ? value('ssid_24') : value('ssid_5'), value('wifi_password'),
+					value('admin_password'), selected('vpn_type')
+				).then((result) => {
+					if (!result.ok) throw new Error(result.message || 'Не удалось применить настройки.');
+					ui.showModal('Настройка завершена', [
+						E('p', {}, `Подключитесь к новой Wi-Fi сети ${networkNames}.`),
+						E('p', {}, 'Затем снова откройте 192.168.1.1 и войдите как admin с новым паролем панели.'),
+						E('a', { 'class': 'btn cbi-button-action', 'href': L.url('oum', 'dashboard') }, 'Открыть OUM после подключения')
+					]);
+				}).catch((err) => ui.showModal('Ошибка', [ E('p', {}, err.message), E('button', { 'class': 'btn', 'click': ui.hideModal }, 'Закрыть') ]));
+			};
+
+			ui.showModal('Wi-Fi будет перезапущен', [
+				E('p', {}, `После применения текущая сеть FirstRun отключится. Подключитесь к новой сети ${networkNames}.`),
+				E('p', { 'class': 'oum-note oum-warn' }, 'Запомните новое имя Wi-Fi и пароль. После переподключения откройте 192.168.1.1.'),
+				E('div', { 'class': 'right' }, [
+					E('button', { 'class': 'btn', 'click': ui.hideModal }, 'Вернуться'),
+					' ',
+					E('button', { 'class': 'btn cbi-button-action important', 'click': apply }, 'Применить и переподключиться')
+				])
+			]);
 		});
 
 		update();

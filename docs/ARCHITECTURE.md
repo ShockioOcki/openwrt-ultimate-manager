@@ -88,6 +88,9 @@ OpenClash overwrite OUM's routing policy.
 2. Connect the optional USB/NAS flow and existing service modules.
 3. Package the runtime assets and promote the test build only after router testing.
 
+The design for Mesh, USB mobile WAN and USB storage is documented separately
+in [EXPANSION.md](EXPANSION.md).
+
 ## LuCI first-run architecture
 
 The first prototype uses a top-level `/cgi-bin/luci/oum` tree, separate from
@@ -126,6 +129,10 @@ and the emergency `root` account. SSH public-key authentication remains usable
 while the password is locked.
 
 The wizard records the selected VPN source and applies WAN and Wi-Fi first.
+Before committing the transaction, it displays the exact destination SSID or
+SSIDs and explains that `FirstRun` will disappear. The completion dialog stays
+open instead of relying on an automatic redirect, so a phone can reconnect to
+the new access point and explicitly reopen OUM afterwards.
 After the network reload and login, the Settings page displays the matching
 protected-connection form. `startVpnImport` writes the secret to a mode-0600
 temporary file and starts `oum-source-job`; the job sources the same generated
