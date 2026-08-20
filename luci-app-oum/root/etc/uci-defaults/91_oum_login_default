@@ -1,0 +1,5 @@
+#!/bin/sh
+
+/usr/libexec/oum-login-default
+
+exit 0

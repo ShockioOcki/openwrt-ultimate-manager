@@ -28,6 +28,7 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-backup" /usr/libexec/oum-backup
 cp "$SOURCE_DIR/root/usr/libexec/oum-backup-codec.rb" /usr/libexec/oum-backup-codec.rb
 cp "$SOURCE_DIR/root/usr/libexec/oum-reset-vpn" /usr/libexec/oum-reset-vpn
 cp "$SOURCE_DIR/root/usr/libexec/oum-system-job" /usr/libexec/oum-system-job
+cp "$SOURCE_DIR/root/usr/libexec/oum-login-default" /usr/libexec/oum-login-default
 cp "$REPO_DIR/dist/oum-test.sh" /usr/libexec/oum-runtime.sh
 cp "$REPO_DIR/helpers/source_converter.rb" /usr/libexec/oum/source_converter.rb
 cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/first-run.js" /www/luci-static/resources/view/oum/first-run.js
@@ -40,6 +41,7 @@ chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/ou
 	/usr/libexec/oum-subscription-info /usr/libexec/oum-speedtest /usr/libexec/oum-speedtest-yaml.rb \
 	/usr/libexec/oum-backup /usr/libexec/oum-backup-codec.rb /usr/libexec/oum-reset-vpn \
 	/usr/libexec/oum-system-job \
+	/usr/libexec/oum-login-default \
 	/usr/libexec/oum-runtime.sh
 chmod 600 /usr/libexec/oum/source_converter.rb
 chmod 644 /usr/share/luci/menu.d/luci-app-oum.json /usr/share/rpcd/acl.d/luci-app-oum.json \
@@ -47,6 +49,7 @@ chmod 644 /usr/share/luci/menu.d/luci-app-oum.json /usr/share/rpcd/acl.d/luci-ap
 	/www/luci-static/resources/view/oum/dashboard.js /www/luci-static/resources/view/oum/settings.js
 
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
+/usr/libexec/oum-login-default
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart
 

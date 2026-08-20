@@ -102,6 +102,11 @@ gate, and an already configured router can deliberately return to it only with
 the Settings page's destructive «Первый запуск» action. Routine WAN and Wi-Fi
 changes therefore have one home instead of being duplicated in the wizard.
 
+LuCI normally pre-fills `root` on every login form. OUM applies a validated,
+idempotent dispatcher adjustment that pre-fills `admin` only when the requested
+path belongs to `/oum`. Full LuCI administration and SSH retain `root`; the
+change affects a form default and does not alter authentication or privileges.
+
 The `oum` ucode rpcd object validates the complete request before writing,
 backs up all affected UCI files, applies WAN and Wi-Fi changes, updates the
 restricted login hash and commits the transaction. A runtime failure restores

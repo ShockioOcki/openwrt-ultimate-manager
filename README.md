@@ -51,6 +51,8 @@ The `luci-app-oum/` directory contains the first installable prototype of the
 simplified OUM interface for OpenWrt 25.12. It provides a restricted `admin`
 login and a four-step first-run wizard for WAN, Wi-Fi, VPN mode selection and
 replacement of the temporary panel password.
+The OUM login form pre-fills `admin`, while full LuCI and SSH continue to use
+the normal `root` default.
 
 After the network reconnect, the Settings page can import Subscription URLs,
 AmneziaWG configurations and VLESS/Hysteria2 links through a background job.
