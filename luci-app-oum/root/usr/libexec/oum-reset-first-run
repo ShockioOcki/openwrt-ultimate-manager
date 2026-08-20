@@ -9,6 +9,16 @@ while [ -d /tmp/oum-device-policy.lock ] && [ "$waited" -lt 60 ]; do
 done
 [ ! -d /tmp/oum-device-policy.lock ] || rmdir /tmp/oum-device-policy.lock 2>/dev/null || true
 
+waited=0
+while [ -d /tmp/oum-speedtest.lock ] && [ "$waited" -lt 90 ]; do
+	sleep 1
+	waited=$((waited + 1))
+done
+if [ -d /tmp/oum-speedtest.lock ]; then
+	printf '%s\n' 'Speed test is still running; reset was not started.' >&2
+	exit 1
+fi
+
 /etc/init.d/openclash stop >/dev/null 2>&1 || true
 /etc/init.d/openclash disable >/dev/null 2>&1 || true
 
@@ -34,6 +44,8 @@ rm -f /etc/oum/active_source /etc/oum/active_profile /etc/oum/proxy_backend
 rm -rf /tmp/oum-vpn-job
 rm -rf /tmp/oum-mihomo-api
 rm -f /tmp/oum-subscription-info.json /tmp/oum-subscription-info.log
+rm -rf /tmp/oum-speedtest
+rm -f /tmp/oum-speedtest.log /tmp/oum-speedtest-start.log
 rm -f /tmp/oum-vpn-job.log
 
 uci set oum.main.setup_complete='0'

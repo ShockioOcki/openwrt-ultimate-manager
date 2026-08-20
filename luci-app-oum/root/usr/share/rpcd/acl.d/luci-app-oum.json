@@ -4,14 +4,14 @@
 		"read": {
 			"ubus": {
 				"luci": [ "getFeatures" ],
-				"oum": [ "status", "dashboardStatus", "nodeStatus", "measureNodeDelays", "vpnJobStatus" ],
+				"oum": [ "status", "dashboardStatus", "nodeStatus", "measureNodeDelays", "vpnJobStatus", "speedTestStatus" ],
 				"session": [ "access" ]
 			},
 			"uci": [ "oum" ]
 		},
 		"write": {
 			"ubus": {
-				"oum": [ "applySetup", "startVpnImport", "selectNode", "setVpnEnabled", "setDevicePolicy", "refreshSubscriptionInfo" ]
+				"oum": [ "applySetup", "startVpnImport", "selectNode", "setVpnEnabled", "setDevicePolicy", "refreshSubscriptionInfo", "startSpeedTest" ]
 			},
 			"uci": [ "oum" ]
 		}

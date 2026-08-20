@@ -23,3 +23,5 @@ jobs:
         run: ruby ./tests/test_policy_yaml.rb
       - name: Subscription metadata
         run: ./tests/test_subscription_info.sh
+      - name: Speed-test YAML
+        run: ruby ./tests/test_speedtest_yaml.rb

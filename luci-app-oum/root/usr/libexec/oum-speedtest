@@ -1,0 +1,88 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+MODE="${1:-}"
+JOB_DIR=/tmp/oum-speedtest
+LOCK_DIR=/tmp/oum-speedtest.lock
+STATUS="$JOB_DIR/status"
+RESULT="$JOB_DIR/$MODE.result"
+BACKUP="$JOB_DIR/runtime.backup"
+UPLOAD="$JOB_DIR/upload.bin"
+URL='https://speed.cloudflare.com/__down'
+
+case "$MODE" in direct) TARGET=DIRECT ;; vpn) TARGET=PROXY ;; *) exit 2 ;; esac
+mkdir -p "$JOB_DIR"
+[ -d "$LOCK_DIR" ] || exit 3
+
+write_status() {
+	state="$1"
+	code="$2"
+	message="$3"
+	tmp="$STATUS.tmp"
+	printf 'state=%s\nmode=%s\ncode=%s\nmessage=%s\n' "$state" "$MODE" "$code" "$message" > "$tmp"
+	mv "$tmp" "$STATUS"
+}
+
+restored=1
+runtime_profile=''
+restore_runtime() {
+	if [ "$restored" = 0 ] && [ -n "$runtime_profile" ] && [ -f "$BACKUP" ]; then
+		cp "$BACKUP" "$runtime_profile" || return 1
+		/usr/libexec/oum-mihomo-api reload >/dev/null 2>&1 || return 1
+		restored=1
+	fi
+}
+cleanup() {
+	restore_runtime || true
+	rm -f "$BACKUP" "$UPLOAD"
+	rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'write_status failed interrupted "Тест скорости остановлен."; exit 130' INT TERM
+
+fail() {
+	write_status failed "$1" "$2"
+	exit 1
+}
+
+[ ! -d /tmp/oum-device-policy.lock ] || fail policy_busy 'Подождите завершения настройки устройств.'
+[ "$(uci -q get openclash.config.enable || echo 0)" = 1 ] || fail vpn_disabled 'Сначала включите VPN.'
+pidof clash >/dev/null 2>&1 || fail core_unavailable 'Ядро OpenClash не запущено.'
+
+profile="$(uci -q get openclash.config.config_path || true)"
+case "$profile" in /etc/openclash/config/*.yaml|/etc/openclash/config/*.yml) ;; *) fail profile_missing 'Активный профиль не найден.' ;; esac
+runtime_profile="/etc/openclash/$(basename "$profile")"
+[ -f "$runtime_profile" ] || fail runtime_missing 'Рабочий профиль OpenClash не найден.'
+
+write_status running preparing 'Готовим изолированный маршрут теста…'
+cp "$runtime_profile" "$BACKUP"
+chmod 600 "$BACKUP"
+restored=0
+/usr/bin/ruby /usr/libexec/oum-speedtest-yaml.rb "$runtime_profile" "$TARGET" || fail route_prepare 'Не удалось подготовить маршрут теста.'
+env SAFE_PATHS=/usr/share/openclash:/etc/ssl /etc/openclash/clash -t -d /etc/openclash -f "$runtime_profile" >/tmp/oum-speedtest.log 2>&1 || fail config_invalid 'Временное правило не прошло проверку.'
+/usr/libexec/oum-mihomo-api reload >>/tmp/oum-speedtest.log 2>&1 || fail reload_failed 'Mihomo не применил маршрут теста.'
+
+write_status running measuring 'Измеряем задержку и скорость…'
+exit_ip="$(curl -4fsS --connect-timeout 5 --max-time 12 'https://speed.cloudflare.com/cdn-cgi/trace' | sed -n 's/^ip=//p' | head -1)" || fail route_check_failed 'Не удалось подтвердить маршрут теста.'
+[ -n "$exit_ip" ] || fail route_check_failed 'Тестовая точка не вернула адрес маршрута.'
+path_fingerprint="$(printf '%s' "$exit_ip" | sha256sum | cut -d' ' -f1)"
+latencies=''
+for attempt in 1 2 3; do
+	value="$(curl -4fsS --connect-timeout 5 --max-time 12 -o /dev/null -w '%{time_starttransfer}' "$URL?bytes=0&latency=$attempt")" || fail latency_failed 'Не удалось измерить задержку.'
+	latencies="$latencies $value"
+done
+latency_ms="$(printf '%s\n' "$latencies" | awk '{ min=$1; for(i=2;i<=NF;i++) if($i<min) min=$i; printf "%.0f", min*1000 }')"
+
+download_bps="$(curl -4fsS --connect-timeout 5 --max-time 50 -o /dev/null -w '%{speed_download}' "$URL?bytes=25000000&run=$(date +%s)")" || fail download_failed 'Не удалось измерить входящую скорость.'
+dd if=/dev/zero of="$UPLOAD" bs=1048576 count=8 >/dev/null 2>&1 || fail upload_prepare 'Недостаточно памяти для теста отдачи.'
+upload_bps="$(curl -4fsS --connect-timeout 5 --max-time 50 -o /dev/null -w '%{speed_upload}' -X POST --data-binary "@$UPLOAD" 'https://speed.cloudflare.com/__up')" || fail upload_failed 'Не удалось измерить исходящую скорость.'
+
+download_mbps="$(awk -v value="$download_bps" 'BEGIN { printf "%.1f", value*8/1000000 }')"
+upload_mbps="$(awk -v value="$upload_bps" 'BEGIN { printf "%.1f", value*8/1000000 }')"
+
+restore_runtime || fail restore_failed 'Не удалось восстановить рабочий маршрут после теста.'
+printf 'mode=%s\ndownload_mbps=%s\nupload_mbps=%s\nlatency_ms=%s\ntimestamp=%s\npath_fingerprint=%s\n' \
+	"$MODE" "$download_mbps" "$upload_mbps" "$latency_ms" "$(date +%s)" "$path_fingerprint" > "$RESULT"
+write_status success complete 'Тест завершён.'

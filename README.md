@@ -74,6 +74,11 @@ Per-device selectors can keep a DHCP client on the normal rule set, force it
 through the VPN or bypass the VPN. Runtime rules are hot-reloaded into Mihomo
 without rewriting the downloaded source profile.
 
+The speed widget runs explicit, user-started DIRECT and VPN measurements
+against the same Cloudflare edge. Each test uses about 35 MB, validates that
+the two egress paths differ, and restores the byte-identical Mihomo runtime
+profile without restarting OpenClash.
+
 Development installation on a test router is handled by
 `tools/install-luci-dev.sh`. The installer deliberately does not activate the
 temporary `FirstRun` access point; run `/usr/libexec/oum-firstboot` separately

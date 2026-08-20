@@ -85,10 +85,8 @@ OpenClash overwrite OUM's routing policy.
 ## Roadmap
 
 1. Complete repeated clean-router first-run and source replacement tests.
-2. Add controlled direct/VPN speed tests without automatic background traffic.
-3. Add VPN node health, selection and per-device routing controls.
-4. Connect the optional USB/NAS flow and existing service modules.
-5. Package the runtime assets and promote the test build only after router testing.
+2. Connect the optional USB/NAS flow and existing service modules.
+3. Package the runtime assets and promote the test build only after router testing.
 
 ## LuCI first-run architecture
 
@@ -154,3 +152,10 @@ Device routing policies are stored in anonymous `oum` UCI sections and paired
 with stable DHCP reservations. OUM maintains a marked block in OpenClash's
 custom rules for persistence, while a validated runtime copy is hot-reloaded
 through Mihomo so policy changes do not require a full OpenClash restart.
+
+Speed tests are manual background jobs. OUM inserts a temporary top-priority
+rule for `speed.cloudflare.com`, validates and hot-reloads the runtime profile,
+measures latency plus fixed-size download/upload transfers, then restores the
+exact backup. DIRECT and VPN result files contain only rates, latency, time and
+a one-way hash used to confirm that the egress paths differ; the public IP is
+never returned to LuCI or written to disk.
