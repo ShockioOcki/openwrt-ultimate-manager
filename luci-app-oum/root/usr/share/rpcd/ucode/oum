@@ -5,6 +5,7 @@ import { cursor } from 'uci';
 
 const CONFIGS = [ 'network', 'wireless', 'rpcd', 'oum' ];
 const BACKUP_DIR = '/tmp/oum-setup-backup';
+const VPN_JOB_DIR = '/tmp/oum-vpn-job';
 
 function shellquote(value) {
 	return `'${replace(value ?? '', "'", "'\\''")}'`;
@@ -12,6 +13,29 @@ function shellquote(value) {
 
 function failure(code, message) {
 	return { ok: false, code, message };
+}
+
+function writePrivate(path, value) {
+	let file = open(path, 'w');
+	if (!file)
+		return false;
+	file.write(value);
+	file.close();
+	return system(`chmod 600 ${path}`) == 0;
+}
+
+function vpnJobStatus() {
+	let raw = readfile(`${VPN_JOB_DIR}/status`);
+	if (!raw)
+		return { state: 'idle', code: '', message: '' };
+
+	let result = { state: 'idle', code: '', message: '' };
+	for (let line in split(raw, '\n')) {
+		let pair = match(line, /^(state|code|message)=(.*)$/);
+		if (pair)
+			result[pair[1]] = pair[2];
+	}
+	return result;
 }
 
 function validSsid(value) {
@@ -135,9 +159,44 @@ const methods = {
 				setup_complete: uci.get('oum', 'main', 'setup_complete') == '1',
 				setup_step: uci.get('oum', 'main', 'setup_step') ?? 'internet',
 				active_source: uci.get('oum', 'main', 'active_source') ?? 'none',
+				pending_source: uci.get('oum', 'main', 'pending_source') ?? 'none',
 				usb_present: length(glob('/sys/class/block/sd*')) > 0,
 				country: 'US'
 			};
+		}
+	},
+
+	vpnJobStatus: {
+		call: function() {
+			return vpnJobStatus();
+		}
+	},
+
+	startVpnImport: {
+		args: { vpn_type: '', payload: '' },
+		call: function(request) {
+			let kind = request.args.vpn_type;
+			let payload = request.args.payload;
+			if (!access('/usr/libexec/oum-source-job'))
+				return failure('runtime_missing', 'Компонент импорта OUM не установлен.');
+			if (!(kind in [ 'subscription', 'awg', 'proxy' ]))
+				return failure('invalid_vpn', 'Неизвестный тип подключения.');
+			if (type(payload) != 'string' || length(payload) < 1 || length(payload) > 262144)
+				return failure('invalid_payload', 'Конфигурация пустая или слишком большая.');
+			if (kind == 'subscription' && (!match(payload, /^https?:\/\//) || match(payload, /\n/)))
+				return failure('invalid_url', 'Введите одну ссылку подписки http(s).');
+			let current = vpnJobStatus();
+			if (current.state == 'running')
+				return failure('job_running', 'Импорт уже выполняется.');
+			if (system(`rm -rf ${VPN_JOB_DIR} && mkdir -p ${VPN_JOB_DIR} && chmod 700 ${VPN_JOB_DIR}`) != 0)
+				return failure('job_directory', 'Не удалось подготовить временное хранилище.');
+			if (!writePrivate(`${VPN_JOB_DIR}/input`, payload))
+				return failure('input_write', 'Не удалось сохранить временный ввод.');
+			if (!writePrivate(`${VPN_JOB_DIR}/status`, 'state=running\ncode=queued\nmessage=Задание поставлено в очередь\n'))
+				return failure('status_write', 'Не удалось создать состояние задания.');
+			if (system(`(/usr/libexec/oum-source-job ${kind} ${VPN_JOB_DIR}/input) >/dev/null 2>&1 &`) != 0)
+				return failure('job_start', 'Не удалось запустить импорт.');
+			return { ok: true, state: 'running' };
 		}
 	},
 
@@ -172,8 +231,8 @@ const methods = {
 
 				phase = 'state';
 				uci.set('oum', 'main', 'wifi_country', 'US');
-				uci.set('oum', 'main', 'active_source', request.args.vpn_type);
-				uci.set('oum', 'main', 'setup_step', 'complete');
+				uci.set('oum', 'main', 'pending_source', request.args.vpn_type);
+				uci.set('oum', 'main', 'setup_step', request.args.vpn_type == 'none' ? 'complete' : 'vpn');
 				uci.set('oum', 'main', 'setup_complete', '1');
 
 				phase = 'admin_password';

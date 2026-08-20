@@ -1,4 +1,8 @@
 oum_deploy_converter() {
+    if [ -n "${OUM_CONVERTER_PATH:-}" ] && [ -f "$OUM_CONVERTER_PATH" ]; then
+        printf '%s\n' "$OUM_CONVERTER_PATH"
+        return 0
+    fi
     converter="$OUM_TMP_DIR/source_converter.rb"
     oum_write_source_converter "$converter"
     chmod 700 "$converter"

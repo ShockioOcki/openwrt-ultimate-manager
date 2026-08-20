@@ -16,3 +16,8 @@ the `luci-app-oum` rpcd ACL. Do not grant it generic `file.exec`, wildcard ubus
 or direct write access to system UCI configurations. `admin/admin` and the
 `FirstRun/admin123` wireless network are temporary bootstrap credentials only;
 the first-run wizard must replace the panel password and the wireless network.
+
+LuCI VPN input is written only to `/tmp/oum-vpn-job/input` with mode `0600`.
+The background importer must remove this file on every exit path. Status files
+may contain a phase and a user-facing error code but never a URL, URI, private
+key or configuration body.

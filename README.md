@@ -52,6 +52,11 @@ simplified OUM interface for OpenWrt 25.12. It provides a restricted `admin`
 login and a four-step first-run wizard for WAN, Wi-Fi, VPN mode selection and
 replacement of the temporary panel password.
 
+After the network reconnect, the dashboard can import Subscription URLs,
+AmneziaWG configurations and VLESS/Hysteria2 links through a background job.
+It reuses the terminal build's validated single-profile pipeline and reports
+progress without retaining submitted credentials in LuCI.
+
 Development installation on a test router is handled by
 `tools/install-luci-dev.sh`. The installer deliberately does not activate the
 temporary `FirstRun` access point; run `/usr/libexec/oum-firstboot` separately

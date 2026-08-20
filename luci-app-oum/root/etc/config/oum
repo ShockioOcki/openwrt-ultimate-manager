@@ -3,4 +3,4 @@ config core 'main'
 	option setup_step 'internet'
 	option wifi_country 'US'
 	option active_source 'none'
-
+	option pending_source 'none'

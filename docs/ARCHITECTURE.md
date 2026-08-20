@@ -115,7 +115,12 @@ same user-selected management password for both the restricted `admin` login
 and the emergency `root` account. SSH public-key authentication remains usable
 while the password is locked.
 
-The current prototype records the selected VPN source type but deliberately
-does not yet accept or persist credentials. Import will be connected to the
-existing atomic single-profile pipeline rather than implemented a second time
-inside LuCI.
+The wizard records the selected VPN source and applies WAN and Wi-Fi first.
+After the network reload and login, the dashboard displays the matching input
+form. `startVpnImport` writes the secret to a mode-0600 temporary file and
+starts `oum-source-job`; the job sources the same generated OUM runtime used by
+the terminal interface and calls the existing atomic single-profile pipeline.
+LuCI polls a small status file and never receives the submitted secret again.
+The input file is removed on success, validation failure, download failure or
+termination. A new Subscription, AWG Tunnel or Proxy still replaces the old
+OUM profile only after Mihomo validation and successful OpenClash startup.
