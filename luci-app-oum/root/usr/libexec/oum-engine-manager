@@ -9,6 +9,7 @@ WORK=/tmp/oum-engine-switch
 STATE=/etc/oum/engines
 STATUS="${OUM_ENGINE_STATUS:-}"
 LOG=/tmp/oum-engine-switch.log
+ERROR_FILE=/tmp/oum-engine-error
 
 PASSWALL_VERSION=26.5.11-r1
 PASSWALL_RELEASE=https://github.com/ShockioOcki/openwrt-ultimate-manager-assets/releases/download/passwall-26.5.11-owrt25.12-aarch64
@@ -53,6 +54,7 @@ log() {
 
 die() {
 	log "ERROR: $*"
+	printf '%s\n' "$*" > "$ERROR_FILE"
 	printf '%s\n' "$*" >&2
 	exit 1
 }
@@ -196,7 +198,9 @@ remove_engine() {
 			for package in $PASSWALL_REMOVE; do installed "$package" && packages="$packages $package"; done
 			[ -z "$packages" ] || apk del $packages >> "$LOG" 2>&1
 			rm -f /etc/config/passwall
-			installed luci-app-passwall && return 1
+			rm -rf /tmp/etc/passwall /tmp/etc/passwall_tmp
+			nft delete table inet passwall >/dev/null 2>&1 || true
+			if installed luci-app-passwall; then return 1; fi
 			;;
 		openclash)
 			/etc/init.d/openclash stop >/dev/null 2>&1 || true
@@ -204,9 +208,12 @@ remove_engine() {
 			installed luci-app-openclash && apk del luci-app-openclash >> "$LOG" 2>&1
 			rm -rf /etc/openclash
 			rm -f /etc/config/openclash
-			installed luci-app-openclash && return 1
+			rm -rf /tmp/openclash /tmp/openclash_ui
+			rm -f /tmp/openclash.bak
+			if installed luci-app-openclash; then return 1; fi
 			;;
 	esac
+	return 0
 }
 
 patch_passwall_compat() {
@@ -298,6 +305,7 @@ rollback() {
 }
 
 cleanup() {
+	set +e
 	if [ "$SUCCESS" != 1 ]; then rollback; fi
 	rm -rf "$WORK"
 }
@@ -317,6 +325,7 @@ prepare_assets() {
 preflight_engine() {
 	case "$TARGET" in passwall|openclash) ;; *) die 'Неизвестный VPN-движок.' ;; esac
 	: > "$LOG"
+	rm -f "$ERROR_FILE"
 	check_platform
 	rm -rf "$WORK"
 	mkdir -p "$WORK"
@@ -331,6 +340,7 @@ switch_engine() {
 	CURRENT="$(current_engine)"
 	[ "$CURRENT" != "$TARGET" ] || die 'Выбранный VPN-движок уже установлен.'
 	: > "$LOG"
+	rm -f "$ERROR_FILE"
 	rm -rf "$WORK"
 	mkdir -p "$WORK" "$STATE"
 	prepare_assets "$TARGET"
@@ -348,8 +358,8 @@ switch_engine() {
 	/etc/init.d/$TARGET stop >/dev/null 2>&1 || true
 	/etc/init.d/$TARGET disable >/dev/null 2>&1 || true
 	update_status replacing 'Останавливаем и удаляем исполняемые пакеты прежнего движка…'
-	remove_engine "$CURRENT" || die 'Не удалось безопасно удалить прежний движок; запускаем автоматический возврат.'
 	CURRENT_REMOVED=1
+	remove_engine "$CURRENT" || die 'Не удалось безопасно удалить прежний движок; запускаем автоматический возврат.'
 	update_status verifying 'Проверяем установленный движок и восстанавливаем его конфигурацию…'
 	restore_metadata "$TARGET"
 	activate_engine "$TARGET" || die 'Новый движок не прошёл проверку; запускаем автоматический возврат.'
@@ -358,6 +368,7 @@ switch_engine() {
 	/etc/init.d/rpcd restart >/dev/null 2>&1 || true
 	/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 	SUCCESS=1
+	rm -f "$ERROR_FILE"
 	log "switch completed: $CURRENT -> $TARGET"
 }
 
