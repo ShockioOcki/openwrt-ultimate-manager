@@ -95,6 +95,17 @@ restore and deliberately downloaded as an unencrypted secret-bearing file.
 Maintenance actions can clear only the VPN layer or return to the FirstRun
 wizard without changing the LAN address.
 
+The VPN engine manager can replace OpenClash with PassWall or restore a
+previously used engine. It downloads and verifies the target package set and a
+rollback set before changing packages, stores only the small secret-bearing
+configuration archive locally, stages the new engine while the old one is
+still running, and restores the previous engine automatically if installation
+or readiness checks fail. PassWall 26.5.11-r1 packages are published without
+configuration or credentials in the public
+[`openwrt-ultimate-manager-assets`](https://github.com/ShockioOcki/openwrt-ultimate-manager-assets)
+repository. Source import remains disabled in PassWall mode until its native
+import adapter is complete; existing PassWall nodes and policies remain usable.
+
 Development installation on a test router is handled by
 `tools/install-luci-dev.sh`. The installer deliberately does not activate the
 temporary `FirstRun` access point; run `/usr/libexec/oum-firstboot` separately

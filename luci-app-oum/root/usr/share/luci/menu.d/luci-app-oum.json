@@ -37,7 +37,7 @@
 		"order": 3,
 		"action": {
 			"type": "view",
-			"path": "oum/settings"
+			"path": "oum/settings-v2"
 		},
 		"depends": {
 			"acl": [ "luci-app-oum" ],

@@ -193,6 +193,43 @@ function capabilityStatus() {
 	};
 }
 
+function passwallInstalled() {
+	return access('/etc/init.d/passwall') && access('/etc/config/passwall');
+}
+
+function packageVersion(name) {
+	let process = popen(`/usr/bin/apk list --installed ${name} 2>/dev/null | cut -d' ' -f1`);
+	if (!process)
+		return '';
+	let value = trim(process.read('line'));
+	process.close();
+	return replace(value, `${name}-`, '');
+}
+
+function engineStatusData() {
+	let passwall = passwallInstalled();
+	let openclash = access('/etc/init.d/openclash') && access('/etc/config/openclash');
+	let arch = trim(readfile('/etc/apk/arch') ?? '');
+	let release = readfile('/etc/openwrt_release') ?? '';
+	let supported = access('/usr/bin/apk') && arch == 'aarch64_cortex-a53' && match(release, /DISTRIB_RELEASE='25\.12\./);
+	return {
+		current: passwall ? 'passwall' : (openclash ? 'openclash' : 'none'),
+		supported: supported ? true : false,
+		passwall: {
+			installed: passwall ? true : false,
+			version: packageVersion('luci-app-passwall'),
+			target_version: '26.5.11-r1',
+			saved: access('/etc/oum/engines/passwall/passwall') ? true : false
+		},
+		openclash: {
+			installed: openclash ? true : false,
+			version: packageVersion('luci-app-openclash'),
+			target_version: 'controlled-0.47.156',
+			saved: access('/etc/oum/engines/openclash/openclash-config.tar.gz') ? true : false
+		}
+	};
+}
+
 function settingsStatusData() {
 	const uci = cursor();
 	let bands = {};
@@ -223,29 +260,17 @@ function settingsStatusData() {
 			country: 'US'
 		},
 		wan,
+		engines: engineStatusData(),
 		capabilities: capabilityStatus(),
 		rollback_wifi: access('/etc/oum/rollback/wireless') ? true : false,
 		rollback_wan: access('/etc/oum/rollback/network') ? true : false
 	};
 }
 
-function passwallInstalled() {
-	return access('/etc/init.d/passwall') && access('/etc/config/passwall');
-}
-
 function vpnReady() {
 	if (passwallInstalled())
 		return system("pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1") == 0;
 	return system("pidof clash >/dev/null 2>&1 && nft list chain inet fw4 openclash 2>/dev/null | grep -q 'redirect to :7892'") == 0;
-}
-
-function packageVersion(name) {
-	let process = popen(`/usr/bin/apk list --installed ${name} 2>/dev/null | cut -d' ' -f1`);
-	if (!process)
-		return '';
-	let value = trim(process.read('line'));
-	process.close();
-	return replace(value, `${name}-`, '');
 }
 
 function passwallStatusData() {
@@ -661,6 +686,23 @@ const methods = {
 		}
 	},
 
+	switchVpnEngine: {
+		args: { engine: '' },
+		call: function(request) {
+			let engine = request.args.engine ?? '';
+			if (!(engine in [ 'openclash', 'passwall' ]))
+				return failure('invalid_engine', 'Выберите OpenClash или PassWall.');
+			let status = engineStatusData();
+			if (!status.supported)
+				return failure('unsupported_platform', 'Для этого устройства пока нет проверенного комплекта переключения.');
+			if (status.current == engine)
+				return failure('already_active', 'Этот VPN-движок уже установлен.');
+			if (!access('/usr/libexec/oum-engine-manager'))
+				return failure('runtime_missing', 'Менеджер VPN-движков не установлен.');
+			return startSystemJob('engine', { engine });
+		}
+	},
+
 	createBackup: {
 		call: function() {
 			if (!access('/usr/libexec/oum-backup') || !access('/usr/libexec/oum-backup-codec.rb'))
@@ -903,6 +945,8 @@ const methods = {
 				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
 			let kind = request.args.vpn_type;
 			let payload = request.args.payload;
+			if (passwallInstalled())
+				return failure('engine_not_supported', 'Импорт источников PassWall будет добавлен отдельным этапом. Сейчас доступно только управление существующей конфигурацией.');
 			if (!access('/usr/libexec/oum-source-job'))
 				return failure('runtime_missing', 'Компонент импорта OUM не установлен.');
 			if (!(kind in [ 'subscription', 'awg', 'proxy' ]))

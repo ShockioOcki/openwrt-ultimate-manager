@@ -19,6 +19,7 @@ sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-subscription-info"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-backup"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-reset-vpn"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-system-job"
+sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-login-default"
 sh -n "$ROOT/tests/test_subscription_info.sh"
 sh -n "$ROOT/tests/test_login_default.sh"
@@ -30,6 +31,6 @@ python3 -m json.tool "$ROOT/luci-app-oum/root/usr/share/rpcd/acl.d/luci-app-oum.
 if command -v node >/dev/null 2>&1; then
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/first-run.js"
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v8.js"
-	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/settings.js"
+	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/settings-v2.js"
 fi
 printf 'syntax tests: OK\n'

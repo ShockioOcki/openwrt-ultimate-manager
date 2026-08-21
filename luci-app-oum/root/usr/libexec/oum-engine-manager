@@ -1,0 +1,369 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-}"
+TARGET="${2:-}"
+WORK=/tmp/oum-engine-switch
+STATE=/etc/oum/engines
+STATUS="${OUM_ENGINE_STATUS:-}"
+LOG=/tmp/oum-engine-switch.log
+
+PASSWALL_VERSION=26.5.11-r1
+PASSWALL_RELEASE=https://github.com/ShockioOcki/openwrt-ultimate-manager-assets/releases/download/passwall-26.5.11-owrt25.12-aarch64
+PASSWALL_ASSETS='chinadns-ng-2025.08.09-r1.apk|2ce83854e76692456a520be41d5fed017aa6a6294f9479f799592f2fb83c3f19
+dns2socks-2.1-r2.apk|49714c6ad39f0b0be862e460620ad33652e835dcf99e0de2e26e415fbf898b6b
+geoview-0.2.6-r1.apk|6beac4ccdcac40cfc377bdc564f0d74be338a63afb4273d522a16f4b1534b60d
+haproxy-3.2.15-r1.apk|7dbb2d40385d597e76c1857dca7941cb270e9a865827cb1e3e34a141f7563fff
+ipt2socks-1.1.4-r3.apk|c18b1b20c6803eb405684fe0c2310f27478e3272dec45ef106a8ab9b1cd53a54
+luci-app-passwall-26.5.11-r1.apk|9b2c7808b4709a0bcdf945537a2c347ff0b04cc83f54047e3b709e3483a7b18f
+microsocks-1.0.5-r2.apk|e1681f48ab5a5cafdf942a35d2b1f5cfaa95c7b5dbf65cec27ab5ab46001149f
+tcping-0.3-r1.apk|04429d4e95e7f64805fe087ead5ca1240516a5cc8ebd99203f274d0bda9e7779
+xray-core-26.5.9-r1.apk|db938702aeb73468853f0517fa63b8a67a2b88e9ba2aa7322f1cc1e936a1570c'
+PASSWALL_REMOVE='luci-app-passwall xray-core chinadns-ng dns2socks geoview haproxy ipt2socks microsocks tcping'
+
+OPENCLASH_VERSION=0.47.156
+OPENCLASH_APK=luci-app-openclash-0.47.156.apk
+OPENCLASH_URL=https://github.com/vernesong/OpenClash/releases/download/v0.47.156/luci-app-openclash-0.47.156.apk
+OPENCLASH_SHA=1e4f330fc654e0270ac9cfa762af221335567d9b89388219890e8a7745b914ab
+MIHOMO_VERSION=1.19.30
+MIHOMO_ARCHIVE=mihomo-linux-arm64-v1.19.30.gz
+MIHOMO_URL=https://github.com/MetaCubeX/mihomo/releases/download/v1.19.30/mihomo-linux-arm64-v1.19.30.gz
+MIHOMO_SHA=58896873736d28628f66de3677c8654fa0f180662523148e136cff4f6e890069
+
+CURRENT=none
+MUTATED=0
+SUCCESS=0
+TARGET_INSTALLED=0
+CURRENT_REMOVED=0
+
+update_status() {
+	[ -n "$STATUS" ] || return 0
+	code="$1"
+	message="$2"
+	tmp="$STATUS.engine.tmp"
+	printf 'state=running\naction=engine\ncode=%s\nmessage=%s\n' "$code" "$message" > "$tmp"
+	mv "$tmp" "$STATUS"
+}
+
+log() {
+	printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"
+}
+
+die() {
+	log "ERROR: $*"
+	printf '%s\n' "$*" >&2
+	exit 1
+}
+
+installed() {
+	apk info -e "$1" >/dev/null 2>&1
+}
+
+current_engine() {
+	if [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ] && installed luci-app-passwall; then
+		printf '%s\n' passwall
+	elif [ -x /etc/init.d/openclash ] && [ -f /etc/config/openclash ] && installed luci-app-openclash; then
+		printf '%s\n' openclash
+	else
+		printf '%s\n' none
+	fi
+}
+
+service_enabled() {
+	case "$1" in
+		passwall) [ "$(uci -q get passwall.@global[0].enabled || true)" = 1 ] ;;
+		openclash) [ "$(uci -q get openclash.config.enable || true)" = 1 ] ;;
+		*) return 1 ;;
+	esac
+}
+
+fetch() {
+	url="$1"
+	file="$2"
+	expected="$3"
+	if command -v curl >/dev/null 2>&1; then
+		curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$file" "$url"
+	else
+		wget -T 20 -t 3 -O "$file" "$url"
+	fi
+	[ -s "$file" ] || return 1
+	actual="$(sha256sum "$file" | awk '{print $1}')"
+	[ "$actual" = "$expected" ]
+}
+
+download_passwall() {
+	mkdir -p "$WORK/passwall"
+	old_ifs="$IFS"
+	IFS='
+'
+	for entry in $PASSWALL_ASSETS; do
+		file="${entry%%|*}"
+		sha="${entry#*|}"
+		fetch "$PASSWALL_RELEASE/$file" "$WORK/passwall/$file" "$sha" || {
+			IFS="$old_ifs"
+			return 1
+		}
+	done
+	IFS="$old_ifs"
+}
+
+download_openclash() {
+	mkdir -p "$WORK/openclash"
+	fetch "$OPENCLASH_URL" "$WORK/openclash/$OPENCLASH_APK" "$OPENCLASH_SHA" || return 1
+	fetch "$MIHOMO_URL" "$WORK/openclash/$MIHOMO_ARCHIVE" "$MIHOMO_SHA"
+}
+
+download_engine() {
+	case "$1" in
+		passwall) download_passwall ;;
+		openclash) download_openclash ;;
+		*) return 1 ;;
+	esac
+}
+
+simulate_engine() {
+	case "$1" in
+		passwall) apk add --simulate --allow-untrusted "$WORK"/passwall/*.apk >> "$LOG" 2>&1 ;;
+		openclash) apk add --simulate --allow-untrusted "$WORK/openclash/$OPENCLASH_APK" >> "$LOG" 2>&1 ;;
+		*) return 1 ;;
+	esac
+}
+
+check_platform() {
+	command -v apk >/dev/null 2>&1 || die 'Переключение движков поддерживается только на OpenWrt с apk.'
+	[ "$(cat /etc/apk/arch 2>/dev/null || true)" = aarch64_cortex-a53 ] || die 'Для архитектуры роутера пока нет проверенного комплекта PassWall.'
+	grep -q "DISTRIB_RELEASE='25\.12\." /etc/openwrt_release || die 'Комплект проверен только с OpenWrt 25.12.'
+	available="$(df -Pk /tmp | awk 'NR == 2 { print $4 }')"
+	[ "${available:-0}" -ge 50000 ] || die 'Недостаточно временной памяти для безопасной загрузки нового и резервного комплектов.'
+}
+
+save_metadata() {
+	dir="$1"
+	printf 'active_source=%s\npending_source=%s\n' \
+		"$(uci -q get oum.main.active_source || echo none)" \
+		"$(uci -q get oum.main.pending_source || echo none)" > "$dir/oum-state"
+}
+
+save_engine() {
+	engine="$1"
+	[ "$engine" != none ] || return 0
+	tmp="$STATE/.${engine}.new"
+	rm -rf "$tmp"
+	mkdir -p "$tmp"
+	if service_enabled "$engine"; then printf '1\n' > "$tmp/enabled"; else printf '0\n' > "$tmp/enabled"; fi
+	save_metadata "$tmp"
+	case "$engine" in
+		passwall)
+			cp /etc/config/passwall "$tmp/passwall"
+			;;
+		openclash)
+			mkdir -p "$tmp/files/etc/config" "$tmp/files/etc/openclash"
+			[ ! -f /etc/config/openclash ] || cp /etc/config/openclash "$tmp/files/etc/config/openclash"
+			for dir in config custom proxy_provider rule_provider; do
+				[ ! -d "/etc/openclash/$dir" ] || cp -a "/etc/openclash/$dir" "$tmp/files/etc/openclash/$dir"
+			done
+			tar -czf "$tmp/openclash-config.tar.gz" -C "$tmp/files" .
+			rm -rf "$tmp/files"
+			;;
+	esac
+	rm -rf "$STATE/$engine"
+	mv "$tmp" "$STATE/$engine"
+	chmod -R go-rwx "$STATE/$engine"
+}
+
+restore_metadata() {
+	dir="$STATE/$1"
+	if [ -f "$dir/oum-state" ]; then
+		active="$(sed -n 's/^active_source=//p' "$dir/oum-state" | head -n 1)"
+		pending="$(sed -n 's/^pending_source=//p' "$dir/oum-state" | head -n 1)"
+	else
+		active=none
+		pending=none
+	fi
+	uci -q set "oum.main.active_source=${active:-none}"
+	uci -q set "oum.main.pending_source=${pending:-none}"
+	uci -q commit oum
+}
+
+remove_engine() {
+	case "$1" in
+		passwall)
+			/etc/init.d/passwall stop >/dev/null 2>&1 || true
+			/etc/init.d/passwall disable >/dev/null 2>&1 || true
+			packages=''
+			for package in $PASSWALL_REMOVE; do installed "$package" && packages="$packages $package"; done
+			[ -z "$packages" ] || apk del $packages >> "$LOG" 2>&1
+			rm -f /etc/config/passwall
+			installed luci-app-passwall && return 1
+			;;
+		openclash)
+			/etc/init.d/openclash stop >/dev/null 2>&1 || true
+			/etc/init.d/openclash disable >/dev/null 2>&1 || true
+			installed luci-app-openclash && apk del luci-app-openclash >> "$LOG" 2>&1
+			rm -rf /etc/openclash
+			rm -f /etc/config/openclash
+			installed luci-app-openclash && return 1
+			;;
+	esac
+}
+
+patch_passwall_compat() {
+	util=/usr/lib/lua/luci/passwall/util_xray.lua
+	[ -f "$util" ] || return 0
+	if grep -Fq 'if not tag then tag = node[".name"] end' "$util"; then
+		mkdir -p /etc/oum/compat
+		[ -f /etc/oum/compat/passwall-util_xray.lua.original ] || cp "$util" /etc/oum/compat/passwall-util_xray.lua.original
+		sed -i 's/if not tag then tag = node\["\.name"\] end/if node and not tag then tag = node[".name"] end/' "$util"
+	fi
+}
+
+install_passwall() {
+	apk add --allow-untrusted "$WORK"/passwall/*.apk >> "$LOG" 2>&1 || return 1
+	[ -x /etc/init.d/passwall ] && command -v xray >/dev/null 2>&1 || return 1
+	[ "$(apk list --installed luci-app-passwall 2>/dev/null | sed -n 's/^luci-app-passwall-\([^ ]*\).*/\1/p')" = "$PASSWALL_VERSION" ] || return 1
+	[ ! -f "$STATE/passwall/passwall" ] || cp "$STATE/passwall/passwall" /etc/config/passwall
+	chmod 600 /etc/config/passwall
+	patch_passwall_compat
+}
+
+install_openclash() {
+	apk add --allow-untrusted "$WORK/openclash/$OPENCLASH_APK" >> "$LOG" 2>&1 || return 1
+	mkdir -p /etc/openclash/core
+	gzip -dc "$WORK/openclash/$MIHOMO_ARCHIVE" > /etc/openclash/core/clash_meta || return 1
+	chmod 755 /etc/openclash/core/clash_meta
+	/etc/openclash/core/clash_meta -v >> "$LOG" 2>&1 || return 1
+	if [ -f "$STATE/openclash/openclash-config.tar.gz" ]; then
+		tar -xzf "$STATE/openclash/openclash-config.tar.gz" -C /
+	fi
+	[ -f /etc/config/openclash ] || return 1
+}
+
+install_engine() {
+	case "$1" in
+		passwall) install_passwall ;;
+		openclash) install_openclash ;;
+		*) return 1 ;;
+	esac
+}
+
+wait_ready() {
+	engine="$1"
+	waited=0
+	while [ "$waited" -lt 60 ]; do
+		case "$engine" in
+			passwall) pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1 && return 0 ;;
+			openclash) pidof clash >/dev/null 2>&1 && nft list chain inet fw4 openclash >/dev/null 2>&1 && return 0 ;;
+		esac
+		sleep 1
+		waited=$((waited + 1))
+	done
+	return 1
+}
+
+activate_engine() {
+	engine="$1"
+	enabled=0
+	[ ! -f "$STATE/$engine/enabled" ] || enabled="$(cat "$STATE/$engine/enabled")"
+	if [ "$enabled" = 1 ]; then
+		/etc/init.d/$engine enable >/dev/null 2>&1 || true
+		/etc/init.d/$engine restart >> "$LOG" 2>&1 || return 1
+		wait_ready "$engine" || return 1
+	else
+		case "$engine" in
+			passwall) uci -q set passwall.@global[0].enabled=0; uci -q commit passwall ;;
+			openclash) uci -q set openclash.config.enable=0; uci -q commit openclash ;;
+		esac
+		/etc/init.d/$engine stop >/dev/null 2>&1 || true
+		/etc/init.d/$engine disable >/dev/null 2>&1 || true
+	fi
+}
+
+rollback() {
+	[ "$MUTATED" = 1 ] || return 0
+	log "rolling back to $CURRENT"
+	/etc/init.d/$TARGET stop >/dev/null 2>&1 || true
+	if [ "$CURRENT" != none ] && [ "$CURRENT_REMOVED" = 1 ]; then
+		if install_engine "$CURRENT"; then
+			restore_metadata "$CURRENT"
+			remove_engine "$TARGET" || log 'could not fully remove failed target engine'
+			activate_engine "$CURRENT" || log 'could not restart previous engine'
+		else
+			log 'could not reinstall previous engine'
+		fi
+	else
+		[ "$TARGET_INSTALLED" != 1 ] || remove_engine "$TARGET" || log 'could not fully remove failed target engine'
+	fi
+}
+
+cleanup() {
+	if [ "$SUCCESS" != 1 ]; then rollback; fi
+	rm -rf "$WORK"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+prepare_assets() {
+	engine="$1"
+	update_status package_index 'Обновляем индекс системных зависимостей…'
+	apk update >> "$LOG" 2>&1 || die 'Не удалось обновить индекс пакетов OpenWrt.'
+	update_status downloading 'Загружаем и проверяем полный комплект нового движка…'
+	download_engine "$engine" || die 'Не удалось загрузить или проверить комплект нового движка.'
+	update_status dependencies 'Проверяем совместимость системных зависимостей…'
+	simulate_engine "$engine" || die 'Системные зависимости нового движка недоступны или несовместимы.'
+}
+
+preflight_engine() {
+	case "$TARGET" in passwall|openclash) ;; *) die 'Неизвестный VPN-движок.' ;; esac
+	: > "$LOG"
+	check_platform
+	rm -rf "$WORK"
+	mkdir -p "$WORK"
+	prepare_assets "$TARGET"
+	SUCCESS=1
+	printf '%s\n' 'Комплект загружен, контрольные суммы и зависимости проверены.'
+}
+
+switch_engine() {
+	case "$TARGET" in passwall|openclash) ;; *) die 'Неизвестный VPN-движок.' ;; esac
+	check_platform
+	CURRENT="$(current_engine)"
+	[ "$CURRENT" != "$TARGET" ] || die 'Выбранный VPN-движок уже установлен.'
+	: > "$LOG"
+	rm -rf "$WORK"
+	mkdir -p "$WORK" "$STATE"
+	prepare_assets "$TARGET"
+	if [ "$CURRENT" != none ]; then
+		update_status rollback_assets 'Готовим проверенный комплект для автоматического возврата…'
+		download_engine "$CURRENT" || die 'Не удалось подготовить комплект автоматического возврата.'
+		simulate_engine "$CURRENT" || die 'Комплект автоматического возврата несовместим с системой.'
+		update_status backup 'Сохраняем конфигурацию текущего движка…'
+		save_engine "$CURRENT" || die 'Не удалось сохранить конфигурацию текущего движка.'
+	fi
+	MUTATED=1
+	update_status installing 'Устанавливаем новый движок, пока текущий продолжает работать…'
+	install_engine "$TARGET" || die 'Новый движок не установился; запускаем автоматический возврат.'
+	TARGET_INSTALLED=1
+	/etc/init.d/$TARGET stop >/dev/null 2>&1 || true
+	/etc/init.d/$TARGET disable >/dev/null 2>&1 || true
+	update_status replacing 'Останавливаем и удаляем исполняемые пакеты прежнего движка…'
+	remove_engine "$CURRENT" || die 'Не удалось безопасно удалить прежний движок; запускаем автоматический возврат.'
+	CURRENT_REMOVED=1
+	update_status verifying 'Проверяем установленный движок и восстанавливаем его конфигурацию…'
+	restore_metadata "$TARGET"
+	activate_engine "$TARGET" || die 'Новый движок не прошёл проверку; запускаем автоматический возврат.'
+	rm -f /tmp/luci-indexcache
+	rm -f /tmp/luci-modulecache/* 2>/dev/null || true
+	/etc/init.d/rpcd restart >/dev/null 2>&1 || true
+	/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+	SUCCESS=1
+	log "switch completed: $CURRENT -> $TARGET"
+}
+
+case "$ACTION" in
+	switch) switch_engine ;;
+	preflight) preflight_engine ;;
+	current) current_engine ;;
+	*) printf 'usage: %s {current|preflight ENGINE|switch ENGINE}\n' "$0" >&2; exit 2 ;;
+esac

@@ -187,13 +187,23 @@ lists. Existing service addresses are never replaced. A policy change backs
 up PassWall, DHCP and OUM state, restarts PassWall, waits for Xray, its DNS
 instance and nftables, and restores the previous files if readiness fails.
 
-Only one routing engine is installed at a time. A future engine transition
-must download and verify the complete replacement package set before stopping
-and removing the current engine, preserve its user configuration separately,
-and verify DNS plus forwarding after installation. PassWall and its compatible
-runtime dependencies use a pinned, tested version set. Other engines follow
-the repository's controlled release channel rather than sharing PassWall's
-version pin.
+Only one routing engine remains installed after a transition. The engine
+manager first updates the OpenWrt package index, downloads and SHA-256 verifies
+both the target package set and the set required for rollback, and simulates
+dependency resolution. It then stores the current engine's configuration under
+mode-0700 `/etc/oum/engines`, stages the target while the current service is
+still available, stops both, removes the old engine and restores the target's
+saved configuration. An installation or readiness failure reinstalls and
+restarts the previous engine before temporary assets are removed. A fresh
+engine intentionally remains disabled until the user supplies a compatible
+source.
+
+PassWall and its compatible runtime dependencies use the pinned, tested
+26.5.11-r1 package set from the public OUM assets repository. The package
+release contains no configuration, nodes, subscription URLs or credentials.
+Other engines use a checksum-verified controlled release manifest rather than
+sharing PassWall's product version pin. Podkop + Zapret remains unavailable in
+the selector until its separate adapter and rollback tests are complete.
 
 ## Settings and recovery
 

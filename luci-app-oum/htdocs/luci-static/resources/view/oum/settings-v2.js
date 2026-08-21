@@ -17,6 +17,7 @@ const callApplyWan = rpc.declare({
 	object: 'oum', method: 'applyWanSettings', params: [ 'wan_type', 'pppoe_user', 'pppoe_password' ], expect: { '': {} }
 });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
+const callSwitchEngine = rpc.declare({ object: 'oum', method: 'switchVpnEngine', params: [ 'engine' ], expect: { '': {} } });
 const callCreateBackup = rpc.declare({ object: 'oum', method: 'createBackup', expect: { '': {} } });
 const callRestoreBackup = rpc.declare({ object: 'oum', method: 'restoreBackup', params: [ 'data' ], expect: { '': {} } });
 const callResetVpn = rpc.declare({ object: 'oum', method: 'resetVpn', expect: { '': {} } });
@@ -32,6 +33,13 @@ function choice(name, value, title, description, checked) {
 function sourceChoice(value, title, description, checked) {
 	return E('label', { 'class': 'oum-source-choice' }, [
 		E('input', { type: 'radio', name: 'vpn_source', value, checked: checked ? '' : null }),
+		E('span', {}, [ E('strong', {}, title), E('small', {}, description) ])
+	]);
+}
+
+function engineChoice(value, title, description, checked, disabled) {
+	return E('label', { 'class': `oum-engine-choice${disabled ? ' is-disabled' : ''}` }, [
+		E('input', { type: 'radio', name: 'vpn_engine', value, checked: checked ? '' : null, disabled: disabled ? '' : null }),
 		E('span', {}, [ E('strong', {}, title), E('small', {}, description) ])
 	]);
 }
@@ -94,6 +102,9 @@ return view.extend({
 			]);
 		const wifi = settings.wifi || {};
 		const wan = settings.wan || {};
+		const engines = settings.engines || { current: 'none', supported: false, passwall: {}, openclash: {} };
+		const engineTitle = engines.current === 'passwall' ? 'PassWall' : (engines.current === 'openclash' ? 'OpenClash' : 'не установлен');
+		const sourceSupported = engines.current === 'openclash';
 		const capabilities = settings.capabilities || {};
 		const meshState = !capabilities.mesh_driver ? 'Режим 802.11s не поддерживается радиодрайвером.' :
 			(capabilities.mesh_runtime ? 'Mesh поддерживается и программный компонент установлен.' : 'Радиомодуль поддерживает Mesh. Для включения потребуется безопасная установка wpad-mesh.');
@@ -108,9 +119,10 @@ return view.extend({
 				.oum-setting-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-setting-field{margin:11px 0}.oum-setting-field label{display:block;font-weight:600;margin-bottom:6px}.oum-setting-field input{width:100%;box-sizing:border-box}.oum-setting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.oum-job-state{padding:11px 13px;border-radius:8px;background:#eef4fa;margin:0 0 16px}.oum-job-state[data-state="failed"]{background:#ffe9e7}.oum-job-state[data-state="success"]{background:#e6f7eb}
 				.oum-maintenance{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.oum-maintenance-card{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
 				.oum-capability-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-capability{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-capability h4{margin:0 0 8px}.oum-capability-state{line-height:1.45}
+				.oum-engine-current{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px;border-radius:9px;background:#eef4fa;margin-bottom:14px}.oum-engine-current small{opacity:.7}.oum-engine-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-engine-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-engine-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-engine-choice span{display:flex;flex-direction:column;gap:5px}.oum-engine-choice small{opacity:.72;line-height:1.4}.oum-engine-choice.is-disabled{opacity:.55;cursor:not-allowed}.oum-engine-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
 				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:14px}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}
 				.oum-vpn-input{margin:18px 0}.oum-vpn-input label{display:block;font-weight:600;margin-bottom:7px}.oum-vpn-input input,.oum-vpn-input textarea{width:100%;box-sizing:border-box}.oum-vpn-input textarea{min-height:180px;font-family:monospace}.oum-vpn-job{padding:12px;border-radius:8px;background:#eef4fa;margin:14px 0}.oum-vpn-job[data-state="failed"]{background:#ffe9e7}.oum-vpn-job[data-state="success"]{background:#e6f7eb}
-				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
+				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid,.oum-engine-choices{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
 			`),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('h2', {}, 'Настройки OUM'),
@@ -170,25 +182,44 @@ return view.extend({
 					E('p', { 'class': 'oum-help' }, 'OUM только определяет возможности. Кнопки настройки появятся после проверки Mesh и USB-оборудования.')
 				])
 			]),
+			E('details', { 'class': 'oum-settings-panel oum-protected', open: '' }, [
+				E('summary', {}, 'VPN-движок'),
+				E('div', { 'class': 'oum-protected-content' }, [
+					E('div', { 'class': 'oum-engine-current' }, [
+						E('span', {}, [ E('small', {}, 'Сейчас установлен'), E('br'), E('strong', {}, engineTitle) ]),
+						E('span', { 'class': 'oum-help' }, engines.current === 'passwall' ? (engines.passwall.version || '') : (engines.openclash.version || ''))
+					]),
+					E('div', { 'class': 'oum-engine-choices' }, [
+						engineChoice('openclash', 'OpenClash', `Управляемый выпуск ${engines.openclash.target_version || ''}. Удобен для подписок, AWG и Proxy.`, engines.current === 'openclash', false),
+						engineChoice('passwall', 'PassWall', `Закреплённая версия ${engines.passwall.target_version || '26.5.11-r1'}. Тонкая маршрутизация через Xray.`, engines.current === 'passwall', false),
+						engineChoice('podkop', 'Podkop + Zapret', 'Появится после отдельного тестирования на основном роутере.', false, true)
+					]),
+					E('p', { 'class': 'oum-help' }, 'Перед заменой OUM загружает оба комплекта, проверяет контрольные суммы и зависимости, сохраняет конфигурацию и только затем удаляет старые пакеты. При ошибке выполняется автоматический возврат.'),
+					E('div', { 'class': 'oum-engine-actions' }, [
+						E('button', { 'class': 'btn cbi-button-action', id: 'switch-engine', 'data-system-action': '', disabled: engines.supported ? null : '' }, 'Заменить движок'),
+						E('span', { 'class': 'oum-help' }, engines.supported ? 'Сохранённая конфигурация выбранного движка восстановится автоматически.' : 'Для этой платформы ещё нет проверенного пакета переключения.')
+					])
+				])
+			]),
 			E('details', {
 				'class': 'oum-settings-panel oum-protected',
 				open: status.pending_source !== 'none' && status.active_source === 'none' ? '' : null
 			}, [
 				E('summary', {}, 'Защищённое подключение'),
 				E('div', { 'class': 'oum-protected-content' }, [
-					E('p', { 'class': 'oum-help' }, 'Новый источник полностью заменяет предыдущий OUM-профиль. При ошибке старый профиль восстанавливается.'),
-					E('div', { 'class': 'oum-sources' }, [
+					E('p', { 'class': 'oum-help' }, sourceSupported ? 'Новый источник полностью заменяет предыдущий OUM-профиль. При ошибке старый профиль восстанавливается.' : 'Сейчас работает PassWall. Управление его существующими нодами доступно на главной; безопасный импорт новых источников добавим следующим этапом.'),
+					E('div', { 'class': 'oum-sources', hidden: sourceSupported ? null : '' }, [
 						sourceChoice('subscription', 'Subscription', 'Ссылка на набор серверов', selectedSource === 'subscription'),
 						sourceChoice('awg', 'AWG Tunnel', 'Конфигурация AmneziaWG', selectedSource === 'awg'),
 						sourceChoice('proxy', 'Proxy', 'VLESS Reality или Hysteria2', selectedSource === 'proxy')
 					]),
-					E('div', { 'class': 'oum-vpn-input' }, [
+					E('div', { 'class': 'oum-vpn-input', hidden: sourceSupported ? null : '' }, [
 						E('label', { id: 'source-label' }, ''),
 						E('input', { id: 'subscription-input', type: 'url', autocomplete: 'off', spellcheck: 'false' }),
 						E('textarea', { id: 'config-input', autocomplete: 'off', spellcheck: 'false', hidden: '' })
 					]),
 					E('div', { 'class': 'oum-vpn-job', id: 'vpn-job-status', 'data-state': initialVpnJob.state || 'idle' }, initialVpnJob.message || 'Готово к добавлению подключения.'),
-					E('button', { 'class': 'btn cbi-button-action', id: 'import-source' }, 'Проверить и активировать')
+					E('button', { 'class': 'btn cbi-button-action', id: 'import-source', hidden: sourceSupported ? null : '', disabled: sourceSupported ? null : '' }, 'Проверить и активировать')
 				])
 			]),
 			E('section', { 'class': 'oum-settings-panel' }, [
@@ -226,6 +257,7 @@ return view.extend({
 		const urlInput = root.querySelector('#subscription-input');
 		const configInput = root.querySelector('#config-input');
 		const sourceLabel = root.querySelector('#source-label');
+		const engineButton = root.querySelector('#switch-engine');
 		let watching = false;
 
 		const setBusy = (busy) => root.querySelectorAll('[data-system-action]').forEach((button) => {
@@ -248,6 +280,8 @@ return view.extend({
 				if (status.state === 'running') return window.setTimeout(tick, 1500);
 				watching = false;
 				setBusy(false);
+				if (status.action === 'engine' && status.state === 'success')
+					window.setTimeout(() => window.location.reload(), 900);
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
 		};
@@ -283,6 +317,17 @@ return view.extend({
 			if (event.target.name === 'wan_type') updateWanFields();
 			if (event.target.name === 'wifi_mode') updateWifiFields();
 			if (event.target.name === 'vpn_source') updateVpnInput();
+		});
+		engineButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			const target = selected('vpn_engine');
+			if (!target || target === engines.current) return ui.addNotification(null, E('p', {}, 'Выберите другой VPN-движок.'), 'warning');
+			const title = target === 'passwall' ? 'PassWall' : 'OpenClash';
+			const saved = target === 'passwall' ? engines.passwall.saved : engines.openclash.saved;
+			const text = saved ? `OUM заменит пакеты и восстановит сохранённую конфигурацию ${title}. VPN кратковременно отключится.` :
+				`OUM установит ${title} без личной конфигурации. После замены VPN останется выключенным, пока вы не добавите подключение.`;
+			if (await confirmation(`Перейти на ${title}?`, text, 'Заменить движок', true))
+				start(callSwitchEngine(target));
 		});
 		importButton.addEventListener('click', (event) => {
 			event.preventDefault();
