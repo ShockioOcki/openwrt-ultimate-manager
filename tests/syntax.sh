@@ -15,6 +15,7 @@ sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-source-job"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-reset-first-run"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-mihomo-api"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-passwall-nodes"
+sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-passwall-policy"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-device-policy"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-subscription-info"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-speedtest"
@@ -31,7 +32,7 @@ grep -Fq "action_logout" "$ROOT/luci-app-oum/root/usr/share/ucode/luci/controlle
 python3 -m json.tool "$ROOT/luci-app-oum/root/usr/share/rpcd/acl.d/luci-app-oum.json" >/dev/null
 if command -v node >/dev/null 2>&1; then
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/first-run.js"
-	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v2.js"
+	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v4.js"
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/settings.js"
 fi
 printf 'syntax tests: OK\n'

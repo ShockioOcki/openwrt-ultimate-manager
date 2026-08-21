@@ -109,8 +109,8 @@ return view.extend({
 				.oum-node{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-node>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-delay{min-width:70px;text-align:right}
 				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
 				.oum-node-all{margin-top:13px}.oum-node-all>summary{cursor:pointer;font-weight:600;padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
-				.oum-passwall-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.oum-passwall-state{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-passwall-state small{display:block;opacity:.68;margin-bottom:5px}.oum-passwall-state strong[data-ok="false"]{color:#c0392b}.oum-passwall-route{background:#eef4fa;border-radius:9px;padding:12px;margin-top:12px}.oum-passwall-route small{display:block;margin-bottom:4px}.oum-passwall-versions{margin-top:12px}.oum-passwall-rules{margin-top:8px}.oum-node-controls[data-engine="passwall"]{border-top:1px solid #d8dde5;margin-top:16px;padding-top:14px}
-				@media(max-width:900px){.oum-cards,.oum-passwall-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-speed-grid,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route{grid-template-columns:1fr}.oum-clients .optional{display:none}}
+				.oum-passwall-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.oum-passwall-state{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-passwall-state small{display:block;opacity:.68;margin-bottom:5px}.oum-passwall-state strong[data-ok="false"],.oum-passwall-diagnostic strong[data-ok="false"]{color:#c0392b}.oum-passwall-route{background:#eef4fa;border-radius:9px;padding:12px;margin-top:12px}.oum-passwall-route small{display:block;margin-bottom:4px}.oum-passwall-versions{margin-top:12px}.oum-passwall-rules{margin-top:8px}.oum-passwall-diagnostics{margin-top:12px}.oum-passwall-diagnostics>summary{cursor:pointer;font-weight:600}.oum-passwall-diagnostic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.oum-passwall-diagnostic{border:1px solid #d8dde5;border-radius:9px;padding:10px}.oum-passwall-diagnostic small{display:block;opacity:.68;margin-bottom:4px}.oum-node-controls[data-engine="passwall"]{border-top:1px solid #d8dde5;margin-top:16px;padding-top:14px}
+				@media(max-width:900px){.oum-cards,.oum-passwall-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid,.oum-passwall-diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-speed-grid,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route,.oum-passwall-diagnostic-grid{grid-template-columns:1fr}.oum-clients .optional{display:none}}
 			`),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('h2', {}, 'OUM'),
@@ -189,7 +189,18 @@ return view.extend({
 						]),
 						E('div', { 'class': 'oum-passwall-route' }, [ E('small', { 'class': 'oum-muted' }, 'Профиль маршрутизации'), E('strong', { id: 'passwall-profile' }, '—') ]),
 						E('div', { 'class': 'oum-passwall-rules oum-muted', id: 'passwall-rules' }, ''),
-						E('div', { 'class': 'oum-passwall-versions oum-muted', id: 'passwall-versions' }, '')
+						E('div', { 'class': 'oum-passwall-versions oum-muted', id: 'passwall-versions' }, ''),
+						E('details', { 'class': 'oum-passwall-diagnostics' }, [
+							E('summary', {}, 'DNS и защита'),
+							E('div', { 'class': 'oum-passwall-diagnostic-grid' }, [
+								E('div', { 'class': 'oum-passwall-diagnostic' }, [ E('small', {}, 'Перехват DNS'), E('strong', { id: 'passwall-diag-redirect' }, '—') ]),
+								E('div', { 'class': 'oum-passwall-diagnostic' }, [ E('small', {}, 'Обработчик DNS'), E('strong', { id: 'passwall-diag-process' }, '—') ]),
+								E('div', { 'class': 'oum-passwall-diagnostic' }, [ E('small', {}, 'Прямой DNS'), E('strong', { id: 'passwall-diag-direct' }, '—') ]),
+								E('div', { 'class': 'oum-passwall-diagnostic' }, [ E('small', {}, 'Удалённый DNS'), E('strong', { id: 'passwall-diag-remote' }, '—') ]),
+								E('div', { 'class': 'oum-passwall-diagnostic' }, [ E('small', {}, 'Защита IPv6'), E('strong', { id: 'passwall-diag-ipv6' }, '—') ]),
+								E('div', { 'class': 'oum-passwall-diagnostic' }, [ E('small', {}, 'GeoSite / GeoIP'), E('strong', { id: 'passwall-diag-geo' }, '—') ])
+							])
+						])
 					]),
 					E('div', { 'class': 'oum-node-controls', id: 'node-controls' }, [
 						E('div', { 'class': 'oum-node-head' }, [
@@ -321,9 +332,9 @@ return view.extend({
 			if (!fresh.clients?.length)
 				body.appendChild(E('tr', {}, E('td', { colspan: 5, 'class': 'oum-muted' }, 'Нет активных DHCP-клиентов')));
 			for (const select of body.querySelectorAll('.oum-policy'))
-				select.disabled = vpnEngine === 'passwall';
+				select.disabled = false;
 			policyMessage.textContent = vpnEngine === 'passwall' ?
-				'Правила устройств PassWall появятся после привязки клиентов к shunt-профилям.' :
+				'PassWall закрепляет адрес устройства и добавляет его в соответствующее shunt-правило.' :
 				'Режим применяется к выбранному устройству и сохраняется после перезагрузки.';
 			updatePasswall(fresh.passwall || {});
 		};
@@ -347,6 +358,21 @@ return view.extend({
 			const versions = state.versions || {};
 			root.querySelector('#passwall-version').textContent = versions.passwall ? `Версия ${versions.passwall}` : '';
 			root.querySelector('#passwall-versions').textContent = `Xray ${versions.xray || '—'} · HAProxy ${versions.haproxy || '—'}`;
+			const diagnostics = state.diagnostics || {};
+			const setDiagnostic = (id, text, ok) => {
+				const element = root.querySelector(`#passwall-diag-${id}`);
+				element.textContent = text;
+				if (ok == null) delete element.dataset.ok;
+				else element.dataset.ok = ok ? 'true' : 'false';
+			};
+			const redirectReady = diagnostics.dns_redirect === true && diagnostics.dns_firewall === true;
+			setDiagnostic('redirect', redirectReady ? 'Включён' : 'Требует внимания', redirectReady);
+			setDiagnostic('process', diagnostics.dns_process === true ? `Работает (${diagnostics.dns_mode || '—'})` : 'Не работает', diagnostics.dns_process === true);
+			setDiagnostic('direct', diagnostics.direct_dns || 'Не задан', diagnostics.direct_dns && diagnostics.direct_dns !== 'Не задан');
+			setDiagnostic('remote', diagnostics.remote_dns_mode ? diagnostics.remote_dns_mode.toUpperCase() : 'Не задан', diagnostics.remote_dns_mode && diagnostics.remote_dns_mode !== 'Не задан');
+			setDiagnostic('ipv6', diagnostics.ipv6_tproxy === true ? 'TProxy включён' : 'Требует внимания', diagnostics.ipv6_tproxy === true);
+			const geoReady = diagnostics.geosite === true && diagnostics.geoip === true;
+			setDiagnostic('geo', geoReady ? 'Оба набора готовы' : 'Неполный набор', geoReady);
 		};
 
 		const updateNodes = (fresh) => {
@@ -487,7 +513,22 @@ return view.extend({
 			policyMessage.textContent = 'Сохраняем режим и обновляем маршрутизацию…';
 			callSetDevicePolicy(target.dataset.mac, target.value).then((result) => {
 				if (!result.ok) throw new Error(result.message || 'Не удалось изменить маршрутизацию.');
-				policyMessage.textContent = result.message || 'Настройка сохранена.';
+				policyMessage.textContent = vpnEngine === 'passwall' ?
+					'PassWall пересобирает маршрутизацию…' : (result.message || 'Настройка сохранена.');
+				let attempts = 0;
+				const watch = () => new Promise((resolve) => window.setTimeout(resolve, 1000))
+					.then(callDashboardStatus).then((fresh) => {
+						updateDashboard(fresh);
+						if ((fresh.policy_applying === true || attempts < 2) && attempts++ < 60)
+							return watch();
+						if (fresh.policy_applying === true)
+							throw new Error('PassWall не завершил применение за 60 секунд.');
+						policyMessage.textContent = 'Маршрутизация устройства применена.';
+					}).catch((err) => {
+						if (attempts++ < 60) return watch();
+						throw err;
+					});
+				return watch();
 			}).catch((err) => {
 				policyMessage.dataset.state = 'failed';
 				policyMessage.textContent = err.message;

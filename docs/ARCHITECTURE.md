@@ -181,6 +181,19 @@ Device routing policies are stored in anonymous `oum` UCI sections and paired
 with stable DHCP reservations. OUM maintains a marked block in OpenClash's
 custom rules for persistence, while a validated runtime copy is hot-reloaded
 through Mihomo so policy changes do not require a full OpenClash restart.
+In PassWall mode OUM preserves the existing shunt topology and adds only its
+managed client addresses to the `full_exception` or `full_redirection` source
+lists. Existing service addresses are never replaced. A policy change backs
+up PassWall, DHCP and OUM state, restarts PassWall, waits for Xray, its DNS
+instance and nftables, and restores the previous files if readiness fails.
+
+Only one routing engine is installed at a time. A future engine transition
+must download and verify the complete replacement package set before stopping
+and removing the current engine, preserve its user configuration separately,
+and verify DNS plus forwarding after installation. PassWall and its compatible
+runtime dependencies use a pinned, tested version set. Other engines follow
+the repository's controlled release channel rather than sharing PassWall's
+version pin.
 
 Speed tests are manual background jobs. OUM inserts a temporary top-priority
 rule for `speed.cloudflare.com`, validates and hot-reloads the runtime profile,

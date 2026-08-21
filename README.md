@@ -79,7 +79,12 @@ expiry metadata from `Subscription-Userinfo`. The URL remains on the router;
 the browser receives only numeric counters from a private 30-minute cache.
 Per-device selectors can keep a DHCP client on the normal rule set, force it
 through the VPN or bypass the VPN. Runtime rules are hot-reloaded into Mihomo
-without rewriting the downloaded source profile.
+without rewriting the downloaded source profile. In PassWall mode the same
+selectors preserve the imported shunt and manage only client addresses in its
+`full_exception` and `full_redirection` rules, with a rollback-protected
+PassWall restart. The expandable PassWall diagnostics report DNS interception,
+the DNS worker and modes, IPv6 TProxy and both Geo datasets without exposing
+proxy credentials.
 
 The speed widget runs explicit, user-started DIRECT and VPN measurements
 against the same Cloudflare edge. Each test uses about 35 MB, validates that

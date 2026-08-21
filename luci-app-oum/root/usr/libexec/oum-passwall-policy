@@ -1,0 +1,162 @@
+#!/bin/sh
+
+set -e
+
+PASSWALL_BACKUP=/tmp/oum-passwall-policy.passwall
+DHCP_BACKUP=/tmp/oum-passwall-policy.dhcp
+OUM_BACKUP=/tmp/oum-passwall-policy.oum
+PASSWALL_LOG=/tmp/oum-passwall-policy.log
+
+IPKG_INSTROOT="${IPKG_INSTROOT:-}"
+export IPKG_INSTROOT
+. /lib/functions.sh
+
+valid_mac() {
+	printf '%s' "$1" | grep -Eq '^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$'
+}
+
+valid_ipv4() {
+	printf '%s' "$1" | awk -F. '
+		NF != 4 { exit 1 }
+		{ for (i = 1; i <= 4; i++) if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1 }
+	'
+}
+
+contains_word() {
+	case " $1 " in
+		*" $2 "*) return 0 ;;
+	esac
+	return 1
+}
+
+without_words() {
+	local current="$1" removed="$2" word result=''
+	for word in $current; do
+		contains_word "$removed" "$word" && continue
+		contains_word "$result" "$word" || result="${result:+$result }$word"
+	done
+	printf '%s' "$result"
+}
+
+append_word() {
+	local current="$1" word="$2"
+	if contains_word "$current" "$word"; then
+		printf '%s' "$current"
+	else
+		printf '%s' "${current:+$current }$word"
+	fi
+}
+
+find_shunt_rule() {
+	local section="$1" remarks
+	config_get remarks "$section" remarks ''
+	case "$remarks" in
+		full_exception) DIRECT_RULE="$section" ;;
+		full_redirection) VPN_RULE="$section" ;;
+	esac
+}
+
+DIRECT_RULE=''
+VPN_RULE=''
+config_load passwall
+config_foreach find_shunt_rule shunt_rules
+[ -n "$DIRECT_RULE" ] && [ -n "$VPN_RULE" ] || {
+	printf '%s\n' 'PassWall shunt rules full_exception/full_redirection were not found.' > "$PASSWALL_LOG"
+	exit 1
+}
+
+cp /etc/config/passwall "$PASSWALL_BACKUP"
+cp /etc/config/dhcp "$DHCP_BACKUP"
+cp /etc/config/oum "$OUM_BACKUP"
+chmod 600 "$PASSWALL_BACKUP" "$DHCP_BACKUP" "$OUM_BACKUP"
+
+old_direct="$(uci -q get oum.main.managed_passwall_direct_ips || true)"
+old_vpn="$(uci -q get oum.main.managed_passwall_vpn_ips || true)"
+direct_source="$(without_words "$(uci -q get "passwall.$DIRECT_RULE.source" || true)" "$old_direct")"
+vpn_source="$(without_words "$(uci -q get "passwall.$VPN_RULE.source" || true)" "$old_vpn")"
+direct_ips=''
+vpn_ips=''
+
+for section in $(uci -q show dhcp | sed -n "s/^dhcp\.\(oum_[A-Za-z0-9_]*\)=host$/\1/p"); do
+	uci -q delete "dhcp.$section" || true
+done
+
+apply_device() {
+	local section="$1" mac ip name policy id
+	config_get mac "$section" mac ''
+	config_get ip "$section" ip ''
+	config_get name "$section" name 'device'
+	config_get policy "$section" policy 'default'
+	valid_mac "$mac" || return 0
+	valid_ipv4 "$ip" || return 0
+	id="$(printf '%s' "$mac" | tr -d ':' | tr 'A-F' 'a-f')"
+
+	case "$policy" in
+		direct)
+			direct_ips="$(append_word "$direct_ips" "$ip")"
+			direct_source="$(append_word "$direct_source" "$ip")"
+			;;
+		vpn)
+			vpn_ips="$(append_word "$vpn_ips" "$ip")"
+			vpn_source="$(append_word "$vpn_source" "$ip")"
+			;;
+		*) return 0 ;;
+	esac
+
+	uci -q set "dhcp.oum_$id=host"
+	uci -q set "dhcp.oum_$id.mac=$mac"
+	uci -q set "dhcp.oum_$id.ip=$ip"
+	uci -q set "dhcp.oum_$id.name=$name"
+}
+
+config_load oum
+config_foreach apply_device device
+
+if [ -n "$direct_source" ]; then
+	uci -q set "passwall.$DIRECT_RULE.source=$direct_source"
+else
+	uci -q delete "passwall.$DIRECT_RULE.source" || true
+fi
+if [ -n "$vpn_source" ]; then
+	uci -q set "passwall.$VPN_RULE.source=$vpn_source"
+else
+	uci -q delete "passwall.$VPN_RULE.source" || true
+fi
+
+if [ -n "$direct_ips" ]; then
+	uci -q set "oum.main.managed_passwall_direct_ips=$direct_ips"
+else
+	uci -q delete oum.main.managed_passwall_direct_ips || true
+fi
+if [ -n "$vpn_ips" ]; then
+	uci -q set "oum.main.managed_passwall_vpn_ips=$vpn_ips"
+else
+	uci -q delete oum.main.managed_passwall_vpn_ips || true
+fi
+
+uci -q commit passwall
+uci -q commit dhcp
+uci -q commit oum
+/etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+
+if /etc/init.d/passwall restart >"$PASSWALL_LOG" 2>&1; then
+	attempt=0
+	while [ "$attempt" -lt 45 ]; do
+		if pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1 &&
+			ps w | grep -q '[d]nsmasq_default'; then
+			rm -f "$PASSWALL_BACKUP" "$DHCP_BACKUP" "$OUM_BACKUP"
+			exit 0
+		fi
+		attempt=$((attempt + 1))
+		sleep 1
+	done
+fi
+
+cp "$PASSWALL_BACKUP" /etc/config/passwall
+cp "$DHCP_BACKUP" /etc/config/dhcp
+cp "$OUM_BACKUP" /etc/config/oum
+chmod 600 /etc/config/passwall /etc/config/dhcp /etc/config/oum
+/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+/etc/init.d/passwall restart >>"$PASSWALL_LOG" 2>&1 || true
+rm -f "$PASSWALL_BACKUP" "$DHCP_BACKUP" "$OUM_BACKUP"
+exit 1

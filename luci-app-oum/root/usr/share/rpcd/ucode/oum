@@ -284,11 +284,16 @@ function passwallStatusData() {
 
 	const uci = cursor();
 	let global = null;
+	let forwarding = null;
 	let nodes = {};
 	let rules = [];
 	uci.foreach('passwall', 'global', (section) => {
 		if (!global)
 			global = section;
+	});
+	uci.foreach('passwall', 'global_forwarding', (section) => {
+		if (!forwarding)
+			forwarding = section;
 	});
 	uci.foreach('passwall', 'nodes', (section) => {
 		nodes[section['.name']] = section;
@@ -311,18 +316,33 @@ function passwallStatusData() {
 	let selected = nodes[tcpNode]?.default_node ?? tcpNode;
 	let geoSite = access('/usr/share/v2ray/geosite.dat');
 	let geoIp = access('/usr/share/v2ray/geoip.dat');
+	let dnsProcess = system("ps w | grep -q '[d]nsmasq_default'") == 0;
+	let dnsRedirect = global?.dns_redirect == '1';
+	let dnsFirewall = system("nft list chain inet passwall PSW_DNS 2>/dev/null | grep -q 'redirect to'") == 0;
+	let ipv6Tproxy = forwarding?.ipv6_tproxy == '1';
 
 	return {
 		installed: true,
 		enabled: global?.enabled == '1',
 		ready: vpnReady(),
 		xray: system('pidof xray >/dev/null 2>&1') == 0,
-		dns: system("ps w | grep -q '[d]nsmasq_default'") == 0,
+		dns: dnsProcess && dnsRedirect && dnsFirewall,
 		firewall: system('nft list table inet passwall >/dev/null 2>&1') == 0,
 		geo_ready: geoSite && geoIp,
 		profile: nodeLabel(tcpNode),
 		selected_node: nodeLabel(selected),
 		rules,
+		diagnostics: {
+			dns_process: dnsProcess,
+			dns_redirect: dnsRedirect,
+			dns_firewall: dnsFirewall,
+			dns_mode: global?.dns_mode ?? 'Не задан',
+			direct_dns: global?.direct_dns ?? 'Не задан',
+			remote_dns_mode: global?.v2ray_dns_mode ?? 'Не задан',
+			ipv6_tproxy: ipv6Tproxy,
+			geosite: geoSite,
+			geoip: geoIp
+		},
 		versions: {
 			passwall: packageVersion('luci-app-passwall'),
 			xray: packageVersion('xray-core'),
@@ -741,6 +761,7 @@ const methods = {
 				vpn_engine: engine,
 				vpn_enabled: engine == 'passwall' ? passwall.enabled : uci.get('openclash', 'config', 'enable') == '1',
 				vpn_ready: vpnReady(),
+				policy_applying: access('/tmp/oum-device-policy.lock') ? true : false,
 				passwall,
 				subscription: engine == 'openclash' ? subscriptionStatusData(false) : { available: false, refreshing: false }
 			};
