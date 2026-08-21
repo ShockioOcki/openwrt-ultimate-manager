@@ -58,10 +58,12 @@ function readKeyValues(path, allowed) {
 }
 
 function speedTestStatus() {
-	let status = readKeyValues(`${SPEEDTEST_DIR}/status`, [ 'state', 'mode', 'code', 'message' ]);
+	let engine = access('/etc/init.d/passwall') && access('/etc/config/passwall') ? 'passwall' : 'openclash';
+	let status = readKeyValues(`${SPEEDTEST_DIR}/status`, [ 'state', 'mode', 'engine', 'code', 'message' ]);
 	let result = {
-		state: status.state ?? 'idle',
+		state: !length(status.engine ?? '') || status.engine == engine ? (status.state ?? 'idle') : 'idle',
 		mode: status.mode ?? '',
+		engine,
 		code: status.code ?? '',
 		message: status.message ?? '',
 		direct: null,
@@ -70,8 +72,8 @@ function speedTestStatus() {
 	};
 	let fingerprints = {};
 	for (let mode in [ 'direct', 'vpn' ]) {
-		let values = readKeyValues(`${SPEEDTEST_DIR}/${mode}.result`, [ 'mode', 'download_mbps', 'upload_mbps', 'latency_ms', 'timestamp', 'path_fingerprint' ]);
-		if (values.mode == mode) {
+		let values = readKeyValues(`${SPEEDTEST_DIR}/${mode}.result`, [ 'mode', 'engine', 'download_mbps', 'upload_mbps', 'latency_ms', 'timestamp', 'path_fingerprint' ]);
+		if (values.mode == mode && values.engine == engine) {
 			result[mode] = {
 				download_mbps: +(values.download_mbps ?? 0),
 				upload_mbps: +(values.upload_mbps ?? 0),
@@ -787,7 +789,7 @@ const methods = {
 			let mode = request.args.mode ?? '';
 			if (!(mode in [ 'direct', 'vpn' ]))
 				return failure('invalid_mode', 'Выберите прямое соединение или VPN.');
-			if (!access('/usr/libexec/oum-speedtest') || !access('/usr/libexec/oum-speedtest-yaml.rb'))
+			if (!access('/usr/libexec/oum-speedtest') || (!passwallInstalled() && !access('/usr/libexec/oum-speedtest-yaml.rb')))
 				return failure('runtime_missing', 'Компонент теста скорости не установлен.');
 			if (access(SYSTEM_JOB_LOCK))
 				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
@@ -800,7 +802,7 @@ const methods = {
 			if (system('mkdir /tmp/oum-speedtest.lock') != 0)
 				return failure('test_running', 'Другой тест скорости уже выполняется.');
 			if (system(`mkdir -p ${SPEEDTEST_DIR} && chmod 700 ${SPEEDTEST_DIR}`) != 0 ||
-				!writePrivate(`${SPEEDTEST_DIR}/status`, `state=running\nmode=${mode}\ncode=queued\nmessage=Запускаем тест скорости…\n`)) {
+				!writePrivate(`${SPEEDTEST_DIR}/status`, `state=running\nmode=${mode}\nengine=${passwallInstalled() ? 'passwall' : 'openclash'}\ncode=queued\nmessage=Запускаем тест скорости…\n`)) {
 				system('rmdir /tmp/oum-speedtest.lock');
 				return failure('status_write', 'Не удалось подготовить состояние теста.');
 			}

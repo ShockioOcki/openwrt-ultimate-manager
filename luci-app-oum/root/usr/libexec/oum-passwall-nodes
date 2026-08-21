@@ -49,8 +49,9 @@ measure_one() {
 	case "$protocol" in _*) return ;; esac
 	[ -n "$address" ] && [ -n "$port" ] || return
 	excluded_label "$remarks" && return
-	value="$(tcping -c 1 -i 0 -t 2 -p "$port" "$address" 2>/dev/null |
-		sed -n 's/.*time=\([0-9.]*\) ms.*/\1/p' | head -n 1)"
+	value="$(tcping -c 2 -i 0 -t 2 -p "$port" "$address" 2>/dev/null |
+		sed -n 's/.*time=\([0-9.]*\) ms.*/\1/p' |
+		awk 'NR == 1 { min = $1 } $1 < min { min = $1 } END { if (NR) print min }')"
 	delay=0
 	[ -z "$value" ] || delay="$(awk -v value="$value" 'BEGIN { printf "%.0f", value }')"
 	printf '%s %s\n' "$section" "$delay" >> "$RESULTS"

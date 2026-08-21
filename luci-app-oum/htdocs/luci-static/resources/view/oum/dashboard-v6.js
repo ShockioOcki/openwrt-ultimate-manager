@@ -107,7 +107,7 @@ return view.extend({
 				.oum-node-actions,.oum-subscription-head{display:flex;align-items:center;gap:8px}.oum-subscription{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #d8dde5}.oum-subscription-head{justify-content:space-between}.oum-subscription-head h3{margin:0}.oum-subscription-progress{height:9px;border-radius:999px;background:#dce3ea;overflow:hidden;margin:13px 0 8px}.oum-subscription-progress>span{display:block;height:100%;background:#32b67a;transition:width .3s}.oum-subscription-data{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}.oum-subscription-status{margin-top:7px;font-size:.85em}
 				.oum-speed-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-speed-card{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-speed-card h4{margin:0 0 12px}.oum-speed-values{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.oum-speed-values small{display:block;opacity:.68;margin-bottom:4px}.oum-speed-values strong{font-size:1.05rem}.oum-speed-card button{width:100%}.oum-speed-status{min-height:1.4em;margin-top:10px}.oum-speed-status[data-state="failed"]{color:#c0392b}
 				.oum-node{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-node>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-delay{min-width:70px;text-align:right}
-				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
+				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-hint{font-size:.86em;margin:2px 0 8px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
 				.oum-node-all{margin-top:13px}.oum-node-all>summary{cursor:pointer;font-weight:600;padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
 				.oum-passwall-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.oum-passwall-state{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-passwall-state small{display:block;opacity:.68;margin-bottom:5px}.oum-passwall-state strong[data-ok="false"],.oum-passwall-diagnostic strong[data-ok="false"]{color:#c0392b}.oum-passwall-route{background:#eef4fa;border-radius:9px;padding:12px;margin-top:12px}.oum-passwall-route small{display:block;margin-bottom:4px}.oum-passwall-versions{margin-top:12px}.oum-passwall-rules{margin-top:8px}.oum-passwall-diagnostics{margin-top:12px}.oum-passwall-diagnostics>summary{cursor:pointer;font-weight:600}.oum-passwall-diagnostic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.oum-passwall-diagnostic{border:1px solid #d8dde5;border-radius:9px;padding:10px}.oum-passwall-diagnostic small{display:block;opacity:.68;margin-bottom:4px}.oum-node-controls[data-engine="passwall"]{border-top:1px solid #d8dde5;margin-top:16px;padding-top:14px}
 				@media(max-width:900px){.oum-cards,.oum-passwall-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid,.oum-passwall-diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-speed-grid,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route,.oum-passwall-diagnostic-grid{grid-template-columns:1fr}.oum-clients .optional{display:none}}
@@ -140,7 +140,7 @@ return view.extend({
 				]),
 				E('section', { 'class': 'oum-panel' }, [
 					E('h3', {}, 'Скорость соединения'),
-					E('p', { 'class': 'oum-muted' }, 'Сравнение через одну тестовую точку Cloudflare. Один запуск использует около 35 МБ трафика.'),
+					E('p', { 'class': 'oum-muted' }, 'Сравнение через одну тестовую точку Cloudflare. Один запуск использует около 35 МБ. Задержка — полный HTTPS-отклик, а не ping ноды.'),
 					E('div', { 'class': 'oum-speed-grid' }, [
 						E('div', { 'class': 'oum-speed-card', 'data-speed-card': 'direct' }, [
 							E('h4', {}, 'Напрямую'),
@@ -207,10 +207,11 @@ return view.extend({
 							E('h3', { id: 'node-panel-title' }, 'VPN-нода'),
 							E('div', { 'class': 'oum-node-actions' }, [
 								E('a', { 'class': 'btn cbi-button', id: 'zashboard-link', href: zashboardUrl, target: '_blank', rel: 'noreferrer' }, 'Zashboard'),
-								E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Обновить ping')
+								E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Измерить TCP')
 							])
 						]),
 						E('div', { 'class': 'oum-current-node', id: 'current-node' }, 'Нет активной ноды'),
+						E('div', { 'class': 'oum-node-hint oum-muted' }, 'Задержка нод — лёгкое TCP-соединение до их серверов; это не полный HTTPS-отклик.'),
 						E('div', { 'class': 'oum-node-message oum-muted', id: 'node-message' }),
 						E('div', { 'class': 'oum-node-title' }, 'Быстрый доступ'),
 						E('div', { 'class': 'oum-node-list oum-node-quick', id: 'node-list' }),
@@ -256,12 +257,6 @@ return view.extend({
 				card.querySelector('[data-speed-value="latency"]').textContent = result ? `${Math.round(result.latency_ms)} мс` : '—';
 			}
 			const running = fresh.state === 'running';
-			if (vpnEngine === 'passwall') {
-				for (const button of speedButtons) button.disabled = true;
-				speedStatus.dataset.state = 'idle';
-				speedStatus.textContent = 'Сравнение DIRECT/VPN для PassWall добавим после нативного адаптера маршрутизации.';
-				return;
-			}
 			for (const button of speedButtons) {
 				button.disabled = running;
 				button.textContent = running && button.dataset.speedMode === fresh.mode ? 'Измеряем…' :
@@ -399,7 +394,7 @@ return view.extend({
 			const current = (fresh.nodes || []).find((node) =>
 				fresh.current_id ? node.id === fresh.current_id : node.name === fresh.current);
 			root.querySelector('#current-node').textContent = current ?
-				`${current.name} · ${delayText(current, 'ping не измерен')}` : (fresh.current || 'Не выбрана');
+				`${current.name} · ${delayText(current, 'TCP не измерен')}` : (fresh.current || 'Не выбрана');
 			nodeList.replaceChildren(...preferredNodes(fresh).map((node) => makeNode(node, false)));
 			if (!nodeList.children.length)
 				nodeList.appendChild(E('div', { 'class': 'oum-muted' }, 'Других нод в профиле нет.'));
@@ -423,10 +418,10 @@ return view.extend({
 				return callNodeStatus();
 			}).then((nodes) => {
 				updateNodes(nodes);
-				showNodeMessage('Ping нод обновлён.', false);
+				showNodeMessage('TCP-задержка нод обновлена.', false);
 			}).catch((err) => showNodeMessage(err.message, true)).finally(() => {
 				measureButton.disabled = false;
-				measureButton.textContent = 'Обновить ping';
+				measureButton.textContent = 'Измерить TCP';
 			});
 		});
 

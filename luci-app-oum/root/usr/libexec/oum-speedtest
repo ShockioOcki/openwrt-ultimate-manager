@@ -10,9 +10,17 @@ STATUS="$JOB_DIR/status"
 RESULT="$JOB_DIR/$MODE.result"
 BACKUP="$JOB_DIR/runtime.backup"
 UPLOAD="$JOB_DIR/upload.bin"
+DIRECT_CONFIG="$JOB_DIR/passwall-direct.json"
+DIRECT_LOG="$JOB_DIR/passwall-direct.log"
 URL='https://speed.cloudflare.com/__down'
 
-case "$MODE" in direct) TARGET=DIRECT ;; vpn) TARGET=PROXY ;; *) exit 2 ;; esac
+if [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ]; then
+	ENGINE=passwall
+else
+	ENGINE=openclash
+fi
+
+case "$MODE" in direct|vpn) ;; *) exit 2 ;; esac
 mkdir -p "$JOB_DIR"
 [ -d "$LOCK_DIR" ] || exit 3
 
@@ -21,12 +29,14 @@ write_status() {
 	code="$2"
 	message="$3"
 	tmp="$STATUS.tmp"
-	printf 'state=%s\nmode=%s\ncode=%s\nmessage=%s\n' "$state" "$MODE" "$code" "$message" > "$tmp"
+	printf 'state=%s\nmode=%s\nengine=%s\ncode=%s\nmessage=%s\n' "$state" "$MODE" "$ENGINE" "$code" "$message" > "$tmp"
 	mv "$tmp" "$STATUS"
 }
 
 restored=1
 runtime_profile=''
+direct_pid=''
+route_proxy=''
 restore_runtime() {
 	if [ "$restored" = 0 ] && [ -n "$runtime_profile" ] && [ -f "$BACKUP" ]; then
 		cp "$BACKUP" "$runtime_profile" || return 1
@@ -36,7 +46,11 @@ restore_runtime() {
 }
 cleanup() {
 	restore_runtime || true
-	rm -f "$BACKUP" "$UPLOAD"
+	if [ -n "$direct_pid" ]; then
+		kill "$direct_pid" 2>/dev/null || true
+		wait "$direct_pid" 2>/dev/null || true
+	fi
+	rm -f "$BACKUP" "$UPLOAD" "$DIRECT_CONFIG" "$DIRECT_LOG"
 	rmdir "$LOCK_DIR" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -48,41 +62,93 @@ fail() {
 }
 
 [ ! -d /tmp/oum-device-policy.lock ] || fail policy_busy 'Подождите завершения настройки устройств.'
-[ "$(uci -q get openclash.config.enable || echo 0)" = 1 ] || fail vpn_disabled 'Сначала включите VPN.'
-pidof clash >/dev/null 2>&1 || fail core_unavailable 'Ядро OpenClash не запущено.'
 
-profile="$(uci -q get openclash.config.config_path || true)"
-case "$profile" in /etc/openclash/config/*.yaml|/etc/openclash/config/*.yml) ;; *) fail profile_missing 'Активный профиль не найден.' ;; esac
-runtime_profile="/etc/openclash/$(basename "$profile")"
-[ -f "$runtime_profile" ] || fail runtime_missing 'Рабочий профиль OpenClash не найден.'
+if [ "$ENGINE" = passwall ]; then
+	[ "$(uci -q get 'passwall.@global[0].enabled' || echo 0)" = 1 ] || fail vpn_disabled 'Сначала включите PassWall.'
+	pidof xray >/dev/null 2>&1 || fail core_unavailable 'Ядро Xray не запущено.'
+	nft list table inet passwall >/dev/null 2>&1 || fail routing_unavailable 'Маршрутизация PassWall не готова.'
+	write_status running preparing 'Готовим изолированный маршрут PassWall…'
+	if [ "$MODE" = vpn ]; then
+		socks_server="$(sed -n 's/^GLOBAL_TCP_SOCKS_server="\(127\.0\.0\.1:[0-9][0-9]*\)"$/\1/p' /tmp/etc/passwall/var 2>/dev/null | head -n 1)"
+		[ -n "$socks_server" ] || fail socks_missing 'Локальный SOCKS-вход PassWall не найден.'
+		socks_port="${socks_server##*:}"
+		netstat -lnt 2>/dev/null | grep -q "127.0.0.1:${socks_port}[[:space:]]" || fail socks_unavailable 'SOCKS-вход PassWall не отвечает.'
+		route_proxy="$socks_server"
+	else
+		xray_bin=/tmp/etc/passwall/bin/xray
+		[ -x "$xray_bin" ] || xray_bin=/usr/bin/xray
+		[ -x "$xray_bin" ] || fail xray_missing 'Исполняемый файл Xray не найден.'
+		direct_port=1091
+		while netstat -lnt 2>/dev/null | grep -q "127.0.0.1:${direct_port}[[:space:]]"; do
+			direct_port=$((direct_port + 1))
+			[ "$direct_port" -le 1100 ] || fail port_unavailable 'Нет свободного локального порта для DIRECT-теста.'
+		done
+		printf '%s\n' '{' '  "log": { "loglevel": "warning" },' \
+			'  "inbounds": [{' \
+			"    \"listen\": \"127.0.0.1\", \"port\": $direct_port, \"protocol\": \"socks\"," \
+			'    "settings": { "auth": "noauth", "udp": false }' \
+			'  }],' \
+			'  "outbounds": [{' \
+			'    "tag": "direct", "protocol": "freedom", "settings": {},' \
+			'    "streamSettings": { "sockopt": { "mark": 255 } }' \
+			'  }]' '}' > "$DIRECT_CONFIG"
+		chmod 600 "$DIRECT_CONFIG"
+		"$xray_bin" run -test -c "$DIRECT_CONFIG" >>"$DIRECT_LOG" 2>&1 || fail direct_config_invalid 'DIRECT-маршрут Xray не прошёл проверку.'
+		"$xray_bin" run -c "$DIRECT_CONFIG" >>"$DIRECT_LOG" 2>&1 &
+		direct_pid=$!
+		attempt=0
+		while ! netstat -lnt 2>/dev/null | grep -q "127.0.0.1:${direct_port}[[:space:]]"; do
+			attempt=$((attempt + 1))
+			[ "$attempt" -lt 10 ] || fail direct_start_failed 'Не удалось запустить DIRECT-маршрут.'
+			kill -0 "$direct_pid" 2>/dev/null || fail direct_start_failed 'DIRECT-маршрут Xray завершился с ошибкой.'
+			sleep 1
+		done
+		route_proxy="127.0.0.1:$direct_port"
+	fi
+else
+	[ "$(uci -q get openclash.config.enable || echo 0)" = 1 ] || fail vpn_disabled 'Сначала включите VPN.'
+	pidof clash >/dev/null 2>&1 || fail core_unavailable 'Ядро OpenClash не запущено.'
+	profile="$(uci -q get openclash.config.config_path || true)"
+	case "$profile" in /etc/openclash/config/*.yaml|/etc/openclash/config/*.yml) ;; *) fail profile_missing 'Активный профиль не найден.' ;; esac
+	runtime_profile="/etc/openclash/$(basename "$profile")"
+	[ -f "$runtime_profile" ] || fail runtime_missing 'Рабочий профиль OpenClash не найден.'
+	write_status running preparing 'Готовим изолированный маршрут теста…'
+	cp "$runtime_profile" "$BACKUP"
+	chmod 600 "$BACKUP"
+	restored=0
+	if [ "$MODE" = direct ]; then TARGET=DIRECT; else TARGET=PROXY; fi
+	/usr/bin/ruby /usr/libexec/oum-speedtest-yaml.rb "$runtime_profile" "$TARGET" || fail route_prepare 'Не удалось подготовить маршрут теста.'
+	env SAFE_PATHS=/usr/share/openclash:/etc/ssl /etc/openclash/clash -t -d /etc/openclash -f "$runtime_profile" >/tmp/oum-speedtest.log 2>&1 || fail config_invalid 'Временное правило не прошло проверку.'
+	/usr/libexec/oum-mihomo-api reload >>/tmp/oum-speedtest.log 2>&1 || fail reload_failed 'Mihomo не применил маршрут теста.'
+fi
 
-write_status running preparing 'Готовим изолированный маршрут теста…'
-cp "$runtime_profile" "$BACKUP"
-chmod 600 "$BACKUP"
-restored=0
-/usr/bin/ruby /usr/libexec/oum-speedtest-yaml.rb "$runtime_profile" "$TARGET" || fail route_prepare 'Не удалось подготовить маршрут теста.'
-env SAFE_PATHS=/usr/share/openclash:/etc/ssl /etc/openclash/clash -t -d /etc/openclash -f "$runtime_profile" >/tmp/oum-speedtest.log 2>&1 || fail config_invalid 'Временное правило не прошло проверку.'
-/usr/libexec/oum-mihomo-api reload >>/tmp/oum-speedtest.log 2>&1 || fail reload_failed 'Mihomo не применил маршрут теста.'
+routed_curl() {
+	if [ -n "$route_proxy" ]; then
+		curl --socks5-hostname "$route_proxy" "$@"
+	else
+		curl "$@"
+	fi
+}
 
 write_status running measuring 'Измеряем задержку и скорость…'
-exit_ip="$(curl -4fsS --connect-timeout 5 --max-time 12 'https://speed.cloudflare.com/cdn-cgi/trace' | sed -n 's/^ip=//p' | head -1)" || fail route_check_failed 'Не удалось подтвердить маршрут теста.'
+exit_ip="$(routed_curl -4fsS --connect-timeout 5 --max-time 12 'https://speed.cloudflare.com/cdn-cgi/trace' | sed -n 's/^ip=//p' | head -1)" || fail route_check_failed 'Не удалось подтвердить маршрут теста.'
 [ -n "$exit_ip" ] || fail route_check_failed 'Тестовая точка не вернула адрес маршрута.'
 path_fingerprint="$(printf '%s' "$exit_ip" | sha256sum | cut -d' ' -f1)"
 latencies=''
 for attempt in 1 2 3; do
-	value="$(curl -4fsS --connect-timeout 5 --max-time 12 -o /dev/null -w '%{time_starttransfer}' "$URL?bytes=0&latency=$attempt")" || fail latency_failed 'Не удалось измерить задержку.'
+	value="$(routed_curl -4fsS --connect-timeout 5 --max-time 12 -o /dev/null -w '%{time_starttransfer}' "$URL?bytes=0&latency=$attempt")" || fail latency_failed 'Не удалось измерить задержку.'
 	latencies="$latencies $value"
 done
 latency_ms="$(printf '%s\n' "$latencies" | awk '{ min=$1; for(i=2;i<=NF;i++) if($i<min) min=$i; printf "%.0f", min*1000 }')"
 
-download_bps="$(curl -4fsS --connect-timeout 5 --max-time 50 -o /dev/null -w '%{speed_download}' "$URL?bytes=25000000&run=$(date +%s)")" || fail download_failed 'Не удалось измерить входящую скорость.'
+download_bps="$(routed_curl -4fsS --connect-timeout 5 --max-time 50 -o /dev/null -w '%{speed_download}' "$URL?bytes=25000000&run=$(date +%s)")" || fail download_failed 'Не удалось измерить входящую скорость.'
 dd if=/dev/zero of="$UPLOAD" bs=1048576 count=8 >/dev/null 2>&1 || fail upload_prepare 'Недостаточно памяти для теста отдачи.'
-upload_bps="$(curl -4fsS --connect-timeout 5 --max-time 50 -o /dev/null -w '%{speed_upload}' -X POST --data-binary "@$UPLOAD" 'https://speed.cloudflare.com/__up')" || fail upload_failed 'Не удалось измерить исходящую скорость.'
+upload_bps="$(routed_curl -4fsS --connect-timeout 5 --max-time 50 -o /dev/null -w '%{speed_upload}' -X POST --data-binary "@$UPLOAD" 'https://speed.cloudflare.com/__up')" || fail upload_failed 'Не удалось измерить исходящую скорость.'
 
 download_mbps="$(awk -v value="$download_bps" 'BEGIN { printf "%.1f", value*8/1000000 }')"
 upload_mbps="$(awk -v value="$upload_bps" 'BEGIN { printf "%.1f", value*8/1000000 }')"
 
 restore_runtime || fail restore_failed 'Не удалось восстановить рабочий маршрут после теста.'
-printf 'mode=%s\ndownload_mbps=%s\nupload_mbps=%s\nlatency_ms=%s\ntimestamp=%s\npath_fingerprint=%s\n' \
-	"$MODE" "$download_mbps" "$upload_mbps" "$latency_ms" "$(date +%s)" "$path_fingerprint" > "$RESULT"
+printf 'mode=%s\nengine=%s\ndownload_mbps=%s\nupload_mbps=%s\nlatency_ms=%s\ntimestamp=%s\npath_fingerprint=%s\n' \
+	"$MODE" "$ENGINE" "$download_mbps" "$upload_mbps" "$latency_ms" "$(date +%s)" "$path_fingerprint" > "$RESULT"
 write_status success complete 'Тест завершён.'
