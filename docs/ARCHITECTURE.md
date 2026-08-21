@@ -195,20 +195,6 @@ runtime dependencies use a pinned, tested version set. Other engines follow
 the repository's controlled release channel rather than sharing PassWall's
 version pin.
 
-Speed tests are manual background jobs. In OpenClash mode OUM inserts a
-temporary top-priority rule for `speed.cloudflare.com`, validates and
-hot-reloads the runtime profile, then restores the exact backup. In PassWall
-mode the VPN test uses the active shunt's loopback-only SOCKS listener. The
-DIRECT test starts a temporary loopback-only Xray `freedom` outbound with
-socket mark 255, which PassWall explicitly excludes from transparent capture;
-it does not edit UCI, nftables or the running PassWall configuration. Both
-modes measure fixed-size download/upload transfers. Latency is the minimum TTFB
-from repeated requests after the first request has established SOCKS, TCP and
-TLS; the result also records the sanitized three-character Cloudflare edge
-code so a distant CDN route is visible. Result files contain only rates, TTFB,
-edge, time and a one-way hash used to confirm that the egress paths differ; the
-public IP is never returned to LuCI or written to disk.
-
 ## Settings and recovery
 
 The restricted `/oum/settings` page uses dedicated RPC methods rather than

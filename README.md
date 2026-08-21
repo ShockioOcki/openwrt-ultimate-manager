@@ -86,15 +86,6 @@ PassWall restart. The expandable PassWall diagnostics report DNS interception,
 the DNS worker and modes, IPv6 TProxy and both Geo datasets without exposing
 proxy credentials.
 
-The speed widget runs explicit, user-started DIRECT and VPN measurements
-against the same Cloudflare edge. Each test uses about 35 MB, validates that
-the two egress paths differ, and restores the byte-identical Mihomo runtime
-profile without restarting OpenClash. For PassWall it uses the active local
-SOCKS input for VPN and an isolated, temporary marked Xray direct outbound;
-the PassWall configuration and routing tables are not rewritten or restarted.
-The displayed latency is warmed-connection TTFB rather than connection setup;
-the Cloudflare edge code is shown beside it to make remote CDN selection clear.
-
 The Settings page owns protected-source replacement as well as Smart/separate
 Wi-Fi credentials and switching WAN between DHCP and PPPoE. Each network
 change keeps a one-step local rollback. A model-bound OUM backup contains

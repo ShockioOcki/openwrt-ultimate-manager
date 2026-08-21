@@ -8,7 +8,6 @@ const CONFIGS = [ 'network', 'wireless', 'rpcd', 'oum' ];
 const BACKUP_DIR = '/tmp/oum-setup-backup';
 const VPN_JOB_DIR = '/tmp/oum-vpn-job';
 const SUBSCRIPTION_CACHE = '/tmp/oum-subscription-info.json';
-const SPEEDTEST_DIR = '/tmp/oum-speedtest';
 const SYSTEM_JOB_DIR = '/tmp/oum-system-job';
 const SYSTEM_JOB_LOCK = '/tmp/oum-system-job.lock';
 const BACKUP_ENCODED = '/tmp/oum-backup.b64';
@@ -57,38 +56,6 @@ function readKeyValues(path, allowed) {
 	return result;
 }
 
-function speedTestStatus() {
-	let engine = access('/etc/init.d/passwall') && access('/etc/config/passwall') ? 'passwall' : 'openclash';
-	let status = readKeyValues(`${SPEEDTEST_DIR}/status`, [ 'state', 'mode', 'engine', 'code', 'message' ]);
-	let result = {
-		state: !length(status.engine ?? '') || status.engine == engine ? (status.state ?? 'idle') : 'idle',
-		mode: status.mode ?? '',
-		engine,
-		code: status.code ?? '',
-		message: status.message ?? '',
-		direct: null,
-		vpn: null,
-		paths_separated: null
-	};
-	let fingerprints = {};
-	for (let mode in [ 'direct', 'vpn' ]) {
-		let values = readKeyValues(`${SPEEDTEST_DIR}/${mode}.result`, [ 'mode', 'engine', 'download_mbps', 'upload_mbps', 'latency_ms', 'edge', 'timestamp', 'path_fingerprint' ]);
-		if (values.mode == mode && values.engine == engine) {
-			result[mode] = {
-				download_mbps: +(values.download_mbps ?? 0),
-				upload_mbps: +(values.upload_mbps ?? 0),
-				latency_ms: +(values.latency_ms ?? 0),
-				edge: match(values.edge ?? '', /^[A-Z0-9]{3}$/) ? values.edge : '',
-				timestamp: +(values.timestamp ?? 0)
-			};
-			fingerprints[mode] = values.path_fingerprint ?? '';
-		}
-	}
-	if (result.direct && result.vpn && length(fingerprints.direct) && length(fingerprints.vpn))
-		result.paths_separated = fingerprints.direct != fingerprints.vpn;
-	return result;
-}
-
 function systemJobStatus() {
 	let values = readKeyValues(`${SYSTEM_JOB_DIR}/status`, [ 'state', 'action', 'code', 'message' ]);
 	return {
@@ -100,7 +67,7 @@ function systemJobStatus() {
 }
 
 function configurationBusy() {
-	return access(SYSTEM_JOB_LOCK) || access('/tmp/oum-speedtest.lock') ||
+	return access(SYSTEM_JOB_LOCK) ||
 		access('/tmp/oum-device-policy.lock') || access('/tmp/oum-passwall-nodes.lock') ||
 		access('/tmp/oum-passwall-nodes.start') ||
 		vpnJobStatus().state == 'running';
@@ -744,12 +711,6 @@ const methods = {
 		}
 	},
 
-	speedTestStatus: {
-		call: function() {
-			return speedTestStatus();
-		}
-	},
-
 	dashboardStatus: {
 		call: function() {
 			const uci = cursor();
@@ -784,44 +745,11 @@ const methods = {
 		}
 	},
 
-	startSpeedTest: {
-		args: { mode: '' },
-		call: function(request) {
-			let mode = request.args.mode ?? '';
-			if (!(mode in [ 'direct', 'vpn' ]))
-				return failure('invalid_mode', 'Выберите прямое соединение или VPN.');
-			if (!access('/usr/libexec/oum-speedtest') || (!passwallInstalled() && !access('/usr/libexec/oum-speedtest-yaml.rb')))
-				return failure('runtime_missing', 'Компонент теста скорости не установлен.');
-			if (access(SYSTEM_JOB_LOCK))
-				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
-			if (access('/tmp/oum-speedtest.lock'))
-				return failure('test_running', 'Другой тест скорости уже выполняется.');
-			if (vpnJobStatus().state == 'running' || access('/tmp/oum-device-policy.lock'))
-				return failure('configuration_busy', 'Подождите завершения настройки VPN.');
-			if (!vpnReady())
-				return failure('vpn_not_ready', 'Для сравнения сначала включите VPN и дождитесь его готовности.');
-			if (system('mkdir /tmp/oum-speedtest.lock') != 0)
-				return failure('test_running', 'Другой тест скорости уже выполняется.');
-			if (system(`mkdir -p ${SPEEDTEST_DIR} && chmod 700 ${SPEEDTEST_DIR}`) != 0 ||
-				!writePrivate(`${SPEEDTEST_DIR}/status`, `state=running\nmode=${mode}\nengine=${passwallInstalled() ? 'passwall' : 'openclash'}\ncode=queued\nmessage=Запускаем тест скорости…\n`)) {
-				system('rmdir /tmp/oum-speedtest.lock');
-				return failure('status_write', 'Не удалось подготовить состояние теста.');
-			}
-			if (system(`(/usr/libexec/oum-speedtest ${mode}) >/tmp/oum-speedtest-start.log 2>&1 &`) != 0) {
-				system('rmdir /tmp/oum-speedtest.lock');
-				return failure('start_failed', 'Не удалось запустить тест скорости.');
-			}
-			return { ok: true, mode, message: 'Тест скорости запущен…' };
-		}
-	},
-
 	setVpnEnabled: {
 		args: { enabled: false },
 		call: function(request) {
 			if (access(SYSTEM_JOB_LOCK))
 				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
-			if (access('/tmp/oum-speedtest.lock'))
-				return failure('speedtest_running', 'Дождитесь завершения теста скорости.');
 			let enabled = request.args.enabled;
 			if (type(enabled) != 'bool')
 				return failure('invalid_state', 'Некорректное состояние VPN.');
@@ -857,8 +785,6 @@ const methods = {
 		call: function(request) {
 			if (access(SYSTEM_JOB_LOCK))
 				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
-			if (access('/tmp/oum-speedtest.lock'))
-				return failure('speedtest_running', 'Дождитесь завершения теста скорости.');
 			let mac = uc(request.args.mac ?? '');
 			let policy = request.args.policy ?? 'default';
 			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
@@ -975,8 +901,6 @@ const methods = {
 		call: function(request) {
 			if (access(SYSTEM_JOB_LOCK))
 				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
-			if (access('/tmp/oum-speedtest.lock'))
-				return failure('speedtest_running', 'Дождитесь завершения теста скорости.');
 			let kind = request.args.vpn_type;
 			let payload = request.args.payload;
 			if (!access('/usr/libexec/oum-source-job'))

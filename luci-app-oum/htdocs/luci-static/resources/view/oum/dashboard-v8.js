@@ -11,8 +11,6 @@ const callSelectNode = rpc.declare({ object: 'oum', method: 'selectNode', params
 const callSetVpnEnabled = rpc.declare({ object: 'oum', method: 'setVpnEnabled', params: [ 'enabled' ], expect: { '': {} } });
 const callSetDevicePolicy = rpc.declare({ object: 'oum', method: 'setDevicePolicy', params: [ 'mac', 'policy' ], expect: { '': {} } });
 const callRefreshSubscriptionInfo = rpc.declare({ object: 'oum', method: 'refreshSubscriptionInfo', expect: { '': {} } });
-const callSpeedTestStatus = rpc.declare({ object: 'oum', method: 'speedTestStatus', expect: { '': {} } });
-const callStartSpeedTest = rpc.declare({ object: 'oum', method: 'startSpeedTest', params: [ 'mode' ], expect: { '': {} } });
 const sourceNames = { none: 'Не настроено', subscription: 'Subscription', awg: 'AWG Tunnel', proxy: 'Proxy', passwall: 'PassWall' };
 
 function countryKey(name) {
@@ -80,13 +78,12 @@ function formatBytes(value) {
 }
 
 return view.extend({
-	load() { return Promise.all([ callStatus(), callDashboardStatus(), callNodeStatus(), callSpeedTestStatus() ]); },
+	load() { return Promise.all([ callStatus(), callDashboardStatus(), callNodeStatus() ]); },
 
 	render(data) {
 		const status = data[0];
 		const dashboard = data[1];
 		const initialNodes = data[2];
-		const initialSpeed = data[3];
 		if (!status.setup_complete)
 			return E('div', {}, [
 				E('h2', {}, 'OUM'),
@@ -105,12 +102,11 @@ return view.extend({
 				.oum-muted{opacity:.68}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
 				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:#eef4fa;margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}.oum-node-quick,.oum-node-all-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 				.oum-node-actions,.oum-subscription-head{display:flex;align-items:center;gap:8px}.oum-subscription{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #d8dde5}.oum-subscription-head{justify-content:space-between}.oum-subscription-head h3{margin:0}.oum-subscription-progress{height:9px;border-radius:999px;background:#dce3ea;overflow:hidden;margin:13px 0 8px}.oum-subscription-progress>span{display:block;height:100%;background:#32b67a;transition:width .3s}.oum-subscription-data{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}.oum-subscription-status{margin-top:7px;font-size:.85em}
-				.oum-speed-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-speed-card{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-speed-card h4{margin:0 0 12px}.oum-speed-values{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.oum-speed-values small{display:block;opacity:.68;margin-bottom:4px}.oum-speed-values strong{font-size:1.05rem}.oum-speed-card button{width:100%}.oum-speed-status{min-height:1.4em;margin-top:10px}.oum-speed-status[data-state="failed"]{color:#c0392b}
 				.oum-node{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-node>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-delay{min-width:70px;text-align:right}
 				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-hint{font-size:.86em;margin:2px 0 8px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
 				.oum-node-all{margin-top:13px}.oum-node-all>summary{cursor:pointer;font-weight:600;padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
 				.oum-passwall-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.oum-passwall-state{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-passwall-state small{display:block;opacity:.68;margin-bottom:5px}.oum-passwall-state strong[data-ok="false"],.oum-passwall-diagnostic strong[data-ok="false"]{color:#c0392b}.oum-passwall-route{background:#eef4fa;border-radius:9px;padding:12px;margin-top:12px}.oum-passwall-route small{display:block;margin-bottom:4px}.oum-passwall-versions{margin-top:12px}.oum-passwall-rules{margin-top:8px}.oum-passwall-diagnostics{margin-top:12px}.oum-passwall-diagnostics>summary{cursor:pointer;font-weight:600}.oum-passwall-diagnostic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.oum-passwall-diagnostic{border:1px solid #d8dde5;border-radius:9px;padding:10px}.oum-passwall-diagnostic small{display:block;opacity:.68;margin-bottom:4px}.oum-node-controls[data-engine="passwall"]{border-top:1px solid #d8dde5;margin-top:16px;padding-top:14px}
-				@media(max-width:900px){.oum-cards,.oum-passwall-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid,.oum-passwall-diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-speed-grid,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route,.oum-passwall-diagnostic-grid{grid-template-columns:1fr}.oum-clients .optional{display:none}}
+				@media(max-width:900px){.oum-cards,.oum-passwall-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid,.oum-passwall-diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route,.oum-passwall-diagnostic-grid{grid-template-columns:1fr}.oum-clients .optional{display:none}}
 			`),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('h2', {}, 'OUM'),
@@ -137,31 +133,6 @@ return view.extend({
 						E('tbody', { id: 'client-list' })
 					]),
 					E('div', { 'class': 'oum-policy-message oum-muted', id: 'policy-message' }, 'Режим применяется к выбранному устройству и сохраняется после перезагрузки.')
-				]),
-				E('section', { 'class': 'oum-panel' }, [
-					E('h3', {}, 'Скорость соединения'),
-					E('p', { 'class': 'oum-muted' }, 'Сравнение через Cloudflare. Один запуск использует около 35 МБ. TTFB измеряется на уже установленной TLS-сессии; рядом указан код CDN-точки.'),
-					E('div', { 'class': 'oum-speed-grid' }, [
-						E('div', { 'class': 'oum-speed-card', 'data-speed-card': 'direct' }, [
-							E('h4', {}, 'Напрямую'),
-							E('div', { 'class': 'oum-speed-values' }, [
-								E('div', {}, [ E('small', {}, 'Получение'), E('strong', { 'data-speed-value': 'download' }, '—') ]),
-								E('div', {}, [ E('small', {}, 'Отдача'), E('strong', { 'data-speed-value': 'upload' }, '—') ]),
-								E('div', {}, [ E('small', {}, 'TTFB'), E('strong', { 'data-speed-value': 'latency' }, '—') ])
-							]),
-							E('button', { 'class': 'btn cbi-button', 'data-speed-mode': 'direct' }, 'Проверить напрямую')
-						]),
-						E('div', { 'class': 'oum-speed-card', 'data-speed-card': 'vpn' }, [
-							E('h4', {}, 'Через VPN'),
-							E('div', { 'class': 'oum-speed-values' }, [
-								E('div', {}, [ E('small', {}, 'Получение'), E('strong', { 'data-speed-value': 'download' }, '—') ]),
-								E('div', {}, [ E('small', {}, 'Отдача'), E('strong', { 'data-speed-value': 'upload' }, '—') ]),
-								E('div', {}, [ E('small', {}, 'TTFB'), E('strong', { 'data-speed-value': 'latency' }, '—') ])
-							]),
-							E('button', { 'class': 'btn cbi-button', 'data-speed-mode': 'vpn' }, 'Проверить через VPN')
-						])
-					]),
-					E('div', { 'class': 'oum-speed-status oum-muted', id: 'speed-status' }, '')
 				]),
 				E('section', { 'class': 'oum-panel', id: 'node-panel', hidden: '' }, [
 					E('div', { 'class': 'oum-subscription', id: 'subscription-panel', hidden: '' }, [
@@ -238,37 +209,12 @@ return view.extend({
 		const vpnToggle = root.querySelector('#vpn-toggle');
 		const vpnControlMessage = root.querySelector('#vpn-control-message');
 		const policyMessage = root.querySelector('#policy-message');
-		const speedStatus = root.querySelector('#speed-status');
-		const speedButtons = Array.from(root.querySelectorAll('[data-speed-mode]'));
 		let vpnEnabled = dashboard.vpn_enabled === true;
 		let vpnEngine = dashboard.vpn_engine || 'openclash';
 		let vpnWatchTimer = null;
-		let speedWatchTimer = null;
 		let passwallInstalled = dashboard.passwall?.installed === true;
 		let nodesAvailable = initialNodes.available === true;
 		const updateVpnPanelVisibility = () => { nodePanel.hidden = !(passwallInstalled || nodesAvailable); };
-
-		const updateSpeed = (fresh) => {
-			for (const mode of [ 'direct', 'vpn' ]) {
-				const card = root.querySelector(`[data-speed-card="${mode}"]`);
-				const result = fresh[mode];
-				card.querySelector('[data-speed-value="download"]').textContent = result ? `${result.download_mbps.toFixed(1)} Мбит/с` : '—';
-				card.querySelector('[data-speed-value="upload"]').textContent = result ? `${result.upload_mbps.toFixed(1)} Мбит/с` : '—';
-				card.querySelector('[data-speed-value="latency"]').textContent = result ?
-					`${Math.round(result.latency_ms)} мс${result.edge ? ` · ${result.edge}` : ''}` : '—';
-			}
-			const running = fresh.state === 'running';
-			for (const button of speedButtons) {
-				button.disabled = running;
-				button.textContent = running && button.dataset.speedMode === fresh.mode ? 'Измеряем…' :
-					(button.dataset.speedMode === 'direct' ? 'Проверить напрямую' : 'Проверить через VPN');
-			}
-			const routeFailed = fresh.paths_separated === false;
-			speedStatus.dataset.state = fresh.state === 'failed' || routeFailed ? 'failed' : 'idle';
-			speedStatus.textContent = routeFailed ? 'Маршруты совпали: результаты нельзя считать сравнением DIRECT и VPN.' :
-				(fresh.paths_separated === true ? 'Маршруты DIRECT и VPN подтверждены и различаются.' :
-					(fresh.message || (fresh.state === 'idle' ? 'Запускайте тесты по очереди для честного сравнения.' : '')));
-		};
 
 		const updateSubscription = (fresh) => {
 			const info = fresh.subscription || {};
@@ -445,28 +391,6 @@ return view.extend({
 			});
 		});
 
-		root.querySelector('.oum-speed-grid').addEventListener('click', (ev) => {
-			const target = ev.target.closest('[data-speed-mode]');
-			if (!target) return;
-			target.disabled = true;
-			speedStatus.dataset.state = 'idle';
-			speedStatus.textContent = 'Запускаем тест скорости…';
-			callStartSpeedTest(target.dataset.speedMode).then((result) => {
-				if (!result.ok) throw new Error(result.message || 'Не удалось запустить тест скорости.');
-				const watch = () => callSpeedTestStatus().then((fresh) => {
-					updateSpeed(fresh);
-					if (fresh.state === 'running')
-						speedWatchTimer = window.setTimeout(watch, 1000);
-				});
-				if (speedWatchTimer) window.clearTimeout(speedWatchTimer);
-				return watch();
-			}).catch((err) => {
-				speedStatus.dataset.state = 'failed';
-				speedStatus.textContent = err.message;
-				for (const button of speedButtons) button.disabled = false;
-			});
-		});
-
 		vpnToggle.addEventListener('click', (ev) => {
 			ev.preventDefault();
 			vpnToggle.disabled = true;
@@ -565,7 +489,6 @@ return view.extend({
 
 		updateDashboard(dashboard);
 		updateNodes(initialNodes);
-		updateSpeed(initialSpeed);
 		poll.add(() => Promise.all([ callDashboardStatus(), callNodeStatus() ]).then(([fresh, nodes]) => {
 			updateDashboard(fresh);
 			updateNodes(nodes);

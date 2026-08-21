@@ -2,7 +2,6 @@
 
 set -eu
 
-[ ! -d /tmp/oum-speedtest.lock ] || { echo 'speed test is running' >&2; exit 1; }
 /etc/init.d/openclash stop >/dev/null 2>&1 || true
 /etc/init.d/openclash disable >/dev/null 2>&1 || true
 
@@ -26,6 +25,6 @@ uci -q commit oum
 /usr/libexec/oum-device-policy reset >/dev/null 2>&1 || true
 
 rm -f /etc/oum/active_source /etc/oum/active_profile /etc/oum/proxy_backend
-rm -rf /tmp/oum-vpn-job /tmp/oum-mihomo-api /tmp/oum-speedtest
-rm -f /tmp/oum-vpn-job.log /tmp/oum-speedtest.log /tmp/oum-speedtest-start.log \
+rm -rf /tmp/oum-vpn-job /tmp/oum-mihomo-api
+rm -f /tmp/oum-vpn-job.log \
 	/tmp/oum-subscription-info.json /tmp/oum-subscription-info.log
