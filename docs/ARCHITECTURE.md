@@ -202,10 +202,12 @@ mode the VPN test uses the active shunt's loopback-only SOCKS listener. The
 DIRECT test starts a temporary loopback-only Xray `freedom` outbound with
 socket mark 255, which PassWall explicitly excludes from transparent capture;
 it does not edit UCI, nftables or the running PassWall configuration. Both
-modes measure fixed-size download/upload transfers and full HTTPS response
-latency. Result files contain only rates, latency, time and a one-way hash used
-to confirm that the egress paths differ; the public IP is never returned to
-LuCI or written to disk.
+modes measure fixed-size download/upload transfers. Latency is the minimum TTFB
+from repeated requests after the first request has established SOCKS, TCP and
+TLS; the result also records the sanitized three-character Cloudflare edge
+code so a distant CDN route is visible. Result files contain only rates, TTFB,
+edge, time and a one-way hash used to confirm that the egress paths differ; the
+public IP is never returned to LuCI or written to disk.
 
 ## Settings and recovery
 

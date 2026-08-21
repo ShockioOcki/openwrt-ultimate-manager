@@ -72,12 +72,13 @@ function speedTestStatus() {
 	};
 	let fingerprints = {};
 	for (let mode in [ 'direct', 'vpn' ]) {
-		let values = readKeyValues(`${SPEEDTEST_DIR}/${mode}.result`, [ 'mode', 'engine', 'download_mbps', 'upload_mbps', 'latency_ms', 'timestamp', 'path_fingerprint' ]);
+		let values = readKeyValues(`${SPEEDTEST_DIR}/${mode}.result`, [ 'mode', 'engine', 'download_mbps', 'upload_mbps', 'latency_ms', 'edge', 'timestamp', 'path_fingerprint' ]);
 		if (values.mode == mode && values.engine == engine) {
 			result[mode] = {
 				download_mbps: +(values.download_mbps ?? 0),
 				upload_mbps: +(values.upload_mbps ?? 0),
 				latency_ms: +(values.latency_ms ?? 0),
+				edge: match(values.edge ?? '', /^[A-Z0-9]{3}$/) ? values.edge : '',
 				timestamp: +(values.timestamp ?? 0)
 			};
 			fingerprints[mode] = values.path_fingerprint ?? '';

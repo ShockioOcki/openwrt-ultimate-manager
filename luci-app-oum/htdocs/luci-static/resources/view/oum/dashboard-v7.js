@@ -140,14 +140,14 @@ return view.extend({
 				]),
 				E('section', { 'class': 'oum-panel' }, [
 					E('h3', {}, 'Скорость соединения'),
-					E('p', { 'class': 'oum-muted' }, 'Сравнение через одну тестовую точку Cloudflare. Один запуск использует около 35 МБ. Задержка — полный HTTPS-отклик, а не ping ноды.'),
+					E('p', { 'class': 'oum-muted' }, 'Сравнение через Cloudflare. Один запуск использует около 35 МБ. TTFB измеряется на уже установленной TLS-сессии; рядом указан код CDN-точки.'),
 					E('div', { 'class': 'oum-speed-grid' }, [
 						E('div', { 'class': 'oum-speed-card', 'data-speed-card': 'direct' }, [
 							E('h4', {}, 'Напрямую'),
 							E('div', { 'class': 'oum-speed-values' }, [
 								E('div', {}, [ E('small', {}, 'Получение'), E('strong', { 'data-speed-value': 'download' }, '—') ]),
 								E('div', {}, [ E('small', {}, 'Отдача'), E('strong', { 'data-speed-value': 'upload' }, '—') ]),
-								E('div', {}, [ E('small', {}, 'Задержка'), E('strong', { 'data-speed-value': 'latency' }, '—') ])
+								E('div', {}, [ E('small', {}, 'TTFB'), E('strong', { 'data-speed-value': 'latency' }, '—') ])
 							]),
 							E('button', { 'class': 'btn cbi-button', 'data-speed-mode': 'direct' }, 'Проверить напрямую')
 						]),
@@ -156,7 +156,7 @@ return view.extend({
 							E('div', { 'class': 'oum-speed-values' }, [
 								E('div', {}, [ E('small', {}, 'Получение'), E('strong', { 'data-speed-value': 'download' }, '—') ]),
 								E('div', {}, [ E('small', {}, 'Отдача'), E('strong', { 'data-speed-value': 'upload' }, '—') ]),
-								E('div', {}, [ E('small', {}, 'Задержка'), E('strong', { 'data-speed-value': 'latency' }, '—') ])
+								E('div', {}, [ E('small', {}, 'TTFB'), E('strong', { 'data-speed-value': 'latency' }, '—') ])
 							]),
 							E('button', { 'class': 'btn cbi-button', 'data-speed-mode': 'vpn' }, 'Проверить через VPN')
 						])
@@ -254,7 +254,8 @@ return view.extend({
 				const result = fresh[mode];
 				card.querySelector('[data-speed-value="download"]').textContent = result ? `${result.download_mbps.toFixed(1)} Мбит/с` : '—';
 				card.querySelector('[data-speed-value="upload"]').textContent = result ? `${result.upload_mbps.toFixed(1)} Мбит/с` : '—';
-				card.querySelector('[data-speed-value="latency"]').textContent = result ? `${Math.round(result.latency_ms)} мс` : '—';
+				card.querySelector('[data-speed-value="latency"]').textContent = result ?
+					`${Math.round(result.latency_ms)} мс${result.edge ? ` · ${result.edge}` : ''}` : '—';
 			}
 			const running = fresh.state === 'running';
 			for (const button of speedButtons) {

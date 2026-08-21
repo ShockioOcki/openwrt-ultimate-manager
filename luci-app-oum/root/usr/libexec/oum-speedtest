@@ -131,15 +131,23 @@ routed_curl() {
 }
 
 write_status running measuring 'Измеряем задержку и скорость…'
-exit_ip="$(routed_curl -4fsS --connect-timeout 5 --max-time 12 'https://speed.cloudflare.com/cdn-cgi/trace' | sed -n 's/^ip=//p' | head -1)" || fail route_check_failed 'Не удалось подтвердить маршрут теста.'
+trace="$(routed_curl -4fsS --connect-timeout 5 --max-time 12 'https://speed.cloudflare.com/cdn-cgi/trace')" || fail route_check_failed 'Не удалось подтвердить маршрут теста.'
+exit_ip="$(printf '%s\n' "$trace" | sed -n 's/^ip=//p' | head -n 1)"
 [ -n "$exit_ip" ] || fail route_check_failed 'Тестовая точка не вернула адрес маршрута.'
 path_fingerprint="$(printf '%s' "$exit_ip" | sha256sum | cut -d' ' -f1)"
-latencies=''
-for attempt in 1 2 3; do
-	value="$(routed_curl -4fsS --connect-timeout 5 --max-time 12 -o /dev/null -w '%{time_starttransfer}' "$URL?bytes=0&latency=$attempt")" || fail latency_failed 'Не удалось измерить задержку.'
-	latencies="$latencies $value"
-done
-latency_ms="$(printf '%s\n' "$latencies" | awk '{ min=$1; for(i=2;i<=NF;i++) if($i<min) min=$i; printf "%.0f", min*1000 }')"
+edge="$(printf '%s\n' "$trace" | sed -n 's/^colo=//p' | head -n 1)"
+case "$edge" in [A-Z0-9][A-Z0-9][A-Z0-9]) ;; *) edge='---' ;; esac
+
+# The first transfer establishes SOCKS, TCP and TLS. The following requests
+# reuse that connection, matching the user-facing TTFB latency methodology.
+latencies="$(routed_curl -4fsS --connect-timeout 5 --max-time 30 -o /dev/null -w '%{time_starttransfer}\n' \
+	"$URL?bytes=0&latency=warmup" \
+	-o /dev/null "$URL?bytes=0&latency=1" \
+	-o /dev/null "$URL?bytes=0&latency=2" \
+	-o /dev/null "$URL?bytes=0&latency=3" \
+	-o /dev/null "$URL?bytes=0&latency=4")" || fail latency_failed 'Не удалось измерить TTFB.'
+latency_ms="$(printf '%s\n' "$latencies" | awk 'NR == 1 { next } NR == 2 { min=$1 } $1 < min { min=$1 } END { if (NR >= 2) printf "%.0f", min*1000 }')"
+[ -n "$latency_ms" ] || fail latency_failed 'Тестовая точка не вернула TTFB.'
 
 download_bps="$(routed_curl -4fsS --connect-timeout 5 --max-time 50 -o /dev/null -w '%{speed_download}' "$URL?bytes=25000000&run=$(date +%s)")" || fail download_failed 'Не удалось измерить входящую скорость.'
 dd if=/dev/zero of="$UPLOAD" bs=1048576 count=8 >/dev/null 2>&1 || fail upload_prepare 'Недостаточно памяти для теста отдачи.'
@@ -149,6 +157,6 @@ download_mbps="$(awk -v value="$download_bps" 'BEGIN { printf "%.1f", value*8/10
 upload_mbps="$(awk -v value="$upload_bps" 'BEGIN { printf "%.1f", value*8/1000000 }')"
 
 restore_runtime || fail restore_failed 'Не удалось восстановить рабочий маршрут после теста.'
-printf 'mode=%s\nengine=%s\ndownload_mbps=%s\nupload_mbps=%s\nlatency_ms=%s\ntimestamp=%s\npath_fingerprint=%s\n' \
-	"$MODE" "$ENGINE" "$download_mbps" "$upload_mbps" "$latency_ms" "$(date +%s)" "$path_fingerprint" > "$RESULT"
+printf 'mode=%s\nengine=%s\ndownload_mbps=%s\nupload_mbps=%s\nlatency_ms=%s\nedge=%s\ntimestamp=%s\npath_fingerprint=%s\n' \
+	"$MODE" "$ENGINE" "$download_mbps" "$upload_mbps" "$latency_ms" "$edge" "$(date +%s)" "$path_fingerprint" > "$RESULT"
 write_status success complete 'Тест завершён.'

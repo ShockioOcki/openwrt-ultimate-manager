@@ -35,7 +35,7 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-login-default" /usr/libexec/oum-login-defau
 cp "$REPO_DIR/dist/oum-test.sh" /usr/libexec/oum-runtime.sh
 cp "$REPO_DIR/helpers/source_converter.rb" /usr/libexec/oum/source_converter.rb
 cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/first-run.js" /www/luci-static/resources/view/oum/first-run.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/dashboard-v6.js" /www/luci-static/resources/view/oum/dashboard-v6.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/dashboard-v7.js" /www/luci-static/resources/view/oum/dashboard-v7.js
 cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/settings.js" /www/luci-static/resources/view/oum/settings.js
 
 chmod 600 /etc/config/oum
@@ -49,7 +49,7 @@ chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/ou
 chmod 600 /usr/libexec/oum/source_converter.rb
 chmod 644 /usr/share/luci/menu.d/luci-app-oum.json /usr/share/ucode/luci/controller/oum.uc /usr/share/rpcd/acl.d/luci-app-oum.json \
 	/usr/share/rpcd/ucode/oum /www/luci-static/resources/view/oum/first-run.js \
-	/www/luci-static/resources/view/oum/dashboard-v6.js /www/luci-static/resources/view/oum/settings.js
+	/www/luci-static/resources/view/oum/dashboard-v7.js /www/luci-static/resources/view/oum/settings.js
 
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
 /usr/libexec/oum-login-default
