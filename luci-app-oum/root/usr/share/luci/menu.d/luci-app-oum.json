@@ -25,7 +25,7 @@
 		"order": 2,
 		"action": {
 			"type": "view",
-			"path": "oum/dashboard-v10"
+			"path": "oum/dashboard-v11"
 		},
 		"depends": {
 			"acl": [ "luci-app-oum" ],

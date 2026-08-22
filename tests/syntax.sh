@@ -33,7 +33,7 @@ grep -Fq "action_logout" "$ROOT/luci-app-oum/root/usr/share/ucode/luci/controlle
 python3 -m json.tool "$ROOT/luci-app-oum/root/usr/share/rpcd/acl.d/luci-app-oum.json" >/dev/null
 if command -v node >/dev/null 2>&1; then
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/first-run-v2.js"
-	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v10.js"
+	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v11.js"
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/settings-v4.js"
 fi
 printf 'syntax tests: OK\n'

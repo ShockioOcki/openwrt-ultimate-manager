@@ -340,6 +340,83 @@ function podkopStatusData() {
 	};
 }
 
+function podkopList(uci, section, option) {
+	let value = uci.get('podkop', section, option);
+	if (type(value) == 'array')
+		return value;
+	if (type(value) == 'string' && length(value))
+		return [ value ];
+	return [];
+}
+
+function podkopRoutingData() {
+	const catalog = [
+		[ 'russia_inside', 'Россия: заблокировано внутри' ], [ 'russia_outside', 'Россия: доступно только из РФ' ],
+		[ 'ukraine_inside', 'Украина' ], [ 'geoblock', 'Geo Block' ], [ 'block', 'Block' ], [ 'porn', '18+' ],
+		[ 'news', 'Новости' ], [ 'anime', 'Anime' ], [ 'youtube', 'YouTube' ], [ 'discord', 'Discord' ],
+		[ 'meta', 'Meta' ], [ 'twitter', 'Twitter (X)' ], [ 'hdrezka', 'HDRezka' ], [ 'tiktok', 'TikTok' ],
+		[ 'telegram', 'Telegram' ], [ 'cloudflare', 'Cloudflare' ], [ 'google_ai', 'Google AI' ],
+		[ 'google_play', 'Google Play' ], [ 'hodca', 'H.O.D.C.A' ], [ 'roblox', 'Roblox' ],
+		[ 'hetzner', 'Hetzner ASN' ], [ 'ovh', 'OVH ASN' ], [ 'digitalocean', 'DigitalOcean ASN' ],
+		[ 'cloudfront', 'CloudFront ASN' ]
+	];
+	let items = [];
+	for (let item in catalog)
+		push(items, { id: item[0], label: item[1] });
+	if (!podkopInstalled())
+		return { installed: false, catalog: items, proxy: {}, direct: {} };
+	const uci = cursor();
+	let direct = access('/etc/config/podkop') && uci.get('podkop', 'oum_exclusion') ? 'oum_exclusion' : 'youtube_direct';
+	return {
+		installed: true,
+		catalog: items,
+		proxy: {
+			lists: podkopList(uci, 'main', 'community_lists'),
+			domains: podkopList(uci, 'main', 'user_domains'),
+			subnets: podkopList(uci, 'main', 'user_subnets')
+		},
+		direct: {
+			lists: podkopList(uci, direct, 'community_lists'),
+			domains: podkopList(uci, direct, 'user_domains'),
+			subnets: podkopList(uci, direct, 'user_subnets')
+		}
+	};
+}
+
+function commandLine(command) {
+	let process = popen(command);
+	if (!process)
+		return '';
+	let value = trim(process.read('all') ?? '');
+	process.close();
+	return value;
+}
+
+function podkopDiagnosticsData() {
+	if (!podkopInstalled())
+		return { installed: false, checks: [] };
+	const uci = cursor();
+	let iface = uci.get('podkop', 'main', 'interface') ?? '';
+	let validIface = match(iface, /^[A-Za-z0-9_]{1,15}$/) ? true : false;
+	let tunnelUp = validIface && system(`ubus call network.interface.${iface} status 2>/dev/null | jsonfilter -e '@.up' | grep -qx true`) == 0;
+	let handshake = validIface ? commandLine(`awg show ${iface} latest-handshakes 2>/dev/null | awk 'NR==1 && $2>0 { d=systime()-$2; print d }'`) : '';
+	let handshakeAge = match(handshake, /^[0-9]+$/) ? +handshake : -1;
+	let checks = [
+		{ id: 'tunnel', label: 'AWG-туннель', ok: tunnelUp, detail: tunnelUp ? `${iface} поднят` : 'Интерфейс не поднят' },
+		{ id: 'handshake', label: 'Рукопожатие AWG', ok: handshakeAge >= 0 && handshakeAge < 300, detail: handshakeAge >= 0 ? `${handshakeAge} сек. назад` : 'Нет данных' },
+		{ id: 'singbox', label: 'Конфигурация sing-box', ok: system('sing-box check -c /etc/sing-box/config.json >/dev/null 2>&1') == 0, detail: 'Проверка синтаксиса' },
+		{ id: 'routing', label: 'Маршрутизация Podkop', ok: system('pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1') == 0, detail: 'Процесс и таблица nftables' },
+		{ id: 'fakeip', label: 'FakeIP DNS', ok: system("nslookup fakeip.podkop.fyi 127.0.0.1 2>/dev/null | grep -Eq '198\\.18\\.'") == 0, detail: 'Локальный DNS Podkop' },
+		{ id: 'dns', label: 'Обычный DNS', ok: system("nslookup openwrt.org 127.0.0.1 >/dev/null 2>&1") == 0, detail: 'Разрешение внешнего домена' },
+		{ id: 'zapret', label: 'Zapret', ok: system("pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1") == 0, detail: 'Обход ограничений без VPN' },
+		{ id: 'zapret_nft', label: 'Правила Zapret', ok: system('nft list table inet zapret >/dev/null 2>&1') == 0, detail: 'Таблица nftables' }
+	];
+	let healthy = true;
+	for (let check in checks)
+		if (!check.ok) healthy = false;
+	return { installed: true, healthy, checked_at: time(), checks };
+}
+
 function passwallStatusData() {
 	if (!passwallInstalled())
 		return { installed: false, enabled: false, ready: false };
@@ -785,6 +862,34 @@ const methods = {
 			if (!(proto in [ 'amneziawg', 'wireguard' ]))
 				return failure('invalid_interface', 'Выбранный интерфейс не является AWG/WireGuard-туннелем.');
 			return startSystemJob('podkop_configure', { interface: iface });
+		}
+	},
+
+	podkopRoutingStatus: {
+		call: function() {
+			return podkopRoutingData();
+		}
+	},
+
+	applyPodkopRouting: {
+		args: { proxy_lists: '', proxy_domains: '', proxy_subnets: '', direct_lists: '', direct_domains: '', direct_subnets: '' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Podkop не установлен.');
+			let payload = {};
+			for (let name in [ 'proxy_lists', 'proxy_domains', 'proxy_subnets', 'direct_lists', 'direct_domains', 'direct_subnets' ]) {
+				let value = request.args[name] ?? '';
+				if (type(value) != 'string' || length(value) > 32768)
+					return failure('invalid_routing', 'Список слишком велик или имеет неверный формат.');
+				payload[name] = value;
+			}
+			return startSystemJob('podkop_routing', payload);
+		}
+	},
+
+	podkopDiagnostics: {
+		call: function() {
+			return podkopDiagnosticsData();
 		}
 	},
 

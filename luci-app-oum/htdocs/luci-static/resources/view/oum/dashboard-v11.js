@@ -11,6 +11,10 @@ const callSelectNode = rpc.declare({ object: 'oum', method: 'selectNode', params
 const callSetVpnEnabled = rpc.declare({ object: 'oum', method: 'setVpnEnabled', params: [ 'enabled' ], expect: { '': {} } });
 const callSetDevicePolicy = rpc.declare({ object: 'oum', method: 'setDevicePolicy', params: [ 'mac', 'policy' ], expect: { '': {} } });
 const callRefreshSubscriptionInfo = rpc.declare({ object: 'oum', method: 'refreshSubscriptionInfo', expect: { '': {} } });
+const callPodkopRoutingStatus = rpc.declare({ object: 'oum', method: 'podkopRoutingStatus', expect: { '': {} } });
+const callApplyPodkopRouting = rpc.declare({ object: 'oum', method: 'applyPodkopRouting', params: [ 'proxy_lists', 'proxy_domains', 'proxy_subnets', 'direct_lists', 'direct_domains', 'direct_subnets' ], expect: { '': {} } });
+const callPodkopDiagnostics = rpc.declare({ object: 'oum', method: 'podkopDiagnostics', expect: { '': {} } });
+const callSystemJobStatus = rpc.declare({ object: 'oum', method: 'systemJobStatus', expect: { '': {} } });
 const sourceNames = { none: 'Не настроено', subscription: 'Subscription', awg: 'AWG Tunnel', proxy: 'Proxy', passwall: 'PassWall', podkop: 'Podkop + Zapret' };
 
 function countryKey(name) {
@@ -78,12 +82,13 @@ function formatBytes(value) {
 }
 
 return view.extend({
-	load() { return Promise.all([ callStatus(), callDashboardStatus(), callNodeStatus() ]); },
+	load() { return Promise.all([ callStatus(), callDashboardStatus(), callNodeStatus(), callPodkopRoutingStatus() ]); },
 
 	render(data) {
 		const status = data[0];
 		const dashboard = data[1];
 		const initialNodes = data[2];
+		const podkopRouting = data[3] || { catalog: [], proxy: {}, direct: {} };
 		if (!status.setup_complete)
 			return E('div', {}, [
 				E('h2', {}, 'OUM'),
@@ -93,6 +98,12 @@ return view.extend({
 
 		const dashboardHost = window.location.hostname.includes(':') ? `[${window.location.hostname}]` : window.location.hostname;
 		const zashboardUrl = `http://${dashboardHost}:9090/ui/zashboard/`;
+		const routingSet = (values) => new Set(values || []);
+		const communityGrid = (prefix, selected) => E('div', { 'class': 'oum-community-grid' },
+			(podkopRouting.catalog || []).map((item) => E('label', { 'class': 'oum-community-item' }, [
+				E('input', { type: 'checkbox', 'data-community': prefix, value: item.id, checked: selected.has(item.id) ? '' : null }),
+				E('span', {}, item.label)
+			])));
 
 		const root = E('div', { 'class': 'oum-dashboard' }, [
 			E('style', {}, `
@@ -106,7 +117,8 @@ return view.extend({
 				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-hint{font-size:.86em;margin:2px 0 8px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
 				.oum-node-all{margin-top:13px}.oum-node-all>summary{cursor:pointer;font-weight:600;padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
 				.oum-passwall-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.oum-passwall-state{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-passwall-state small{display:block;opacity:.68;margin-bottom:5px}.oum-passwall-state strong[data-ok="false"],.oum-passwall-diagnostic strong[data-ok="false"]{color:#c0392b}.oum-passwall-route{background:#eef4fa;border-radius:9px;padding:12px;margin-top:12px}.oum-passwall-route small{display:block;margin-bottom:4px}.oum-passwall-versions{margin-top:12px}.oum-passwall-rules{margin-top:8px}.oum-passwall-diagnostics{margin-top:12px}.oum-passwall-diagnostics>summary{cursor:pointer;font-weight:600}.oum-passwall-diagnostic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.oum-passwall-diagnostic{border:1px solid #d8dde5;border-radius:9px;padding:10px}.oum-passwall-diagnostic small{display:block;opacity:.68;margin-bottom:4px}.oum-node-controls[data-engine="passwall"]{border-top:1px solid #d8dde5;margin-top:16px;padding-top:14px}
-				@media(max-width:900px){.oum-cards,.oum-passwall-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid,.oum-passwall-diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route,.oum-passwall-diagnostic-grid{grid-template-columns:1fr}.oum-clients .optional{display:none}}
+				.oum-tabs{display:flex;gap:6px;border-bottom:1px solid #ccd3dc;margin:16px 0 13px}.oum-tab{border:0;background:transparent;padding:9px 13px;border-bottom:3px solid transparent;cursor:pointer}.oum-tab[data-active="true"]{border-color:#2673ec;color:#2673ec;font-weight:600}.oum-route-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.oum-route-box{border:1px solid #d8dde5;border-radius:10px;padding:13px}.oum-route-box h4{margin:0 0 5px}.oum-community-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0}.oum-community-item{display:flex;align-items:center;gap:7px;border:1px solid #d8dde5;border-radius:7px;padding:7px 8px;min-width:0}.oum-community-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-route-box textarea{width:100%;min-height:92px;box-sizing:border-box;margin-top:6px}.oum-route-label{display:block;font-weight:600;margin-top:11px}.oum-route-actions{display:flex;align-items:center;gap:12px;margin-top:14px}.oum-route-message[data-state="failed"]{color:#c0392b}.oum-diagnostic-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.oum-diagnostic-card{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-diagnostic-card small{display:block;opacity:.68;margin-bottom:5px}.oum-diagnostic-card strong[data-ok="false"]{color:#c0392b}.oum-diagnostic-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+				@media(max-width:900px){.oum-cards,.oum-passwall-grid,.oum-diagnostic-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid,.oum-passwall-diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.oum-route-columns{grid-template-columns:1fr}.oum-community-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route,.oum-passwall-diagnostic-grid,.oum-diagnostic-grid,.oum-community-grid{grid-template-columns:1fr}.oum-clients .optional{display:none}}
 			`),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('h2', {}, 'OUM'),
@@ -185,7 +197,31 @@ return view.extend({
 							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Zapret / YouTube'), E('strong', { id: 'podkop-zapret' }, '—') ]),
 							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Маршрут'), E('strong', {}, 'Russia inside') ])
 						]),
-						E('div', { 'class': 'oum-passwall-route' }, [ E('small', { 'class': 'oum-muted' }, 'Прямое исключение'), E('strong', {}, 'YouTube через Zapret без расхода VPN-трафика') ])
+						E('div', { 'class': 'oum-tabs' }, [
+							E('button', { 'class': 'oum-tab', 'data-podkop-tab': 'routing', 'data-active': 'true' }, 'Маршрутизация'),
+							E('button', { 'class': 'oum-tab', 'data-podkop-tab': 'diagnostics', 'data-active': 'false' }, 'Диагностика')
+						]),
+						E('div', { id: 'podkop-routing-tab' }, [
+							E('div', { 'class': 'oum-route-columns' }, [
+								E('div', { 'class': 'oum-route-box' }, [
+									E('h4', {}, 'Через AWG'), E('p', { 'class': 'oum-muted' }, 'Выбранные сообщества, домены и подсети идут через туннель.'),
+									communityGrid('proxy', routingSet(podkopRouting.proxy?.lists)),
+					E('label', { 'class': 'oum-route-label' }, 'Свои домены'), E('textarea', { id: 'podkop-proxy-domains', placeholder: 'example.com\n.example.org' }, (podkopRouting.proxy?.domains || []).join('\n')),
+									E('label', { 'class': 'oum-route-label' }, 'Свои подсети'), E('textarea', { id: 'podkop-proxy-subnets', placeholder: '203.0.113.0/24\n198.51.100.10' }, (podkopRouting.proxy?.subnets || []).join('\n'))
+								]),
+								E('div', { 'class': 'oum-route-box' }, [
+									E('h4', {}, 'Напрямую / исключения'), E('p', { 'class': 'oum-muted' }, 'Эти назначения обходят AWG; YouTube может обрабатываться Zapret.'),
+									communityGrid('direct', routingSet(podkopRouting.direct?.lists)),
+									E('label', { 'class': 'oum-route-label' }, 'Свои домены'), E('textarea', { id: 'podkop-direct-domains', placeholder: 'local.example.com' }, (podkopRouting.direct?.domains || []).join('\n')),
+									E('label', { 'class': 'oum-route-label' }, 'Свои подсети'), E('textarea', { id: 'podkop-direct-subnets', placeholder: '192.0.2.0/24' }, (podkopRouting.direct?.subnets || []).join('\n'))
+								])
+							]),
+							E('div', { 'class': 'oum-route-actions' }, [ E('button', { 'class': 'btn cbi-button-action', id: 'podkop-routing-save' }, 'Сохранить маршрутизацию'), E('span', { 'class': 'oum-route-message oum-muted', id: 'podkop-routing-message' }, '') ])
+						]),
+						E('div', { id: 'podkop-diagnostics-tab', hidden: '' }, [
+							E('div', { 'class': 'oum-diagnostic-head' }, [ E('p', { 'class': 'oum-muted', id: 'podkop-diagnostic-summary' }, 'Нажмите «Проверить», чтобы выполнить диагностику.'), E('button', { 'class': 'btn cbi-button', id: 'podkop-diagnostics-refresh' }, 'Проверить') ]),
+							E('div', { 'class': 'oum-diagnostic-grid', id: 'podkop-diagnostic-grid' })
+						])
 					]),
 					E('div', { 'class': 'oum-node-controls', id: 'node-controls' }, [
 						E('div', { 'class': 'oum-node-head' }, [
@@ -230,6 +266,61 @@ return view.extend({
 		let podkopInstalled = dashboard.podkop?.installed === true;
 		let nodesAvailable = initialNodes.available === true;
 		const updateVpnPanelVisibility = () => { nodePanel.hidden = !(passwallInstalled || podkopInstalled || nodesAvailable); };
+		const podkopRoutingMessage = root.querySelector('#podkop-routing-message');
+		const podkopRoutingSave = root.querySelector('#podkop-routing-save');
+		const podkopDiagnosticsRefresh = root.querySelector('#podkop-diagnostics-refresh');
+
+		for (const tab of root.querySelectorAll('[data-podkop-tab]')) tab.addEventListener('click', (event) => {
+			event.preventDefault();
+			const selected = tab.dataset.podkopTab;
+			for (const button of root.querySelectorAll('[data-podkop-tab]'))
+				button.dataset.active = button.dataset.podkopTab === selected ? 'true' : 'false';
+			root.querySelector('#podkop-routing-tab').hidden = selected !== 'routing';
+			root.querySelector('#podkop-diagnostics-tab').hidden = selected !== 'diagnostics';
+		});
+
+		const selectedCommunities = (name) => Array.from(root.querySelectorAll(`[data-community="${name}"]:checked`)).map((item) => item.value).join('\n');
+		podkopRoutingSave.addEventListener('click', (event) => {
+			event.preventDefault();
+			podkopRoutingSave.disabled = true;
+			podkopRoutingMessage.dataset.state = 'idle';
+			podkopRoutingMessage.textContent = 'Проверяем и применяем правила…';
+			callApplyPodkopRouting(
+				selectedCommunities('proxy'), root.querySelector('#podkop-proxy-domains').value, root.querySelector('#podkop-proxy-subnets').value,
+				selectedCommunities('direct'), root.querySelector('#podkop-direct-domains').value, root.querySelector('#podkop-direct-subnets').value
+			).then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Не удалось запустить применение.');
+				let attempts = 0;
+				const watch = () => new Promise((resolve) => window.setTimeout(resolve, 1000)).then(callSystemJobStatus).then((job) => {
+					podkopRoutingMessage.textContent = job.message || 'Применяем…';
+					if (job.state === 'running' && attempts++ < 90) return watch();
+					if (job.state !== 'success') throw new Error(job.message || 'Маршрутизация не применена.');
+					return callDashboardStatus().then(updateDashboard);
+				});
+				return watch();
+			}).catch((error) => {
+				podkopRoutingMessage.dataset.state = 'failed';
+				podkopRoutingMessage.textContent = error.message;
+			}).finally(() => { podkopRoutingSave.disabled = false; });
+		});
+
+		const renderPodkopDiagnostics = (diagnostics) => {
+			const grid = root.querySelector('#podkop-diagnostic-grid');
+			grid.replaceChildren(...(diagnostics.checks || []).map((check) => E('div', { 'class': 'oum-diagnostic-card' }, [
+				E('small', {}, check.label), E('strong', { 'data-ok': check.ok ? 'true' : 'false' }, check.ok ? 'Работает' : 'Требует внимания'),
+				E('div', { 'class': 'oum-muted' }, check.detail || '')
+			])));
+			root.querySelector('#podkop-diagnostic-summary').textContent = diagnostics.healthy ?
+				'Все проверки пройдены.' : 'Одна или несколько проверок требуют внимания.';
+		};
+		podkopDiagnosticsRefresh.addEventListener('click', (event) => {
+			event.preventDefault();
+			podkopDiagnosticsRefresh.disabled = true;
+			root.querySelector('#podkop-diagnostic-summary').textContent = 'Выполняем безопасные проверки…';
+			callPodkopDiagnostics().then(renderPodkopDiagnostics).catch((error) => {
+				root.querySelector('#podkop-diagnostic-summary').textContent = error.message;
+			}).finally(() => { podkopDiagnosticsRefresh.disabled = false; });
+		});
 
 		const updateSubscription = (fresh) => {
 			const info = fresh.subscription || {};
