@@ -179,6 +179,8 @@ function unmanagedTunnels(uci) {
 		let name = section['.name'] ?? '';
 		if (!(proto in [ 'amneziawg', 'wireguard' ]) || !match(name, /^[A-Za-z0-9_]+$/))
 			return;
+		if (podkopInstalled() && (uci.get('podkop', 'main', 'interface') ?? '') == name)
+			return;
 		let state = bus?.call(`network.interface.${name}`, 'status') ?? {};
 		push(result, { name, proto, up: state.up == true });
 	});
@@ -215,6 +217,10 @@ function passwallInstalled() {
 	return access('/etc/init.d/passwall') && access('/etc/config/passwall');
 }
 
+function podkopInstalled() {
+	return access('/etc/init.d/podkop') && access('/etc/config/podkop') && access('/etc/init.d/zapret');
+}
+
 function packageVersion(name) {
 	let process = popen(`/usr/bin/apk list --installed ${name} 2>/dev/null | cut -d' ' -f1`);
 	if (!process)
@@ -239,11 +245,12 @@ function passwallCachePresent() {
 function engineStatusData() {
 	let passwall = passwallInstalled();
 	let openclash = access('/etc/init.d/openclash') && access('/etc/config/openclash');
+	let podkop = podkopInstalled();
 	let arch = trim(readfile('/etc/apk/arch') ?? '');
 	let release = readfile('/etc/openwrt_release') ?? '';
 	let supported = access('/usr/bin/apk') && arch == 'aarch64_cortex-a53' && match(release, /DISTRIB_RELEASE='25\.12\./);
 	return {
-		current: passwall ? 'passwall' : (openclash ? 'openclash' : 'none'),
+		current: podkop ? 'podkop' : (passwall ? 'passwall' : (openclash ? 'openclash' : 'none')),
 		supported: supported ? true : false,
 		passwall: {
 			installed: passwall ? true : false,
@@ -257,6 +264,13 @@ function engineStatusData() {
 			version: packageVersion('luci-app-openclash'),
 			target_version: 'controlled-0.47.156',
 			saved: access('/etc/oum/engines/openclash/openclash-config.tar.gz') ? true : false
+		},
+		podkop: {
+			installed: podkop ? true : false,
+			version: packageVersion('podkop'),
+			target_version: '0.7.22 + Zapret 72.20260307',
+			saved: access('/etc/oum/engines/podkop/podkop-config.tar.gz') ? true : false,
+			interface: podkop ? (cursor().get('podkop', 'main', 'interface') ?? '') : ''
 		}
 	};
 }
@@ -300,9 +314,30 @@ function settingsStatusData() {
 }
 
 function vpnReady() {
+	if (podkopInstalled())
+		return system("pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1") == 0;
 	if (passwallInstalled())
 		return system("pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1") == 0;
 	return system("pidof clash >/dev/null 2>&1 && nft list chain inet fw4 openclash 2>/dev/null | grep -q 'redirect to :7892'") == 0;
+}
+
+function podkopStatusData() {
+	if (!podkopInstalled())
+		return { installed: false, enabled: false, ready: false, zapret: false, interface: '' };
+	const uci = cursor();
+	let iface = uci.get('podkop', 'main', 'interface') ?? '';
+	let bus = connect();
+	let tunnel = length(iface) ? (bus?.call(`network.interface.${iface}`, 'status') ?? {}) : {};
+	return {
+		installed: true,
+		enabled: system('/etc/init.d/podkop enabled >/dev/null 2>&1') == 0,
+		ready: system('pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1') == 0,
+		zapret: system('pidof nfqws >/dev/null 2>&1') == 0,
+		interface: iface,
+		tunnel_up: tunnel.up == true,
+		version: packageVersion('podkop'),
+		zapret_version: packageVersion('zapret')
+	};
 }
 
 function passwallStatusData() {
@@ -466,6 +501,8 @@ function readJsonFile(path) {
 }
 
 function nodeStatusData() {
+	if (podkopInstalled())
+		return { available: false, engine: 'podkop', group: '', current: '', nodes: [] };
 	if (passwallInstalled())
 		return passwallNodeStatusData();
 	const uci = cursor();
@@ -722,8 +759,8 @@ const methods = {
 		args: { engine: '' },
 		call: function(request) {
 			let engine = request.args.engine ?? '';
-			if (!(engine in [ 'openclash', 'passwall' ]))
-				return failure('invalid_engine', 'Выберите OpenClash или PassWall.');
+			if (!(engine in [ 'openclash', 'passwall', 'podkop' ]))
+				return failure('invalid_engine', 'Выберите OpenClash, PassWall или Podkop + Zapret.');
 			let status = engineStatusData();
 			if (!status.supported)
 				return failure('unsupported_platform', 'Для этого устройства пока нет проверенного комплекта переключения.');
@@ -732,6 +769,22 @@ const methods = {
 			if (!access('/usr/libexec/oum-engine-manager'))
 				return failure('runtime_missing', 'Менеджер VPN-движков не установлен.');
 			return startSystemJob('engine', { engine });
+		}
+	},
+
+	configurePodkop: {
+		args: { interface: '' },
+		call: function(request) {
+			let iface = request.args.interface ?? '';
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Сначала установите движок Podkop + Zapret.');
+			if (!match(iface, /^[A-Za-z0-9_]{1,15}$/))
+				return failure('invalid_interface', 'Выберите отдельный AWG/WireGuard-интерфейс.');
+			const uci = cursor();
+			let proto = uci.get('network', iface, 'proto') ?? '';
+			if (!(proto in [ 'amneziawg', 'wireguard' ]))
+				return failure('invalid_interface', 'Выбранный интерфейс не является AWG/WireGuard-туннелем.');
+			return startSystemJob('podkop_configure', { interface: iface });
 		}
 	},
 
@@ -789,7 +842,8 @@ const methods = {
 		call: function() {
 			const uci = cursor();
 			const passwall = passwallStatusData();
-			const engine = passwall.installed ? 'passwall' : 'openclash';
+			const podkop = podkopStatusData();
+			const engine = podkop.installed ? 'podkop' : (passwall.installed ? 'passwall' : 'openclash');
 			return {
 				wan: networkStatus(),
 				wifi: wifiStatus(uci),
@@ -797,10 +851,11 @@ const methods = {
 				thermal: thermalStatus(),
 				active_source: uci.get('oum', 'main', 'active_source') ?? 'none',
 				vpn_engine: engine,
-				vpn_enabled: engine == 'passwall' ? passwall.enabled : uci.get('openclash', 'config', 'enable') == '1',
+				vpn_enabled: engine == 'podkop' ? podkop.enabled : (engine == 'passwall' ? passwall.enabled : uci.get('openclash', 'config', 'enable') == '1'),
 				vpn_ready: vpnReady(),
 				policy_applying: access('/tmp/oum-device-policy.lock') ? true : false,
 				passwall,
+				podkop,
 				unmanaged_tunnels: unmanagedTunnels(uci),
 				subscription: engine == 'openclash' ? subscriptionStatusData(false) : { available: false, refreshing: false }
 			};
@@ -829,6 +884,22 @@ const methods = {
 			if (type(enabled) != 'bool')
 				return failure('invalid_state', 'Некорректное состояние VPN.');
 			const uci = cursor();
+			if (podkopInstalled()) {
+				let iface = uci.get('podkop', 'main', 'interface') ?? '';
+				if (enabled && !length(iface))
+					return failure('podkop_interface_missing', 'Сначала выберите отдельный AWG/WireGuard-интерфейс для Podkop.');
+				if (enabled) {
+					system('/etc/init.d/podkop enable >/dev/null 2>&1');
+					system('/etc/init.d/zapret enable >/dev/null 2>&1');
+					system('(/etc/init.d/podkop restart && /etc/init.d/zapret restart) >/tmp/oum-vpn-control.log 2>&1 &');
+				}
+				else {
+					system('/etc/init.d/podkop disable >/dev/null 2>&1');
+					system('/etc/init.d/zapret disable >/dev/null 2>&1');
+					system('(/etc/init.d/podkop stop; /etc/init.d/zapret stop) >/tmp/oum-vpn-control.log 2>&1 &');
+				}
+				return { ok: true, enabled, engine: 'podkop', message: enabled ? 'Podkop и Zapret запускаются…' : 'Podkop и Zapret отключаются…' };
+			}
 			if (passwallInstalled()) {
 				let globalSection = null;
 				uci.foreach('passwall', 'global', (section) => {

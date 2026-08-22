@@ -89,23 +89,29 @@ proxy credentials.
 The Settings page owns protected-source replacement as well as Smart/separate
 Wi-Fi credentials and switching WAN between DHCP and PPPoE. Each network
 change keeps a one-step local rollback. A model-bound, engine-tagged OUM backup
-contains network, Wi-Fi, firewall, routing state and the current OpenClash or
-PassWall configuration; it is validated before a
+contains network, Wi-Fi, firewall, routing state and the current OpenClash,
+PassWall or Podkop configuration; it is validated before a
 restore and deliberately downloaded as an unencrypted secret-bearing file.
 Maintenance actions can clear only the VPN layer or return to the FirstRun
 wizard without changing the LAN address.
 
-The VPN engine manager can replace OpenClash with PassWall or restore a
-previously used engine. It downloads and verifies the target package set and a
+The VPN engine manager can replace OpenClash with PassWall or Podkop + Zapret,
+or restore a previously used engine. It downloads and verifies the target package set and a
 rollback set before changing packages, stores only the small secret-bearing
-configuration archive locally, stages the new engine while the old one is
-still running, and restores the previous engine automatically if installation
+configuration archive locally, removes the old runtime only after rollback
+assets are ready, and restores the previous engine automatically if installation
 or readiness checks fail. PassWall 26.5.11-r1 packages are kept without
 configuration or credentials in the private `openwrt-ultimate-manager-assets`
 repository. Development routers use a checksum-verified local cache under
 `/etc/oum/packages`; no GitHub token is stored on the router. Source import
 remains disabled in PassWall mode until its native
 import adapter is complete; existing PassWall nodes and policies remain usable.
+
+Podkop uses a dedicated, already configured WireGuard or AmneziaWG interface.
+The managed default sends the `Russia inside` list through that tunnel while a
+higher-priority `YouTube` exclusion stays direct and is handled by Zapret. This
+keeps video traffic out of the paid tunnel. OUM never copies tunnel secrets
+into Podkop and does not enable `route_allowed_ips`.
 
 Subscriptions may be base64/plain URI lists or Clash YAML documents containing
 an embedded `proxies` array. Provider YAML is loaded in safe mode before nodes

@@ -18,6 +18,7 @@ const callApplyWan = rpc.declare({
 });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
 const callSwitchEngine = rpc.declare({ object: 'oum', method: 'switchVpnEngine', params: [ 'engine' ], expect: { '': {} } });
+const callConfigurePodkop = rpc.declare({ object: 'oum', method: 'configurePodkop', params: [ 'interface' ], expect: { '': {} } });
 const callCreateBackup = rpc.declare({ object: 'oum', method: 'createBackup', expect: { '': {} } });
 const callRestoreBackup = rpc.declare({ object: 'oum', method: 'restoreBackup', params: [ 'data' ], expect: { '': {} } });
 const callResetVpn = rpc.declare({ object: 'oum', method: 'resetVpn', expect: { '': {} } });
@@ -102,9 +103,11 @@ return view.extend({
 			]);
 		const wifi = settings.wifi || {};
 		const wan = settings.wan || {};
-		const engines = settings.engines || { current: 'none', supported: false, passwall: {}, openclash: {} };
+		const engines = settings.engines || { current: 'none', supported: false, passwall: {}, openclash: {}, podkop: {} };
 		const unmanagedTunnels = settings.unmanaged_tunnels || [];
-		const engineTitle = engines.current === 'passwall' ? 'PassWall' : (engines.current === 'openclash' ? 'OpenClash' : 'не установлен');
+		const engineTitle = engines.current === 'passwall' ? 'PassWall' : (engines.current === 'podkop' ? 'Podkop + Zapret' : (engines.current === 'openclash' ? 'OpenClash' : 'не установлен'));
+		const engineVersion = engines.current === 'passwall' ? engines.passwall.version : (engines.current === 'podkop' ? engines.podkop.version : engines.openclash.version);
+		const podkopInterfaces = Array.from(new Set([ engines.podkop?.interface || '', ...unmanagedTunnels.map((item) => item.name) ].filter(Boolean)));
 		const sourceSupported = engines.current === 'openclash';
 		const capabilities = settings.capabilities || {};
 		const meshState = !capabilities.mesh_driver ? 'Режим 802.11s не поддерживается радиодрайвером.' :
@@ -188,19 +191,26 @@ return view.extend({
 				E('div', { 'class': 'oum-protected-content' }, [
 					E('div', { 'class': 'oum-engine-current' }, [
 						E('span', {}, [ E('small', {}, 'Сейчас установлен'), E('br'), E('strong', {}, engineTitle) ]),
-						E('span', { 'class': 'oum-help' }, engines.current === 'passwall' ? (engines.passwall.version || '') : (engines.openclash.version || ''))
+						E('span', { 'class': 'oum-help' }, engineVersion || '')
 					]),
 					E('div', { 'class': 'oum-inline-warning', hidden: unmanagedTunnels.length ? null : '' }, unmanagedTunnels.length ?
 						`Найдены туннели вне OUM: ${unmanagedTunnels.map((item) => item.name).join(', ')}. Перед включением другого движка проверьте их маршруты.` : ''),
 					E('div', { 'class': 'oum-engine-choices' }, [
 						engineChoice('openclash', 'OpenClash', `Управляемый выпуск ${engines.openclash.target_version || ''}. Удобен для подписок, AWG и Proxy.`, engines.current === 'openclash', false),
 						engineChoice('passwall', 'PassWall', `Закреплённая версия ${engines.passwall.target_version || '26.5.11-r1'}. Тонкая маршрутизация через Xray.`, engines.current === 'passwall', false),
-						engineChoice('podkop', 'Podkop + Zapret', 'Появится после отдельного тестирования на основном роутере.', false, true)
+						engineChoice('podkop', 'Podkop + Zapret', `Podkop ${engines.podkop?.target_version || 'с AWG-туннелем'}. YouTube напрямую через Zapret.`, engines.current === 'podkop', false)
 					]),
 					E('p', { 'class': 'oum-help' }, `Перед заменой OUM проверяет полный комплект, сохраняет конфигурацию и только затем удаляет старые пакеты. При ошибке выполняется автоматический возврат.${engines.passwall.cache_ready ? ' Локальный комплект PassWall готов.' : ' Для приватной разработки комплект PassWall должен быть заранее загружен на роутер.'}`),
 					E('div', { 'class': 'oum-engine-actions' }, [
 						E('button', { 'class': 'btn cbi-button-action', id: 'switch-engine', 'data-system-action': '', disabled: engines.supported ? null : '' }, 'Заменить движок'),
 						E('span', { 'class': 'oum-help' }, engines.supported ? 'Сохранённая конфигурация выбранного движка восстановится автоматически.' : 'Для этой платформы ещё нет проверенного пакета переключения.')
+					]),
+					E('div', { 'class': 'oum-inline-warning', hidden: engines.current === 'podkop' ? null : '' }, [
+						E('strong', {}, 'Отдельный туннель Podkop'),
+						E('p', { 'class': 'oum-help' }, 'Podkop направляет Russia inside через выбранный AWG/WireGuard. YouTube исключается из туннеля и обрабатывается Zapret напрямую.'),
+						E('select', { id: 'podkop-interface' }, podkopInterfaces.length ? podkopInterfaces.map((name) => E('option', { value: name, selected: name === engines.podkop?.interface ? '' : null }, name)) : E('option', { value: '' }, 'AWG/WireGuard не найден')),
+						' ',
+						E('button', { 'class': 'btn cbi-button-action', id: 'configure-podkop', 'data-system-action': '', disabled: podkopInterfaces.length ? null : '' }, 'Настроить и запустить')
 					])
 				])
 			]),
@@ -210,7 +220,7 @@ return view.extend({
 			}, [
 				E('summary', {}, 'Защищённое подключение'),
 				E('div', { 'class': 'oum-protected-content' }, [
-					E('p', { 'class': 'oum-help' }, sourceSupported ? 'Новый источник полностью заменяет предыдущий OUM-профиль. При ошибке старый профиль восстанавливается.' : 'Сейчас работает PassWall. Управление его существующими нодами доступно на главной; безопасный импорт новых источников добавим следующим этапом.'),
+					E('p', { 'class': 'oum-help' }, sourceSupported ? 'Новый источник полностью заменяет предыдущий OUM-профиль. При ошибке старый профиль восстанавливается.' : (engines.current === 'podkop' ? 'Podkop использует отдельный сетевой туннель; выберите его в разделе VPN-движка выше.' : 'Сейчас работает PassWall. Управление его существующими нодами доступно на главной; безопасный импорт новых источников добавим следующим этапом.')),
 					E('div', { 'class': 'oum-sources', hidden: sourceSupported ? null : '' }, [
 						sourceChoice('subscription', 'Subscription', 'Ссылка на набор серверов', selectedSource === 'subscription'),
 						sourceChoice('awg', 'AWG Tunnel', 'Конфигурация AmneziaWG', selectedSource === 'awg'),
@@ -283,7 +293,7 @@ return view.extend({
 				if (status.state === 'running') return window.setTimeout(tick, 1500);
 				watching = false;
 				setBusy(false);
-				if (status.action === 'engine' && status.state === 'success')
+				if ((status.action === 'engine' || status.action === 'podkop_configure') && status.state === 'success')
 					window.setTimeout(() => window.location.reload(), 900);
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
@@ -325,12 +335,20 @@ return view.extend({
 			event.preventDefault();
 			const target = selected('vpn_engine');
 			if (!target || target === engines.current) return ui.addNotification(null, E('p', {}, 'Выберите другой VPN-движок.'), 'warning');
-			const title = target === 'passwall' ? 'PassWall' : 'OpenClash';
-			const saved = target === 'passwall' ? engines.passwall.saved : engines.openclash.saved;
+			const title = target === 'passwall' ? 'PassWall' : (target === 'podkop' ? 'Podkop + Zapret' : 'OpenClash');
+			const saved = target === 'passwall' ? engines.passwall.saved : (target === 'podkop' ? engines.podkop.saved : engines.openclash.saved);
 			const text = saved ? `OUM заменит пакеты и восстановит сохранённую конфигурацию ${title}. VPN кратковременно отключится.` :
 				`OUM установит ${title} без личной конфигурации. После замены VPN останется выключенным, пока вы не добавите подключение.`;
 			if (await confirmation(`Перейти на ${title}?`, text, 'Заменить движок', true))
 				start(callSwitchEngine(target));
+		});
+		const podkopButton = root.querySelector('#configure-podkop');
+		if (podkopButton) podkopButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			const iface = root.querySelector('#podkop-interface')?.value || '';
+			if (!iface) return ui.addNotification(null, E('p', {}, 'Не найден отдельный AWG/WireGuard-интерфейс.'), 'warning');
+			if (await confirmation('Запустить Podkop + Zapret?', `Трафик Russia inside пойдёт через ${iface}, а YouTube — напрямую через Zapret.`, 'Настроить', false))
+				start(callConfigurePodkop(iface));
 		});
 		importButton.addEventListener('click', (event) => {
 			event.preventDefault();
@@ -384,7 +402,9 @@ return view.extend({
 		root.querySelector('#reset-vpn').addEventListener('click', async () => {
 			const text = engines.current === 'passwall' ?
 				'PassWall будет остановлен, правила устройств OUM удалены, а конфигурация нод сохранена в защищённом снимке. Wi-Fi и WAN не изменятся.' :
-				'OpenClash будет остановлен, а активный OUM-профиль и правила устройств удалены. Wi-Fi и WAN не изменятся.';
+				(engines.current === 'podkop' ?
+					'Podkop и Zapret будут остановлены, правила устройств OUM удалены, а их конфигурация сохранена в защищённом снимке. AWG, Wi-Fi и WAN не изменятся.' :
+					'OpenClash будет остановлен, а активный OUM-профиль и правила устройств удалены. Wi-Fi и WAN не изменятся.');
 			if (await confirmation('Сбросить VPN?', text, 'Сбросить VPN', true)) start(callResetVpn());
 		});
 		root.querySelector('#reset-all').addEventListener('click', async () => {

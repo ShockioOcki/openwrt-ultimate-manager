@@ -22,6 +22,48 @@ IPKG_INSTROOT="${IPKG_INSTROOT:-}"
 export IPKG_INSTROOT
 . /lib/functions.sh
 
+if [ -x /etc/init.d/podkop ] && [ -f /etc/config/podkop ]; then
+	valid_ipv4_podkop() {
+		printf '%s' "$1" | awk -F. '
+			NF != 4 { exit 1 }
+			{ for (i = 1; i <= 4; i++) if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1 }
+		'
+	}
+	for ip in $(uci -q get oum.main.managed_podkop_direct_ips || true); do
+		valid_ipv4_podkop "$ip" && uci -q del_list "podkop.settings.routing_excluded_ips=$ip" || true
+	done
+	for ip in $(uci -q get oum.main.managed_podkop_vpn_ips || true); do
+		valid_ipv4_podkop "$ip" && uci -q del_list "podkop.main.fully_routed_ips=$ip" || true
+	done
+	uci -q delete oum.main.managed_podkop_direct_ips || true
+	uci -q delete oum.main.managed_podkop_vpn_ips || true
+
+	apply_podkop_device() {
+		local section="$1" ip policy
+		config_get ip "$section" ip ''
+		config_get policy "$section" policy 'default'
+		valid_ipv4_podkop "$ip" || return 0
+		case "$policy" in
+			direct)
+				uci -q add_list "podkop.settings.routing_excluded_ips=$ip"
+				uci -q add_list "oum.main.managed_podkop_direct_ips=$ip"
+				;;
+			vpn)
+				uci -q add_list "podkop.main.fully_routed_ips=$ip"
+				uci -q add_list "oum.main.managed_podkop_vpn_ips=$ip"
+				;;
+		esac
+	}
+	config_load oum
+	config_foreach apply_podkop_device device
+	uci -q commit podkop
+	uci -q commit oum
+	if /etc/init.d/podkop running >/dev/null 2>&1; then
+		/etc/init.d/podkop reload >/dev/null 2>&1 || /etc/init.d/podkop restart >/dev/null 2>&1
+	fi
+	exit 0
+fi
+
 if [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ]; then
 	[ -x /usr/libexec/oum-passwall-policy ] || exit 1
 	/usr/libexec/oum-passwall-policy

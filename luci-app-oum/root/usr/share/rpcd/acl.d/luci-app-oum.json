@@ -11,7 +11,7 @@
 		},
 		"write": {
 			"ubus": {
-				"oum": [ "applySetup", "startVpnImport", "selectNode", "setVpnEnabled", "setDevicePolicy", "refreshSubscriptionInfo", "applyWifiSettings", "applyWanSettings", "rollbackSettings", "switchVpnEngine", "createBackup", "restoreBackup", "resetVpn", "resetFirstRun" ]
+				"oum": [ "applySetup", "startVpnImport", "selectNode", "setVpnEnabled", "setDevicePolicy", "refreshSubscriptionInfo", "applyWifiSettings", "applyWanSettings", "rollbackSettings", "switchVpnEngine", "configurePodkop", "createBackup", "restoreBackup", "resetVpn", "resetFirstRun" ]
 			},
 			"uci": [ "oum" ]
 		}

@@ -1,0 +1,105 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-status}"
+INTERFACE="${2:-$(uci -q get oum.main.podkop_interface || true)}"
+ROLLBACK=/etc/oum/rollback/podkop-before-config
+
+valid_interface() {
+	printf '%s' "$1" | grep -Eq '^[A-Za-z0-9_]{1,15}$' || return 1
+	proto="$(uci -q get "network.$1.proto" || true)"
+	[ "$proto" = amneziawg ] || [ "$proto" = wireguard ]
+}
+
+tunnel_ready() {
+	device="$(ubus call "network.interface.$1" status 2>/dev/null | jsonfilter -e '@.l3_device' || true)"
+	[ -n "$device" ] && ip link show dev "$device" 2>/dev/null | grep -q 'UP'
+}
+
+save_rollback() {
+	rm -rf "$ROLLBACK"
+	mkdir -p "$ROLLBACK"
+	cp /etc/config/podkop "$ROLLBACK/podkop"
+	[ ! -f /etc/config/zapret ] || cp /etc/config/zapret "$ROLLBACK/zapret"
+	[ ! -f /opt/zapret/config ] || cp /opt/zapret/config "$ROLLBACK/zapret-main"
+}
+
+restore_rollback() {
+	[ ! -f "$ROLLBACK/podkop" ] || cp "$ROLLBACK/podkop" /etc/config/podkop
+	[ ! -f "$ROLLBACK/zapret" ] || cp "$ROLLBACK/zapret" /etc/config/zapret
+	[ ! -f "$ROLLBACK/zapret-main" ] || cp "$ROLLBACK/zapret-main" /opt/zapret/config
+	/etc/init.d/podkop stop >/dev/null 2>&1 || true
+	/etc/init.d/zapret stop >/dev/null 2>&1 || true
+}
+
+configure() {
+	[ -x /etc/init.d/podkop ] && [ -x /etc/init.d/zapret ] || {
+		echo 'Podkop + Zapret are not installed' >&2
+		return 1
+	}
+	valid_interface "$INTERFACE" || { echo 'Select a WireGuard or AmneziaWG interface' >&2; return 1; }
+	ifup "$INTERFACE" >/dev/null 2>&1 || true
+	tunnel_ready "$INTERFACE" || { echo 'Selected tunnel is not up' >&2; return 1; }
+	save_rollback
+
+	uci -q set podkop.settings=settings
+	uci -q set podkop.settings.dns_type='udp'
+	uci -q set podkop.settings.dns_server='77.88.8.8'
+	uci -q set podkop.settings.bootstrap_dns_server='77.88.8.8'
+	uci -q set podkop.settings.disable_quic='0'
+	uci -q set podkop.settings.dont_touch_dhcp='0'
+	uci -q delete podkop.settings.routing_excluded_ips || true
+
+	uci -q set podkop.main=section
+	uci -q set podkop.main.connection_type='vpn'
+	uci -q set "podkop.main.interface=$INTERFACE"
+	uci -q delete podkop.main.proxy_config_type || true
+	uci -q delete podkop.main.proxy_string || true
+	uci -q delete podkop.main.community_lists || true
+	uci -q add_list podkop.main.community_lists='russia_inside'
+
+	uci -q delete podkop.youtube_direct || true
+	uci -q set podkop.youtube_direct=section
+	uci -q set podkop.youtube_direct.connection_type='exclusion'
+	uci -q add_list podkop.youtube_direct.community_lists='youtube'
+	uci -q commit podkop || { restore_rollback; return 1; }
+
+	uci -q set oum.main.active_source='podkop'
+	uci -q set oum.main.pending_source='none'
+	uci -q set "oum.main.podkop_interface=$INTERFACE"
+	uci -q commit oum
+
+	/etc/init.d/podkop enable >/dev/null 2>&1 || true
+	/etc/init.d/zapret enable >/dev/null 2>&1 || true
+	/etc/init.d/podkop restart >/tmp/oum-podkop.log 2>&1 || { restore_rollback; return 1; }
+	/etc/init.d/zapret restart >/tmp/oum-zapret.log 2>&1 || { restore_rollback; return 1; }
+
+	waited=0
+	while [ "$waited" -lt 60 ]; do
+		if pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1 &&
+			pidof nfqws >/dev/null 2>&1; then
+			/usr/libexec/oum-device-policy sync >/dev/null 2>&1 || true
+			return 0
+		fi
+		sleep 1
+		waited=$((waited + 1))
+	done
+	restore_rollback
+	return 1
+}
+
+status() {
+	printf 'installed=%s\n' "$(command -v podkop >/dev/null 2>&1 && echo 1 || echo 0)"
+	printf 'interface=%s\n' "$INTERFACE"
+	printf 'tunnel=%s\n' "$(valid_interface "$INTERFACE" && tunnel_ready "$INTERFACE" && echo 1 || echo 0)"
+	printf 'podkop=%s\n' "$(pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1 && echo 1 || echo 0)"
+	printf 'zapret=%s\n' "$(pidof nfqws >/dev/null 2>&1 && echo 1 || echo 0)"
+}
+
+case "$ACTION" in
+	configure) configure ;;
+	status) status ;;
+	*) printf 'usage: %s {configure INTERFACE|status}\n' "$0" >&2; exit 2 ;;
+esac

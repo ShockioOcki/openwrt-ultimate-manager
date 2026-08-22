@@ -11,7 +11,7 @@ const callSelectNode = rpc.declare({ object: 'oum', method: 'selectNode', params
 const callSetVpnEnabled = rpc.declare({ object: 'oum', method: 'setVpnEnabled', params: [ 'enabled' ], expect: { '': {} } });
 const callSetDevicePolicy = rpc.declare({ object: 'oum', method: 'setDevicePolicy', params: [ 'mac', 'policy' ], expect: { '': {} } });
 const callRefreshSubscriptionInfo = rpc.declare({ object: 'oum', method: 'refreshSubscriptionInfo', expect: { '': {} } });
-const sourceNames = { none: 'Не настроено', subscription: 'Subscription', awg: 'AWG Tunnel', proxy: 'Proxy', passwall: 'PassWall' };
+const sourceNames = { none: 'Не настроено', subscription: 'Subscription', awg: 'AWG Tunnel', proxy: 'Proxy', passwall: 'PassWall', podkop: 'Podkop + Zapret' };
 
 function countryKey(name) {
 	const flag = String(name).match(/[\u{1F1E6}-\u{1F1FF}]{2}/u);
@@ -174,6 +174,19 @@ return view.extend({
 							])
 						])
 					]),
+					E('div', { id: 'podkop-panel', hidden: '' }, [
+						E('div', { 'class': 'oum-node-head' }, [
+							E('h3', {}, 'Podkop + Zapret'),
+							E('span', { 'class': 'oum-muted', id: 'podkop-version' }, '')
+						]),
+						E('div', { 'class': 'oum-passwall-grid' }, [
+							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'AWG-туннель'), E('strong', { id: 'podkop-tunnel' }, '—') ]),
+							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Podkop'), E('strong', { id: 'podkop-routing' }, '—') ]),
+							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Zapret / YouTube'), E('strong', { id: 'podkop-zapret' }, '—') ]),
+							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Маршрут'), E('strong', {}, 'Russia inside') ])
+						]),
+						E('div', { 'class': 'oum-passwall-route' }, [ E('small', { 'class': 'oum-muted' }, 'Прямое исключение'), E('strong', {}, 'YouTube через Zapret без расхода VPN-трафика') ])
+					]),
 					E('div', { 'class': 'oum-node-controls', id: 'node-controls' }, [
 						E('div', { 'class': 'oum-node-head' }, [
 							E('h3', { id: 'node-panel-title' }, 'VPN-нода'),
@@ -214,12 +227,13 @@ return view.extend({
 		let vpnEngine = dashboard.vpn_engine || 'openclash';
 		let vpnWatchTimer = null;
 		let passwallInstalled = dashboard.passwall?.installed === true;
+		let podkopInstalled = dashboard.podkop?.installed === true;
 		let nodesAvailable = initialNodes.available === true;
-		const updateVpnPanelVisibility = () => { nodePanel.hidden = !(passwallInstalled || nodesAvailable); };
+		const updateVpnPanelVisibility = () => { nodePanel.hidden = !(passwallInstalled || podkopInstalled || nodesAvailable); };
 
 		const updateSubscription = (fresh) => {
 			const info = fresh.subscription || {};
-			subscriptionPanel.hidden = fresh.vpn_engine === 'passwall' || fresh.active_source !== 'subscription';
+			subscriptionPanel.hidden = fresh.vpn_engine !== 'openclash' || fresh.active_source !== 'subscription';
 			if (subscriptionPanel.hidden) return;
 			subscriptionRefresh.disabled = info.refreshing === true;
 			if (!info.available) {
@@ -263,11 +277,11 @@ return view.extend({
 			const ssids = Array.from(new Set((fresh.wifi || []).map((item) => item.ssid)));
 			root.querySelector('#wifi-detail').textContent = ssids.length ? ssids.join(' · ') : 'Wi-Fi выключен';
 			root.querySelector('#thermal-state').textContent = fresh.thermal?.maximum != null ? `${Math.round(fresh.thermal.maximum)} °C` : 'Нет данных';
-			root.querySelector('#active-source').textContent = sourceNames[vpnEngine === 'passwall' ? 'passwall' : fresh.active_source] || fresh.active_source;
+			root.querySelector('#active-source').textContent = sourceNames[vpnEngine === 'passwall' ? 'passwall' : (vpnEngine === 'podkop' ? 'podkop' : fresh.active_source)] || fresh.active_source;
 			vpnEnabled = fresh.vpn_enabled === true;
 			vpnToggle.textContent = vpnEnabled ? 'Отключить' : 'Включить';
 			// A broken or half-started VPN must always remain possible to disable.
-			vpnToggle.disabled = !vpnEnabled && vpnEngine !== 'passwall' && fresh.active_source === 'none';
+			vpnToggle.disabled = !vpnEnabled && vpnEngine === 'openclash' && fresh.active_source === 'none';
 			vpnControlMessage.textContent = !vpnEnabled ? 'VPN выключен' :
 				(fresh.vpn_ready === true ? 'VPN работает' : 'VPN запускается или требует внимания');
 			updateSubscription(fresh);
@@ -284,8 +298,22 @@ return view.extend({
 				select.disabled = false;
 			policyMessage.textContent = vpnEngine === 'passwall' ?
 				'PassWall закрепляет адрес устройства и добавляет его в соответствующее shunt-правило.' :
-				'Режим применяется к выбранному устройству и сохраняется после перезагрузки.';
+				(vpnEngine === 'podkop' ? 'Podkop применяет исключение либо полную маршрутизацию к IP-адресу устройства.' :
+				'Режим применяется к выбранному устройству и сохраняется после перезагрузки.');
 			updatePasswall(fresh.passwall || {});
+			updatePodkop(fresh.podkop || {});
+		};
+
+		const updatePodkop = (state) => {
+			const panel = root.querySelector('#podkop-panel');
+			podkopInstalled = state.installed === true;
+			panel.hidden = !podkopInstalled;
+			updateVpnPanelVisibility();
+			if (panel.hidden) return;
+			root.querySelector('#podkop-version').textContent = `Podkop ${state.version || '—'} · Zapret ${state.zapret_version || '—'}`;
+			root.querySelector('#podkop-tunnel').textContent = state.tunnel_up ? `${state.interface || 'AWG'} поднят` : 'Требует внимания';
+			root.querySelector('#podkop-routing').textContent = state.ready ? 'Работает' : 'Требует внимания';
+			root.querySelector('#podkop-zapret').textContent = state.zapret ? 'Работает' : 'Требует внимания';
 		};
 
 		const updatePasswall = (state) => {

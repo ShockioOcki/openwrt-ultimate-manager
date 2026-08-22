@@ -34,12 +34,22 @@ MIHOMO_ARCHIVE=mihomo-linux-arm64-v1.19.30.gz
 MIHOMO_URL=https://github.com/MetaCubeX/mihomo/releases/download/v1.19.30/mihomo-linux-arm64-v1.19.30.gz
 MIHOMO_SHA=58896873736d28628f66de3677c8654fa0f180662523148e136cff4f6e890069
 
+PODKOP_VERSION=0.7.22-r1
+PODKOP_RELEASE=https://github.com/itdoginfo/podkop/releases/download/0.7.22
+PODKOP_ASSETS='podkop-0.7.22-r1.apk|5abf1422f73819d0834fd3ca81ccd55aaa7631e8665dc03e8c0d629811302e27
+luci-app-podkop-0.7.22-r1.apk|72addad80b71a9f44ea64af011c24b405c98b7a2b94751166a5668deeab7ad53'
+ZAPRET_VERSION=72.20260307-r1
+ZAPRET_ARCHIVE=zapret_v72.20260307_aarch64_cortex-a53.zip
+ZAPRET_URL=https://github.com/remittor/zapret-openwrt/releases/download/v72.20260307/$ZAPRET_ARCHIVE
+ZAPRET_SHA=fda00483a87071555e4bf3ae40ee815ee6c7f6a386f2860b646ce7e9347572dd
+PODKOP_REMOVE='luci-app-podkop podkop sing-box luci-app-zapret zapret'
+
 CURRENT=none
 MUTATED=0
 SUCCESS=0
 TARGET_INSTALLED=0
 CURRENT_REMOVED=0
-OUM_RUNTIME='curl ruby ruby-yaml'
+OUM_RUNTIME='curl ruby ruby-yaml unzip'
 
 update_status() {
 	[ -n "$STATUS" ] || return 0
@@ -77,7 +87,9 @@ ensure_oum_runtime() {
 }
 
 current_engine() {
-	if [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ] && installed luci-app-passwall; then
+	if [ -x /etc/init.d/podkop ] && [ -f /etc/config/podkop ] && installed podkop; then
+		printf '%s\n' podkop
+	elif [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ] && installed luci-app-passwall; then
 		printf '%s\n' passwall
 	elif [ -x /etc/init.d/openclash ] && [ -f /etc/config/openclash ] && installed luci-app-openclash; then
 		printf '%s\n' openclash
@@ -90,6 +102,7 @@ service_enabled() {
 	case "$1" in
 		passwall) [ "$(uci -q get passwall.@global[0].enabled || true)" = 1 ] ;;
 		openclash) [ "$(uci -q get openclash.config.enable || true)" = 1 ] ;;
+		podkop) /etc/init.d/podkop enabled >/dev/null 2>&1 ;;
 		*) return 1 ;;
 	esac
 }
@@ -114,11 +127,12 @@ stage_asset() {
 	url="$3"
 	expected="$4"
 	destination="$5"
-	cached="$PACKAGE_CACHE/$engine/$file"
-	if [ -s "$cached" ] && [ "$(sha256sum "$cached" | awk '{print $1}')" = "$expected" ]; then
-		cp "$cached" "$destination"
-		return 0
-	fi
+	for cached in "$PACKAGE_CACHE/$engine/$file" "/tmp/oum-package-cache/$engine/$file"; do
+		if [ -s "$cached" ] && [ "$(sha256sum "$cached" | awk '{print $1}')" = "$expected" ]; then
+			cp "$cached" "$destination"
+			return 0
+		fi
+	done
 	fetch "$url" "$destination" "$expected"
 }
 
@@ -144,10 +158,31 @@ download_openclash() {
 	stage_asset openclash "$MIHOMO_ARCHIVE" "$MIHOMO_URL" "$MIHOMO_SHA" "$WORK/openclash/$MIHOMO_ARCHIVE"
 }
 
+download_podkop() {
+	mkdir -p "$WORK/podkop"
+	old_ifs="$IFS"
+	IFS='
+'
+	for entry in $PODKOP_ASSETS; do
+		file="${entry%%|*}"
+		sha="${entry#*|}"
+		stage_asset podkop "$file" "$PODKOP_RELEASE/$file" "$sha" "$WORK/podkop/$file" || {
+			IFS="$old_ifs"
+			return 1
+		}
+	done
+	IFS="$old_ifs"
+	stage_asset podkop "$ZAPRET_ARCHIVE" "$ZAPRET_URL" "$ZAPRET_SHA" "$WORK/podkop/$ZAPRET_ARCHIVE" || return 1
+	unzip -jo "$WORK/podkop/$ZAPRET_ARCHIVE" 'apk/*.apk' -d "$WORK/podkop" >> "$LOG" 2>&1 || return 1
+	[ "$(sha256sum "$WORK/podkop/zapret-$ZAPRET_VERSION.apk" | awk '{print $1}')" = 2d1d3aa78b43d5319be3bb831cf81050c33920162f8e39368238a58ccbc16922 ] || return 1
+	[ "$(sha256sum "$WORK/podkop/luci-app-zapret-$ZAPRET_VERSION.apk" | awk '{print $1}')" = 6bdcc35f923b73f006f576e71a17b2b7076376a589bc7c2bd667d9a500a7a104 ] || return 1
+}
+
 download_engine() {
 	case "$1" in
 		passwall) download_passwall ;;
 		openclash) download_openclash ;;
+		podkop) download_podkop ;;
 		*) return 1 ;;
 	esac
 }
@@ -156,13 +191,14 @@ simulate_engine() {
 	case "$1" in
 		passwall) apk add --simulate --allow-untrusted "$WORK"/passwall/*.apk >> "$LOG" 2>&1 ;;
 		openclash) apk add --simulate --allow-untrusted "$WORK/openclash/$OPENCLASH_APK" >> "$LOG" 2>&1 ;;
+		podkop) apk add --simulate --allow-untrusted "$WORK"/podkop/*.apk >> "$LOG" 2>&1 ;;
 		*) return 1 ;;
 	esac
 }
 
 check_platform() {
 	command -v apk >/dev/null 2>&1 || die 'Переключение движков поддерживается только на OpenWrt с apk.'
-	[ "$(cat /etc/apk/arch 2>/dev/null || true)" = aarch64_cortex-a53 ] || die 'Для архитектуры роутера пока нет проверенного комплекта PassWall.'
+	[ "$(cat /etc/apk/arch 2>/dev/null || true)" = aarch64_cortex-a53 ] || die 'Для архитектуры роутера пока нет проверенного комплекта VPN-движков.'
 	grep -q "DISTRIB_RELEASE='25\.12\." /etc/openwrt_release || die 'Комплект проверен только с OpenWrt 25.12.'
 	available="$(df -Pk /tmp | awk 'NR == 2 { print $4 }')"
 	[ "${available:-0}" -ge 50000 ] || die 'Недостаточно временной памяти для безопасной загрузки нового и резервного комплектов.'
@@ -196,6 +232,22 @@ save_engine() {
 				[ ! -d "/etc/openclash/$dir" ] || cp -a "/etc/openclash/$dir" "$tmp/files/etc/openclash/$dir"
 			done
 			tar -czf "$tmp/openclash-config.tar.gz" -C "$tmp/files" .
+			rm -rf "$tmp/files"
+			;;
+		podkop)
+			mkdir -p "$tmp/files/etc/config" "$tmp/files/opt/zapret/ipset"
+			[ ! -f /etc/config/podkop ] || cp /etc/config/podkop "$tmp/files/etc/config/podkop"
+			[ ! -f /etc/config/zapret ] || cp /etc/config/zapret "$tmp/files/etc/config/zapret"
+			[ ! -f /opt/zapret/config ] || cp /opt/zapret/config "$tmp/files/opt/zapret/config"
+			for file in zapret-hosts-user.txt zapret-hosts-user-exclude.txt zapret-ip-user.txt zapret-ip-user-exclude.txt; do
+				[ ! -f "/opt/zapret/ipset/$file" ] || cp "/opt/zapret/ipset/$file" "$tmp/files/opt/zapret/ipset/$file"
+			done
+			if [ -x /etc/init.d/zapret ] && /etc/init.d/zapret enabled >/dev/null 2>&1; then
+				printf '1\n' > "$tmp/zapret-enabled"
+			else
+				printf '0\n' > "$tmp/zapret-enabled"
+			fi
+			tar -czf "$tmp/podkop-config.tar.gz" -C "$tmp/files" .
 			rm -rf "$tmp/files"
 			;;
 	esac
@@ -241,6 +293,20 @@ remove_engine() {
 			rm -f /tmp/openclash.bak
 			if installed luci-app-openclash; then return 1; fi
 			;;
+		podkop)
+			/etc/init.d/podkop stop >/dev/null 2>&1 || true
+			/etc/init.d/podkop disable >/dev/null 2>&1 || true
+			/etc/init.d/zapret stop >/dev/null 2>&1 || true
+			/etc/init.d/zapret disable >/dev/null 2>&1 || true
+			packages=''
+			for package in $PODKOP_REMOVE; do installed "$package" && packages="$packages $package"; done
+			[ -z "$packages" ] || apk del $packages >> "$LOG" 2>&1
+			rm -f /etc/config/podkop /etc/config/zapret
+			rm -rf /etc/sing-box /opt/zapret /tmp/sing-box /tmp/podkop
+			nft delete table inet PodkopTable >/dev/null 2>&1 || true
+			nft delete table inet zapret >/dev/null 2>&1 || true
+			if installed podkop || installed zapret; then return 1; fi
+			;;
 	esac
 	return 0
 }
@@ -277,10 +343,27 @@ install_openclash() {
 	[ -f /etc/config/openclash ] || return 1
 }
 
+install_podkop() {
+	apk add --allow-untrusted "$WORK"/podkop/*.apk >> "$LOG" 2>&1 || return 1
+	[ -x /etc/init.d/podkop ] && [ -x /etc/init.d/zapret ] && command -v sing-box >/dev/null 2>&1 || return 1
+	[ "$(apk list --installed podkop 2>/dev/null | sed -n 's/^podkop-\([^ ]*\).*/\1/p')" = "$PODKOP_VERSION" ] || return 1
+	[ "$(apk list --installed zapret 2>/dev/null | sed -n 's/^zapret-\([^ ]*\).*/\1/p')" = "$ZAPRET_VERSION" ] || return 1
+	if [ -f "$STATE/podkop/podkop-config.tar.gz" ]; then
+		tar -xzf "$STATE/podkop/podkop-config.tar.gz" -C /
+	fi
+	[ -f /etc/config/podkop ] && [ -f /opt/zapret/config ] || return 1
+	chmod 600 /etc/config/podkop /opt/zapret/config
+	/etc/init.d/podkop stop >/dev/null 2>&1 || true
+	/etc/init.d/podkop disable >/dev/null 2>&1 || true
+	/etc/init.d/zapret stop >/dev/null 2>&1 || true
+	/etc/init.d/zapret disable >/dev/null 2>&1 || true
+}
+
 install_engine() {
 	case "$1" in
 		passwall) install_passwall ;;
 		openclash) install_openclash ;;
+		podkop) install_podkop ;;
 		*) return 1 ;;
 	esac
 }
@@ -292,6 +375,7 @@ wait_ready() {
 		case "$engine" in
 			passwall) pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1 && return 0 ;;
 			openclash) pidof clash >/dev/null 2>&1 && nft list chain inet fw4 openclash >/dev/null 2>&1 && return 0 ;;
+			podkop) pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1 && return 0 ;;
 		esac
 		sleep 1
 		waited=$((waited + 1))
@@ -307,6 +391,10 @@ activate_engine() {
 		/etc/init.d/$engine enable >/dev/null 2>&1 || true
 		/etc/init.d/$engine restart >> "$LOG" 2>&1 || return 1
 		wait_ready "$engine" || return 1
+		if [ "$engine" = podkop ] && [ "$(cat "$STATE/podkop/zapret-enabled" 2>/dev/null || echo 0)" = 1 ]; then
+			/etc/init.d/zapret enable >/dev/null 2>&1 || true
+			/etc/init.d/zapret restart >> "$LOG" 2>&1 || return 1
+		fi
 	else
 		case "$engine" in
 			passwall) uci -q set passwall.@global[0].enabled=0; uci -q commit passwall ;;
@@ -314,6 +402,10 @@ activate_engine() {
 		esac
 		/etc/init.d/$engine stop >/dev/null 2>&1 || true
 		/etc/init.d/$engine disable >/dev/null 2>&1 || true
+		if [ "$engine" = podkop ]; then
+			/etc/init.d/zapret stop >/dev/null 2>&1 || true
+			/etc/init.d/zapret disable >/dev/null 2>&1 || true
+		fi
 	fi
 }
 
@@ -322,9 +414,9 @@ rollback() {
 	log "rolling back to $CURRENT"
 	/etc/init.d/$TARGET stop >/dev/null 2>&1 || true
 	if [ "$CURRENT" != none ] && [ "$CURRENT_REMOVED" = 1 ]; then
+		remove_engine "$TARGET" || log 'could not fully remove failed target engine'
 		if install_engine "$CURRENT"; then
 			restore_metadata "$CURRENT"
-			remove_engine "$TARGET" || log 'could not fully remove failed target engine'
 			activate_engine "$CURRENT" || log 'could not restart previous engine'
 		else
 			log 'could not reinstall previous engine'
@@ -353,7 +445,7 @@ prepare_assets() {
 }
 
 preflight_engine() {
-	case "$TARGET" in passwall|openclash) ;; *) die 'Неизвестный VPN-движок.' ;; esac
+	case "$TARGET" in passwall|openclash|podkop) ;; *) die 'Неизвестный VPN-движок.' ;; esac
 	: > "$LOG"
 	rm -f "$ERROR_FILE"
 	check_platform
@@ -365,7 +457,7 @@ preflight_engine() {
 }
 
 switch_engine() {
-	case "$TARGET" in passwall|openclash) ;; *) die 'Неизвестный VPN-движок.' ;; esac
+	case "$TARGET" in passwall|openclash|podkop) ;; *) die 'Неизвестный VPN-движок.' ;; esac
 	check_platform
 	CURRENT="$(current_engine)"
 	[ "$CURRENT" != "$TARGET" ] || die 'Выбранный VPN-движок уже установлен.'
@@ -384,14 +476,14 @@ switch_engine() {
 		save_engine "$CURRENT" || die 'Не удалось сохранить конфигурацию текущего движка.'
 	fi
 	MUTATED=1
-	update_status installing 'Устанавливаем новый движок, пока текущий продолжает работать…'
+	update_status replacing 'Останавливаем и удаляем исполняемые пакеты прежнего движка…'
+	CURRENT_REMOVED=1
+	remove_engine "$CURRENT" || die 'Не удалось безопасно удалить прежний движок; запускаем автоматический возврат.'
+	update_status installing 'Устанавливаем новый движок из проверенного комплекта…'
 	install_engine "$TARGET" || die 'Новый движок не установился; запускаем автоматический возврат.'
 	TARGET_INSTALLED=1
 	/etc/init.d/$TARGET stop >/dev/null 2>&1 || true
 	/etc/init.d/$TARGET disable >/dev/null 2>&1 || true
-	update_status replacing 'Останавливаем и удаляем исполняемые пакеты прежнего движка…'
-	CURRENT_REMOVED=1
-	remove_engine "$CURRENT" || die 'Не удалось безопасно удалить прежний движок; запускаем автоматический возврат.'
 	update_status verifying 'Проверяем установленный движок и восстанавливаем его конфигурацию…'
 	restore_metadata "$TARGET"
 	activate_engine "$TARGET" || die 'Новый движок не прошёл проверку; запускаем автоматический возврат.'

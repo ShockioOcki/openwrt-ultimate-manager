@@ -199,8 +199,8 @@ Only one routing engine remains installed after a transition. The engine
 manager first updates the OpenWrt package index, downloads and SHA-256 verifies
 both the target package set and the set required for rollback, and simulates
 dependency resolution. It then stores the current engine's configuration under
-mode-0700 `/etc/oum/engines`, stages the target while the current service is
-still available, stops both, removes the old engine and restores the target's
+mode-0700 `/etc/oum/engines`, stops and removes the old runtime to avoid an
+unsafe flash-space overlap, installs the verified target and restores its
 saved configuration. An installation or readiness failure reinstalls and
 restarts the previous engine before temporary assets are removed. A fresh
 engine intentionally remains disabled until the user supplies a compatible
@@ -213,8 +213,10 @@ Development routers receive it in `/etc/oum/packages/passwall`; every asset is
 checked against the compiled SHA-256 manifest before use, so no personal GitHub
 token is stored on the router.
 Other engines use a checksum-verified controlled release manifest rather than
-sharing PassWall's product version pin. Podkop + Zapret remains unavailable in
-the selector until its separate adapter and rollback tests are complete.
+sharing PassWall's product version pin. Podkop + Zapret uses Podkop 0.7.22 and
+Zapret 72.20260307 on the tested OpenWrt 25.12 aarch64 target. Podkop binds to
+an independent AWG/WireGuard interface, routes `Russia inside` through it and
+adds a higher-priority `YouTube` exclusion for direct Zapret processing.
 
 ## Settings and recovery
 
@@ -230,7 +232,8 @@ restore that one-step snapshot from the same page. Wi-Fi is always normalized
 to country `US`, WPA2/WPA3 mixed mode and enabled AP interfaces.
 
 OUM backups use an allowlisted, engine-tagged archive containing the required
-UCI configs, the active OpenClash profile or PassWall configuration, custom
+UCI configs, the active OpenClash profile, PassWall configuration or Podkop and
+Zapret configuration, custom
 routing rules and non-secret state markers.
 Restore requires the same VPN engine to be installed and rejects a different
 board, links, unexpected paths, oversized expanded
