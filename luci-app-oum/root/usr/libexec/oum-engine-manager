@@ -39,6 +39,7 @@ MUTATED=0
 SUCCESS=0
 TARGET_INSTALLED=0
 CURRENT_REMOVED=0
+OUM_RUNTIME='curl ruby ruby-yaml'
 
 update_status() {
 	[ -n "$STATUS" ] || return 0
@@ -62,6 +63,17 @@ die() {
 
 installed() {
 	apk info -e "$1" >/dev/null 2>&1
+}
+
+ensure_oum_runtime() {
+	# Development installs are copied directly to the router and therefore do
+	# not have an apk package keeping these dependencies in /etc/apk/world.
+	# Pin them explicitly before removing an engine, otherwise apk may remove
+	# Ruby/YAML as now-unused transitive OpenClash dependencies and break OUM.
+	apk add $OUM_RUNTIME >> "$LOG" 2>&1 || return 1
+	command -v curl >/dev/null 2>&1 || return 1
+	command -v ruby >/dev/null 2>&1 || return 1
+	ruby -ryaml -e 'YAML.safe_load("oum: true") or exit 1' >> "$LOG" 2>&1
 }
 
 current_engine() {
@@ -362,6 +374,8 @@ switch_engine() {
 	rm -rf "$WORK"
 	mkdir -p "$WORK" "$STATE"
 	prepare_assets "$TARGET"
+	update_status runtime 'Закрепляем системные компоненты OUM…'
+	ensure_oum_runtime || die 'Не удалось закрепить системные компоненты OUM; переключение отменено.'
 	if [ "$CURRENT" != none ]; then
 		update_status rollback_assets 'Готовим проверенный комплект для автоматического возврата…'
 		download_engine "$CURRENT" || die 'Не удалось подготовить комплект автоматического возврата.'

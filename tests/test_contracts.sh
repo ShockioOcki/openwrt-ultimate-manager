@@ -14,6 +14,8 @@ grep -Fq 'passwall)' "$BACKUP"
 grep -Fq 'passwall-before-vpn-reset' "$RESET"
 grep -Fq 'PACKAGE_CACHE=/etc/oum/packages' "$ENGINE"
 grep -Fq 'stage_asset passwall' "$ENGINE"
+grep -Fq "OUM_RUNTIME='curl ruby ruby-yaml'" "$ENGINE"
+grep -Fq 'ensure_oum_runtime || die' "$ENGINE"
 grep -Fq 'unmanaged_tunnels' "$RPC"
 grep -Fq "length(args.admin_password) < 6" "$RPC"
 

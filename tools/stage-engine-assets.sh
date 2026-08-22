@@ -23,10 +23,21 @@ microsocks-1.0.5-r2.apk|e1681f48ab5a5cafdf942a35d2b1f5cfaa95c7b5dbf65cec27ab5ab4
 tcping-0.3-r1.apk|04429d4e95e7f64805fe087ead5ca1240516a5cc8ebd99203f274d0bda9e7779
 xray-core-26.5.9-r1.apk|db938702aeb73468853f0517fa63b8a67a2b88e9ba2aa7322f1cc1e936a1570c'
 
-SSH_ARGS='-o BatchMode=yes -o StrictHostKeyChecking=accept-new'
-if [ -n "$KEY" ]; then
-	SSH_ARGS="$SSH_ARGS -i $KEY"
-fi
+router_ssh() {
+	if [ -n "$KEY" ]; then
+		ssh -i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$@"
+	else
+		ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$@"
+	fi
+}
+
+router_scp() {
+	if [ -n "$KEY" ]; then
+		scp -O -i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$@"
+	else
+		scp -O -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$@"
+	fi
+}
 
 old_ifs="$IFS"
 IFS='
@@ -41,19 +52,16 @@ for entry in $ASSETS; do
 done
 IFS="$old_ifs"
 
-# shellcheck disable=SC2086
-ssh $SSH_ARGS "$ROUTER" 'mkdir -p /etc/oum/packages/passwall && chmod 700 /etc/oum /etc/oum/packages /etc/oum/packages/passwall'
+router_ssh "$ROUTER" 'mkdir -p /etc/oum/packages/passwall && chmod 700 /etc/oum /etc/oum/packages /etc/oum/packages/passwall'
 
 IFS='
 '
 for entry in $ASSETS; do
 	file="${entry%%|*}"
 	# Legacy SCP mode works with OpenWrt Dropbear without sftp-server.
-	# shellcheck disable=SC2086
-	scp -O $SSH_ARGS "$SOURCE_DIR/$file" "$ROUTER:/etc/oum/packages/passwall/$file"
+	router_scp "$SOURCE_DIR/$file" "$ROUTER:/etc/oum/packages/passwall/$file"
 done
 IFS="$old_ifs"
 
-# shellcheck disable=SC2086
-ssh $SSH_ARGS "$ROUTER" 'chmod 600 /etc/oum/packages/passwall/*.apk; /usr/libexec/oum-engine-manager preflight passwall'
+router_ssh "$ROUTER" 'chmod 600 /etc/oum/packages/passwall/*.apk; /usr/libexec/oum-engine-manager preflight passwall'
 echo 'PassWall assets staged and verified.'
