@@ -99,7 +99,7 @@ return view.extend({
 				.oum-dashboard{max-width:1050px;margin:0 auto}.oum-page-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-page-head h2{margin:0}.oum-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
 				.oum-card,.oum-panel{border:1px solid #ccd3dc;border-radius:12px;padding:16px}.oum-card small{display:block;opacity:.7;margin-bottom:8px}.oum-card strong{font-size:1.1rem}.oum-vpn-card-row{display:flex;align-items:center;justify-content:space-between;gap:8px}.oum-vpn-card-row button{padding:4px 9px}.oum-card-message{font-size:.82em;margin-top:7px;min-height:1.2em}
 				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:#c0392b}
-				.oum-muted{opacity:.68}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
+				.oum-muted{opacity:.68}.oum-warning{padding:12px 14px;border:1px solid #e4b04d;background:#fff4df;border-radius:10px;margin-top:14px;line-height:1.45}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
 				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:#eef4fa;margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}.oum-node-quick,.oum-node-all-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 				.oum-node-actions,.oum-subscription-head{display:flex;align-items:center;gap:8px}.oum-subscription{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #d8dde5}.oum-subscription-head{justify-content:space-between}.oum-subscription-head h3{margin:0}.oum-subscription-progress{height:9px;border-radius:999px;background:#dce3ea;overflow:hidden;margin:13px 0 8px}.oum-subscription-progress>span{display:block;height:100%;background:#32b67a;transition:width .3s}.oum-subscription-data{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}.oum-subscription-status{margin-top:7px;font-size:.85em}
 				.oum-node{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-node>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-delay{min-width:70px;text-align:right}
@@ -112,6 +112,7 @@ return view.extend({
 				E('h2', {}, 'OUM'),
 				E('a', { 'class': 'btn cbi-button', href: L.url('oum', 'logout') }, 'Выйти')
 			]),
+			E('div', { 'class': 'oum-warning', id: 'unmanaged-tunnel-warning', hidden: '' }),
 			E('div', { 'class': 'oum-cards' }, [
 				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
 				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, '') ]),
@@ -251,6 +252,11 @@ return view.extend({
 
 		const updateDashboard = (fresh) => {
 			vpnEngine = fresh.vpn_engine || 'openclash';
+			const tunnelWarning = root.querySelector('#unmanaged-tunnel-warning');
+			const unmanaged = fresh.unmanaged_tunnels || [];
+			tunnelWarning.hidden = unmanaged.length === 0;
+			tunnelWarning.textContent = unmanaged.length ?
+				`Найдены сетевые туннели вне OUM: ${unmanaged.map((item) => `${item.name} (${item.up ? 'поднят' : 'выключен'})`).join(', ')}. Их маршруты могут конфликтовать с выбранным VPN-движком.` : '';
 			root.querySelector('#wan-state').textContent = fresh.wan?.up ? 'Подключён' : 'Нет соединения';
 			root.querySelector('#wan-detail').textContent = fresh.wan?.ipv4 ? `${fresh.wan.ipv4} · ${String(fresh.wan.proto || '').toUpperCase()}` : String(fresh.wan?.proto || '').toUpperCase();
 			root.querySelector('#client-count').textContent = String(fresh.clients?.length || 0);
@@ -260,9 +266,10 @@ return view.extend({
 			root.querySelector('#active-source').textContent = sourceNames[vpnEngine === 'passwall' ? 'passwall' : fresh.active_source] || fresh.active_source;
 			vpnEnabled = fresh.vpn_enabled === true;
 			vpnToggle.textContent = vpnEnabled ? 'Отключить' : 'Включить';
-			vpnToggle.disabled = (vpnEngine !== 'passwall' && fresh.active_source === 'none') || (vpnEnabled && fresh.vpn_ready !== true);
+			// A broken or half-started VPN must always remain possible to disable.
+			vpnToggle.disabled = !vpnEnabled && vpnEngine !== 'passwall' && fresh.active_source === 'none';
 			vpnControlMessage.textContent = !vpnEnabled ? 'VPN выключен' :
-				(fresh.vpn_ready === true ? 'VPN работает' : 'VPN запускается…');
+				(fresh.vpn_ready === true ? 'VPN работает' : 'VPN запускается или требует внимания');
 			updateSubscription(fresh);
 			const body = root.querySelector('#client-list');
 			body.replaceChildren(...(fresh.clients || []).map((client) => E('tr', {}, [

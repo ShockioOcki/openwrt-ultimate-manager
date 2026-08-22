@@ -139,6 +139,14 @@ uci -q commit dhcp
 uci -q commit oum
 /etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
 
+# Updating an intentionally disabled PassWall instance does not require Xray
+# readiness. Persist the cleaned policy and keep the service stopped.
+if [ "$(uci -q get passwall.@global[0].enabled || echo 0)" != 1 ]; then
+	/etc/init.d/passwall stop >/dev/null 2>&1 || true
+	rm -f "$PASSWALL_BACKUP" "$DHCP_BACKUP" "$OUM_BACKUP"
+	exit 0
+fi
+
 if /etc/init.d/passwall restart >"$PASSWALL_LOG" 2>&1; then
 	attempt=0
 	while [ "$attempt" -lt 45 ]; do

@@ -103,6 +103,7 @@ return view.extend({
 		const wifi = settings.wifi || {};
 		const wan = settings.wan || {};
 		const engines = settings.engines || { current: 'none', supported: false, passwall: {}, openclash: {} };
+		const unmanagedTunnels = settings.unmanaged_tunnels || [];
 		const engineTitle = engines.current === 'passwall' ? 'PassWall' : (engines.current === 'openclash' ? 'OpenClash' : 'не установлен');
 		const sourceSupported = engines.current === 'openclash';
 		const capabilities = settings.capabilities || {};
@@ -120,7 +121,7 @@ return view.extend({
 				.oum-maintenance{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.oum-maintenance-card{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
 				.oum-capability-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-capability{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-capability h4{margin:0 0 8px}.oum-capability-state{line-height:1.45}
 				.oum-engine-current{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px;border-radius:9px;background:#eef4fa;margin-bottom:14px}.oum-engine-current small{opacity:.7}.oum-engine-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-engine-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-engine-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-engine-choice span{display:flex;flex-direction:column;gap:5px}.oum-engine-choice small{opacity:.72;line-height:1.4}.oum-engine-choice.is-disabled{opacity:.55;cursor:not-allowed}.oum-engine-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
-				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:14px}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}
+				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:14px}.oum-inline-warning{padding:11px 13px;border:1px solid #e4b04d;background:#fff4df;border-radius:9px;margin:12px 0;line-height:1.45}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}
 				.oum-vpn-input{margin:18px 0}.oum-vpn-input label{display:block;font-weight:600;margin-bottom:7px}.oum-vpn-input input,.oum-vpn-input textarea{width:100%;box-sizing:border-box}.oum-vpn-input textarea{min-height:180px;font-family:monospace}.oum-vpn-job{padding:12px;border-radius:8px;background:#eef4fa;margin:14px 0}.oum-vpn-job[data-state="failed"]{background:#ffe9e7}.oum-vpn-job[data-state="success"]{background:#e6f7eb}
 				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid,.oum-engine-choices{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
 			`),
@@ -189,12 +190,14 @@ return view.extend({
 						E('span', {}, [ E('small', {}, 'Сейчас установлен'), E('br'), E('strong', {}, engineTitle) ]),
 						E('span', { 'class': 'oum-help' }, engines.current === 'passwall' ? (engines.passwall.version || '') : (engines.openclash.version || ''))
 					]),
+					E('div', { 'class': 'oum-inline-warning', hidden: unmanagedTunnels.length ? null : '' }, unmanagedTunnels.length ?
+						`Найдены туннели вне OUM: ${unmanagedTunnels.map((item) => item.name).join(', ')}. Перед включением другого движка проверьте их маршруты.` : ''),
 					E('div', { 'class': 'oum-engine-choices' }, [
 						engineChoice('openclash', 'OpenClash', `Управляемый выпуск ${engines.openclash.target_version || ''}. Удобен для подписок, AWG и Proxy.`, engines.current === 'openclash', false),
 						engineChoice('passwall', 'PassWall', `Закреплённая версия ${engines.passwall.target_version || '26.5.11-r1'}. Тонкая маршрутизация через Xray.`, engines.current === 'passwall', false),
 						engineChoice('podkop', 'Podkop + Zapret', 'Появится после отдельного тестирования на основном роутере.', false, true)
 					]),
-					E('p', { 'class': 'oum-help' }, 'Перед заменой OUM загружает оба комплекта, проверяет контрольные суммы и зависимости, сохраняет конфигурацию и только затем удаляет старые пакеты. При ошибке выполняется автоматический возврат.'),
+					E('p', { 'class': 'oum-help' }, `Перед заменой OUM проверяет полный комплект, сохраняет конфигурацию и только затем удаляет старые пакеты. При ошибке выполняется автоматический возврат.${engines.passwall.cache_ready ? ' Локальный комплект PassWall готов.' : ' Для приватной разработки комплект PassWall должен быть заранее загружен на роутер.'}`),
 					E('div', { 'class': 'oum-engine-actions' }, [
 						E('button', { 'class': 'btn cbi-button-action', id: 'switch-engine', 'data-system-action': '', disabled: engines.supported ? null : '' }, 'Заменить движок'),
 						E('span', { 'class': 'oum-help' }, engines.supported ? 'Сохранённая конфигурация выбранного движка восстановится автоматически.' : 'Для этой платформы ещё нет проверенного пакета переключения.')
@@ -227,7 +230,7 @@ return view.extend({
 				E('div', { 'class': 'oum-maintenance' }, [
 					E('div', { 'class': 'oum-maintenance-card' }, [
 						E('h4', {}, 'Резервная копия'),
-						E('p', { 'class': 'oum-help' }, 'Сохраняет сеть, Wi-Fi, OUM, OpenClash и активный VPN-профиль. Файл содержит секреты и не зашифрован.'),
+					E('p', { 'class': 'oum-help' }, `Сохраняет сеть, Wi-Fi, OUM и конфигурацию текущего движка ${engineTitle}. Файл содержит секреты и не зашифрован.`),
 						E('button', { 'class': 'btn cbi-button', id: 'create-backup', 'data-system-action': '' }, 'Скачать копию')
 					]),
 					E('div', { 'class': 'oum-maintenance-card' }, [
@@ -379,7 +382,10 @@ return view.extend({
 			start(file.text().then((content) => callRestoreBackup(content.trim())));
 		});
 		root.querySelector('#reset-vpn').addEventListener('click', async () => {
-			if (await confirmation('Сбросить VPN?', 'OpenClash будет остановлен, а активный OUM-профиль и правила устройств удалены. Wi-Fi и интернет останутся настроенными.', 'Сбросить VPN', true)) start(callResetVpn());
+			const text = engines.current === 'passwall' ?
+				'PassWall будет остановлен, правила устройств OUM удалены, а конфигурация нод сохранена в защищённом снимке. Wi-Fi и WAN не изменятся.' :
+				'OpenClash будет остановлен, а активный OUM-профиль и правила устройств удалены. Wi-Fi и WAN не изменятся.';
+			if (await confirmation('Сбросить VPN?', text, 'Сбросить VPN', true)) start(callResetVpn());
 		});
 		root.querySelector('#reset-all').addEventListener('click', async () => {
 			if (await confirmation('Вернуть первый запуск?', 'VPN будет удалён, появится временная сеть FirstRun и потребуется войти как admin/admin. Текущий LAN-адрес не меняется.', 'Вернуть мастер', true)) start(callResetFirstRun());

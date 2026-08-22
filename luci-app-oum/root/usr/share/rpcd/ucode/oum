@@ -7,6 +7,7 @@ import { connect } from 'ubus';
 const CONFIGS = [ 'network', 'wireless', 'rpcd', 'oum' ];
 const BACKUP_DIR = '/tmp/oum-setup-backup';
 const VPN_JOB_DIR = '/tmp/oum-vpn-job';
+const VPN_JOB_LOCK = '/tmp/oum-vpn-job.lock';
 const SUBSCRIPTION_CACHE = '/tmp/oum-subscription-info.json';
 const SYSTEM_JOB_DIR = '/tmp/oum-system-job';
 const SYSTEM_JOB_LOCK = '/tmp/oum-system-job.lock';
@@ -42,6 +43,8 @@ function vpnJobStatus() {
 		if (pair)
 			result[pair[1]] = pair[2];
 	}
+	if (result.state == 'running' && !access(VPN_JOB_LOCK))
+		return { state: 'failed', code: 'interrupted', message: 'Предыдущий импорт был прерван. Его можно запустить заново.' };
 	return result;
 }
 
@@ -68,6 +71,7 @@ function systemJobStatus() {
 
 function configurationBusy() {
 	return access(SYSTEM_JOB_LOCK) ||
+		access(VPN_JOB_LOCK) ||
 		access('/tmp/oum-device-policy.lock') || access('/tmp/oum-passwall-nodes.lock') ||
 		access('/tmp/oum-passwall-nodes.start') ||
 		vpnJobStatus().state == 'running';
@@ -167,6 +171,20 @@ function wifiStatus(uci) {
 	return networks;
 }
 
+function unmanagedTunnels(uci) {
+	let result = [];
+	let bus = connect();
+	uci.foreach('network', 'interface', (section) => {
+		let proto = section.proto ?? '';
+		let name = section['.name'] ?? '';
+		if (!(proto in [ 'amneziawg', 'wireguard' ]) || !match(name, /^[A-Za-z0-9_]+$/))
+			return;
+		let state = bus?.call(`network.interface.${name}`, 'status') ?? {};
+		push(result, { name, proto, up: state.up == true });
+	});
+	return result;
+}
+
 function networkStatus() {
 	let result = { up: false, ipv4: '', device: '', proto: '' };
 	let bus = connect();
@@ -206,6 +224,18 @@ function packageVersion(name) {
 	return replace(value, `${name}-`, '');
 }
 
+function passwallCachePresent() {
+	let files = [
+		'chinadns-ng-2025.08.09-r1.apk', 'dns2socks-2.1-r2.apk', 'geoview-0.2.6-r1.apk',
+		'haproxy-3.2.15-r1.apk', 'ipt2socks-1.1.4-r3.apk', 'luci-app-passwall-26.5.11-r1.apk',
+		'microsocks-1.0.5-r2.apk', 'tcping-0.3-r1.apk', 'xray-core-26.5.9-r1.apk'
+	];
+	for (let file in files)
+		if (!access(`/etc/oum/packages/passwall/${file}`))
+			return false;
+	return true;
+}
+
 function engineStatusData() {
 	let passwall = passwallInstalled();
 	let openclash = access('/etc/init.d/openclash') && access('/etc/config/openclash');
@@ -219,6 +249,7 @@ function engineStatusData() {
 			installed: passwall ? true : false,
 			version: packageVersion('luci-app-passwall'),
 			target_version: '26.5.11-r1',
+			cache_ready: passwallCachePresent(),
 			saved: access('/etc/oum/engines/passwall/passwall') ? true : false
 		},
 		openclash: {
@@ -261,6 +292,7 @@ function settingsStatusData() {
 		},
 		wan,
 		engines: engineStatusData(),
+		unmanaged_tunnels: unmanagedTunnels(uci),
 		capabilities: capabilityStatus(),
 		rollback_wifi: access('/etc/oum/rollback/wireless') ? true : false,
 		rollback_wan: access('/etc/oum/rollback/network') ? true : false
@@ -505,8 +537,8 @@ function validate(args) {
 	if (type(args.wifi_password) != 'string' || length(args.wifi_password) < 8 || length(args.wifi_password) > 63)
 		return failure('invalid_wifi_password', 'Пароль Wi-Fi должен содержать от 8 до 63 символов.');
 
-	if (type(args.admin_password) != 'string' || length(args.admin_password) < 8)
-		return failure('invalid_admin_password', 'Новый пароль панели должен содержать минимум 8 символов.');
+	if (type(args.admin_password) != 'string' || length(args.admin_password) < 6)
+		return failure('invalid_admin_password', 'Новый пароль панели должен содержать минимум 6 символов.');
 
 	if (!(args.vpn_type in [ 'none', 'subscription', 'awg', 'proxy' ]))
 		return failure('invalid_vpn', 'Неизвестный тип VPN.');
@@ -769,6 +801,7 @@ const methods = {
 				vpn_ready: vpnReady(),
 				policy_applying: access('/tmp/oum-device-policy.lock') ? true : false,
 				passwall,
+				unmanaged_tunnels: unmanagedTunnels(uci),
 				subscription: engine == 'openclash' ? subscriptionStatusData(false) : { available: false, refreshing: false }
 			};
 		}
@@ -958,14 +991,24 @@ const methods = {
 			let current = vpnJobStatus();
 			if (current.state == 'running')
 				return failure('job_running', 'Импорт уже выполняется.');
-			if (system(`rm -rf ${VPN_JOB_DIR} && mkdir -p ${VPN_JOB_DIR} && chmod 700 ${VPN_JOB_DIR}`) != 0)
+			if (system(`mkdir ${VPN_JOB_LOCK}`) != 0)
+				return failure('job_running', 'Другой импорт уже выполняется.');
+			if (system(`rm -rf ${VPN_JOB_DIR} && mkdir -p ${VPN_JOB_DIR} && chmod 700 ${VPN_JOB_DIR}`) != 0) {
+				system(`rmdir ${VPN_JOB_LOCK}`);
 				return failure('job_directory', 'Не удалось подготовить временное хранилище.');
-			if (!writePrivate(`${VPN_JOB_DIR}/input`, payload))
+			}
+			if (!writePrivate(`${VPN_JOB_DIR}/input`, payload)) {
+				system(`rmdir ${VPN_JOB_LOCK}`);
 				return failure('input_write', 'Не удалось сохранить временный ввод.');
-			if (!writePrivate(`${VPN_JOB_DIR}/status`, 'state=running\ncode=queued\nmessage=Задание поставлено в очередь\n'))
+			}
+			if (!writePrivate(`${VPN_JOB_DIR}/status`, 'state=running\ncode=queued\nmessage=Задание поставлено в очередь\n')) {
+				system(`rmdir ${VPN_JOB_LOCK}`);
 				return failure('status_write', 'Не удалось создать состояние задания.');
-			if (system(`(/usr/libexec/oum-source-job ${kind} ${VPN_JOB_DIR}/input) >/dev/null 2>&1 &`) != 0)
+			}
+			if (system(`(/usr/libexec/oum-source-job ${kind} ${VPN_JOB_DIR}/input) >/dev/null 2>&1 &`) != 0) {
+				system(`rmdir ${VPN_JOB_LOCK}`);
 				return failure('job_start', 'Не удалось запустить импорт.');
+			}
 			return { ok: true, state: 'running' };
 		}
 	},

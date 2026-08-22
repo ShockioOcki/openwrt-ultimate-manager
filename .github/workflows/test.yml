@@ -11,7 +11,7 @@ jobs:
   syntax-and-converters:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"
@@ -23,5 +23,9 @@ jobs:
         run: ruby ./tests/test_policy_yaml.rb
       - name: Subscription metadata
         run: ./tests/test_subscription_info.sh
-      - name: Speed-test YAML
-        run: ruby ./tests/test_speedtest_yaml.rb
+      - name: Login routing
+        run: ./tests/test_login_default.sh
+      - name: OUM integration contracts
+        run: ./tests/test_contracts.sh
+      - name: Backup codec
+        run: ruby ./tests/test_backup_codec.rb

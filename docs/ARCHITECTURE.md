@@ -73,6 +73,9 @@ restores the previous YAML and OpenClash UCI state.
 The subscription URL is registered as OpenClash `subscribe_info` metadata so
 the Config File page can display traffic use and expiry without letting
 OpenClash overwrite OUM's routing policy.
+Both URI-list subscriptions and Clash YAML documents with embedded proxies are
+accepted. Provider YAML uses `safe_load`; arbitrary Ruby objects are never
+deserialized.
 
 ## Secret handling
 
@@ -118,7 +121,7 @@ the backup. Network, Wi-Fi and rpcd reload only after all commits succeed.
 Until setup is complete, `oum-firstboot` provides the temporary dual-band
 `FirstRun` network with WPA2/WPA3 mixed encryption, password `admin123` and
 country code `US`. The temporary panel login is `admin/admin`; the wizard
-requires replacing it with an eight-character-or-longer password before it can
+requires replacing it with a six-character-or-longer password before it can
 finish. The final Wi-Fi password is also at least eight characters because
 shorter keys are invalid for WPA2/WPA3 Personal.
 
@@ -149,11 +152,12 @@ zone readings. The browser refreshes these values every ten seconds. Client
 names come from DHCP leases; unknown names are displayed explicitly rather
 than guessed from MAC vendors.
 
-`oum-reset-first-run` is a test and recovery helper. It removes only
-OUM-managed OpenClash profiles and state, disables OpenClash, locks root
+`oum-reset-first-run` is a test and recovery helper. It clears OUM-managed
+profiles and device policies, disables the installed VPN engine, locks root
 password authentication and restores the temporary FirstRun network and
-restricted admin login. It does not factory-reset OpenWrt or change the LAN
-address.
+restricted admin login. A PassWall reset keeps a private one-step copy and does
+not destroy its imported nodes or shunt. It does not factory-reset OpenWrt or
+change the LAN address.
 
 Node selection uses Mihomo's loopback-only external-controller API. The
 read-only RPC exposes node names, types, current selection and delay history;
@@ -187,6 +191,10 @@ lists. Existing service addresses are never replaced. A policy change backs
 up PassWall, DHCP and OUM state, restarts PassWall, waits for Xray, its DNS
 instance and nftables, and restores the previous files if readiness fails.
 
+Native WireGuard and AmneziaWG interfaces configured outside OUM are reported
+on the dashboard and Settings page. OUM does not silently delete or adopt them,
+because their routes may be intentional.
+
 Only one routing engine remains installed after a transition. The engine
 manager first updates the OpenWrt package index, downloads and SHA-256 verifies
 both the target package set and the set required for rollback, and simulates
@@ -199,8 +207,11 @@ engine intentionally remains disabled until the user supplies a compatible
 source.
 
 PassWall and its compatible runtime dependencies use the pinned, tested
-26.5.11-r1 package set from the public OUM assets repository. The package
+26.5.11-r1 package set from the private OUM assets repository. The package
 release contains no configuration, nodes, subscription URLs or credentials.
+Development routers receive it in `/etc/oum/packages/passwall`; every asset is
+checked against the compiled SHA-256 manifest before use, so no personal GitHub
+token is stored on the router.
 Other engines use a checksum-verified controlled release manifest rather than
 sharing PassWall's product version pin. Podkop + Zapret remains unavailable in
 the selector until its separate adapter and rollback tests are complete.
@@ -209,8 +220,8 @@ the selector until its separate adapter and rollback tests are complete.
 
 The restricted `/oum/settings` page uses dedicated RPC methods rather than
 generic UCI access. Wi-Fi, WAN, restore and reset requests share one atomic
-system-job lock and are mutually exclusive with VPN import, device-policy
-updates and speed tests. Password fields are write-only: status responses show
+system-job lock and are mutually exclusive with VPN import and device-policy
+updates. Password fields are write-only: status responses show
 only whether a secret exists, and an empty field preserves the current value.
 
 Wi-Fi and WAN changes save the immediately preceding UCI file under
@@ -218,9 +229,11 @@ Wi-Fi and WAN changes save the immediately preceding UCI file under
 restore that one-step snapshot from the same page. Wi-Fi is always normalized
 to country `US`, WPA2/WPA3 mixed mode and enabled AP interfaces.
 
-OUM backups use an allowlisted archive containing the required UCI configs,
-the one active OUM profile, custom routing rules and non-secret state markers.
-Restore rejects a different board, links, unexpected paths, oversized expanded
+OUM backups use an allowlisted, engine-tagged archive containing the required
+UCI configs, the active OpenClash profile or PassWall configuration, custom
+routing rules and non-secret state markers.
+Restore requires the same VPN engine to be installed and rejects a different
+board, links, unexpected paths, oversized expanded
 content, invalid UCI and malformed YAML before writing `/etc`. Apply failures
 restore a private runtime snapshot. The downloaded `.oum` file is base64
 transport around a gzip archive, not encryption, so the UI warns that it must

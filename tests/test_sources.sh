@@ -36,6 +36,12 @@ ruby -ryaml -e '
   abort "subscription node filter failed" unless nodes.map { |node| node["name"] } == ["KEEP"]
 ' "$TMP/filtered.yaml"
 
+ruby "$ROOT/helpers/source_converter.rb" subscription "$ROOT/tests/fixtures/subscription-clash.yaml" "$TMP/clash-subscription.yaml"
+ruby -ryaml -e '
+  nodes = YAML.safe_load_file(ARGV[0], aliases: true).fetch("proxies")
+  abort "Clash YAML subscription import failed" unless nodes.map { |node| node["name"] } == ["KEEP-YAML"]
+' "$TMP/clash-subscription.yaml"
+
 ruby "$ROOT/helpers/source_converter.rb" uris "$ROOT/tests/fixtures/subscription-base64.txt" "$TMP/subscription.yaml"
 ruby -ryaml -e 'abort "base64 subscription failed" unless YAML.load_file(ARGV[0]).fetch("proxies").length == 2' "$TMP/subscription.yaml"
 

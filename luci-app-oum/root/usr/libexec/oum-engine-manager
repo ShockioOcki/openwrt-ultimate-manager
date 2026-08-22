@@ -7,6 +7,7 @@ ACTION="${1:-}"
 TARGET="${2:-}"
 WORK=/tmp/oum-engine-switch
 STATE=/etc/oum/engines
+PACKAGE_CACHE=/etc/oum/packages
 STATUS="${OUM_ENGINE_STATUS:-}"
 LOG=/tmp/oum-engine-switch.log
 ERROR_FILE=/tmp/oum-engine-error
@@ -95,6 +96,20 @@ fetch() {
 	[ "$actual" = "$expected" ]
 }
 
+stage_asset() {
+	engine="$1"
+	file="$2"
+	url="$3"
+	expected="$4"
+	destination="$5"
+	cached="$PACKAGE_CACHE/$engine/$file"
+	if [ -s "$cached" ] && [ "$(sha256sum "$cached" | awk '{print $1}')" = "$expected" ]; then
+		cp "$cached" "$destination"
+		return 0
+	fi
+	fetch "$url" "$destination" "$expected"
+}
+
 download_passwall() {
 	mkdir -p "$WORK/passwall"
 	old_ifs="$IFS"
@@ -103,7 +118,7 @@ download_passwall() {
 	for entry in $PASSWALL_ASSETS; do
 		file="${entry%%|*}"
 		sha="${entry#*|}"
-		fetch "$PASSWALL_RELEASE/$file" "$WORK/passwall/$file" "$sha" || {
+		stage_asset passwall "$file" "$PASSWALL_RELEASE/$file" "$sha" "$WORK/passwall/$file" || {
 			IFS="$old_ifs"
 			return 1
 		}
@@ -113,8 +128,8 @@ download_passwall() {
 
 download_openclash() {
 	mkdir -p "$WORK/openclash"
-	fetch "$OPENCLASH_URL" "$WORK/openclash/$OPENCLASH_APK" "$OPENCLASH_SHA" || return 1
-	fetch "$MIHOMO_URL" "$WORK/openclash/$MIHOMO_ARCHIVE" "$MIHOMO_SHA"
+	stage_asset openclash "$OPENCLASH_APK" "$OPENCLASH_URL" "$OPENCLASH_SHA" "$WORK/openclash/$OPENCLASH_APK" || return 1
+	stage_asset openclash "$MIHOMO_ARCHIVE" "$MIHOMO_URL" "$MIHOMO_SHA" "$WORK/openclash/$MIHOMO_ARCHIVE"
 }
 
 download_engine() {
@@ -163,7 +178,9 @@ save_engine() {
 		openclash)
 			mkdir -p "$tmp/files/etc/config" "$tmp/files/etc/openclash"
 			[ ! -f /etc/config/openclash ] || cp /etc/config/openclash "$tmp/files/etc/config/openclash"
-			for dir in config custom proxy_provider rule_provider; do
+			# Rule-provider downloads are reproducible caches and can be large.
+			# Preserve only user/OUM configuration needed to restore the engine.
+			for dir in config custom; do
 				[ ! -d "/etc/openclash/$dir" ] || cp -a "/etc/openclash/$dir" "$tmp/files/etc/openclash/$dir"
 			done
 			tar -czf "$tmp/openclash-config.tar.gz" -C "$tmp/files" .
@@ -237,6 +254,7 @@ install_passwall() {
 
 install_openclash() {
 	apk add --allow-untrusted "$WORK/openclash/$OPENCLASH_APK" >> "$LOG" 2>&1 || return 1
+	[ "$(apk list --installed luci-app-openclash 2>/dev/null | sed -n 's/^luci-app-openclash-\([^ ]*\).*/\1/p')" = "$OPENCLASH_VERSION" ] || return 1
 	mkdir -p /etc/openclash/core
 	gzip -dc "$WORK/openclash/$MIHOMO_ARCHIVE" > /etc/openclash/core/clash_meta || return 1
 	chmod 755 /etc/openclash/core/clash_meta
@@ -317,7 +335,7 @@ prepare_assets() {
 	update_status package_index 'Обновляем индекс системных зависимостей…'
 	apk update >> "$LOG" 2>&1 || die 'Не удалось обновить индекс пакетов OpenWrt.'
 	update_status downloading 'Загружаем и проверяем полный комплект нового движка…'
-	download_engine "$engine" || die 'Не удалось загрузить или проверить комплект нового движка.'
+	download_engine "$engine" || die 'Не удалось получить проверенный комплект движка. Для приватной сборки загрузите пакеты в /etc/oum/packages или проверьте доступ в интернет.'
 	update_status dependencies 'Проверяем совместимость системных зависимостей…'
 	simulate_engine "$engine" || die 'Системные зависимости нового движка недоступны или несовместимы.'
 }

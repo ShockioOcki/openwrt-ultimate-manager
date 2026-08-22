@@ -88,9 +88,9 @@ proxy credentials.
 
 The Settings page owns protected-source replacement as well as Smart/separate
 Wi-Fi credentials and switching WAN between DHCP and PPPoE. Each network
-change keeps a one-step local rollback. A model-bound OUM backup contains
-network, Wi-Fi, firewall,
-OpenClash, routing state and the active OUM profile; it is validated before a
+change keeps a one-step local rollback. A model-bound, engine-tagged OUM backup
+contains network, Wi-Fi, firewall, routing state and the current OpenClash or
+PassWall configuration; it is validated before a
 restore and deliberately downloaded as an unencrypted secret-bearing file.
 Maintenance actions can clear only the VPN layer or return to the FirstRun
 wizard without changing the LAN address.
@@ -100,13 +100,20 @@ previously used engine. It downloads and verifies the target package set and a
 rollback set before changing packages, stores only the small secret-bearing
 configuration archive locally, stages the new engine while the old one is
 still running, and restores the previous engine automatically if installation
-or readiness checks fail. PassWall 26.5.11-r1 packages are published without
-configuration or credentials in the public
-[`openwrt-ultimate-manager-assets`](https://github.com/ShockioOcki/openwrt-ultimate-manager-assets)
-repository. Source import remains disabled in PassWall mode until its native
+or readiness checks fail. PassWall 26.5.11-r1 packages are kept without
+configuration or credentials in the private `openwrt-ultimate-manager-assets`
+repository. Development routers use a checksum-verified local cache under
+`/etc/oum/packages`; no GitHub token is stored on the router. Source import
+remains disabled in PassWall mode until its native
 import adapter is complete; existing PassWall nodes and policies remain usable.
+
+Subscriptions may be base64/plain URI lists or Clash YAML documents containing
+an embedded `proxies` array. Provider YAML is loaded in safe mode before nodes
+are filtered and embedded into the single OUM profile.
 
 Development installation on a test router is handled by
 `tools/install-luci-dev.sh`. The installer deliberately does not activate the
 temporary `FirstRun` access point; run `/usr/libexec/oum-firstboot` separately
 after taking a backup and confirming that changing Wi-Fi is safe.
+For private PassWall development, stage the verified release APKs with
+`tools/stage-engine-assets.sh` before testing engine replacement.

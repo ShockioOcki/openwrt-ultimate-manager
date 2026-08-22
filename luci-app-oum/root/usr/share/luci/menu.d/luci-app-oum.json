@@ -14,7 +14,7 @@
 		"firstchild_ineligible": true,
 		"action": {
 			"type": "view",
-			"path": "oum/first-run"
+			"path": "oum/first-run-v2"
 		},
 		"depends": {
 			"acl": [ "luci-app-oum" ]
@@ -25,7 +25,7 @@
 		"order": 2,
 		"action": {
 			"type": "view",
-			"path": "oum/dashboard-v8"
+			"path": "oum/dashboard-v9"
 		},
 		"depends": {
 			"acl": [ "luci-app-oum" ],
@@ -37,7 +37,7 @@
 		"order": 3,
 		"action": {
 			"type": "view",
-			"path": "oum/settings-v2"
+			"path": "oum/settings-v3"
 		},
 		"depends": {
 			"acl": [ "luci-app-oum" ],

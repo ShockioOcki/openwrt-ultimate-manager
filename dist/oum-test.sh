@@ -1,6 +1,6 @@
 #!/bin/sh
 # Generated from modular sources. Do not edit dist/oum-test.sh directly.
-OUM_VERSION="9.0.0-test.4"
+OUM_VERSION="9.0.0-test.5"
 OUM_STATE_DIR="/etc/oum"
 OUM_BACKUP_DIR="/root/oum-backups"
 OUM_TMP_DIR="/tmp/oum.$$"
@@ -334,7 +334,7 @@ def load_yaml(path)
 end
 
 def load_yaml_text(text)
-  YAML.respond_to?(:unsafe_load) ? YAML.unsafe_load(text) : YAML.load(text)
+  YAML.safe_load(text, permitted_classes: [], permitted_symbols: [], aliases: true)
 end
 
 def write_yaml(value, path)
@@ -467,6 +467,21 @@ def convert_uri_list(input, filter_subscription: false)
   abort 'no supported nodes found' if nodes.empty?
   warn "INFO: filtered #{filtered} subscription nodes by name" if filtered.positive?
   {'proxies' => nodes}
+end
+
+def convert_subscription(input)
+  text = File.read(input)
+  begin
+    document = load_yaml_text(text)
+    if document.is_a?(Hash) && document['proxies'].is_a?(Array)
+      nodes = document['proxies'].select { |node| node.is_a?(Hash) && !excluded_subscription_name?(node['name']) }
+      abort 'Clash subscription contains no supported nodes after filtering' if nodes.empty?
+      return {'proxies' => nodes}
+    end
+  rescue Psych::Exception
+    # URI subscriptions are commonly plain text or base64 and are handled below.
+  end
+  convert_uri_list(input, filter_subscription: true)
 end
 
 def parse_ini(path)
@@ -638,7 +653,7 @@ when 'uris'
 when 'subscription'
   input, output = ARGV
   abort 'usage: subscription INPUT OUTPUT' unless input && output
-  write_yaml(convert_uri_list(input, filter_subscription: true), output)
+  write_yaml(convert_subscription(input), output)
 when 'standalone'
   output, provider_file, kind = ARGV
   abort 'usage: standalone OUTPUT PROVIDER_FILE KIND' unless output && provider_file && kind

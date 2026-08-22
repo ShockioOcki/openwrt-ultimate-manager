@@ -4,6 +4,7 @@ set -u
 umask 077
 
 JOB_DIR=/tmp/oum-vpn-job
+LOCK_DIR=/tmp/oum-vpn-job.lock
 STATUS_FILE="$JOB_DIR/status"
 RUNTIME=/usr/libexec/oum-runtime.sh
 CONVERTER=/usr/libexec/oum/source_converter.rb
@@ -26,9 +27,11 @@ kind="${1:-}"
 input="${2:-}"
 display_name='AWG_Node'
 
+[ -d "$LOCK_DIR" ] || exit 3
+
 case "$kind" in subscription|awg|proxy) ;; *) write_status failed invalid_type 'Неизвестный тип подключения'; exit 1 ;; esac
 [ "$input" = "$JOB_DIR/input" ] && [ -s "$input" ] || { write_status failed missing_input 'Данные подключения не найдены'; exit 1; }
-trap 'rm -f "$input"' EXIT INT TERM
+trap 'rm -f "$input"; rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
 [ -r "$RUNTIME" ] && [ -r "$CONVERTER" ] || { write_status failed runtime_missing 'Компоненты импорта OUM не установлены'; exit 1; }
 
 write_status running preparing 'Подготавливаем профиль'
@@ -38,7 +41,7 @@ export OUM_LIBRARY_MODE OUM_CONVERTER_PATH
 # shellcheck source=/dev/null
 . "$RUNTIME"
 oum_prepare_dirs
-trap 'oum_cleanup; rm -f "$input"' EXIT INT TERM
+trap 'oum_cleanup; rm -f "$input"; rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
 
 case "$kind" in
 	subscription)

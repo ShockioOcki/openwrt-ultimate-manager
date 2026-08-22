@@ -113,8 +113,8 @@ return view.extend({
 				E('h3', {}, '4. Защита панели'),
 				E('p', {}, 'Временный пароль admin больше использоваться не будет. Задайте новый пароль панели управления.'),
 				E('div', { 'class': 'oum-grid' }, [
-					E('div', { 'class': 'oum-field' }, [E('label', {}, 'Новый пароль admin'), E('input', { 'name': 'admin_password', 'type': 'password', 'minlength': 8, 'autocomplete': 'new-password' })]),
-					E('div', { 'class': 'oum-field' }, [E('label', {}, 'Повторите пароль'), E('input', { 'name': 'admin_password_confirm', 'type': 'password', 'minlength': 8, 'autocomplete': 'new-password' })])
+					E('div', { 'class': 'oum-field' }, [E('label', {}, 'Новый пароль admin'), E('input', { 'name': 'admin_password', 'type': 'password', 'minlength': 6, 'autocomplete': 'new-password' })]),
+					E('div', { 'class': 'oum-field' }, [E('label', {}, 'Повторите пароль'), E('input', { 'name': 'admin_password_confirm', 'type': 'password', 'minlength': 6, 'autocomplete': 'new-password' })])
 				]),
 				E('p', { 'class': 'oum-note' }, status.usb_present ? 'USB-накопитель обнаружен. Настройку NAS предложим после завершения базового мастера.' : 'USB-накопитель не обнаружен, поэтому шаг NAS сейчас пропущен.')
 			]),
@@ -146,7 +146,7 @@ return view.extend({
 			}
 			if (step === 3 && !selected('vpn_type')) return 'Выберите тип подключения или «Пропустить».';
 			if (step === 4) {
-				if (value('admin_password').length < 8) return 'Пароль панели должен содержать минимум 8 символов.';
+				if (value('admin_password').length < 6) return 'Пароль панели должен содержать минимум 6 символов.';
 				if (value('admin_password') !== value('admin_password_confirm')) return 'Пароли панели не совпадают.';
 			}
 			return null;

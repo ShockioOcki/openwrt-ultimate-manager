@@ -23,10 +23,15 @@ esac
 port="$(uci -q get openclash.config.cn_port || echo 9090)"
 secret="$(uci -q get openclash.config.dashboard_password || true)"
 case "$port" in ''|*[!0-9]*) exit 4 ;; esac
-case "$secret" in *[!A-Za-z0-9._-]*) exit 4 ;; esac
+[ "$port" -ge 1 ] && [ "$port" -le 65535 ] || exit 4
+[ "${#secret}" -le 256 ] || exit 4
+case "$secret" in *'
+'*|*''*) exit 4 ;; esac
+escaped_secret="$(printf '%s' "$secret" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 
 mkdir -p "$WORK_DIR"
 chmod 700 "$WORK_DIR"
+rm -f "$RESPONSE"
 {
 	printf 'silent\n'
 	printf 'show-error\n'
@@ -34,7 +39,7 @@ chmod 700 "$WORK_DIR"
 	printf 'connect-timeout = 2\n'
 	printf 'max-time = 12\n'
 	printf 'header = "Content-Type: application/json"\n'
-	printf 'header = "Authorization: Bearer %s"\n' "$secret"
+	printf 'header = "Authorization: Bearer %s"\n' "$escaped_secret"
 	printf 'output = "%s"\n' "$RESPONSE"
 } > "$CURL_CONFIG"
 chmod 600 "$CURL_CONFIG"
