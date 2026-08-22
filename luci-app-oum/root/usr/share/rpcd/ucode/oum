@@ -171,6 +171,10 @@ function wifiStatus(uci) {
 	return networks;
 }
 
+function podkopInstalled() {
+	return access('/etc/init.d/podkop') && access('/etc/config/podkop') && access('/etc/init.d/zapret');
+}
+
 function unmanagedTunnels(uci) {
 	let result = [];
 	let bus = connect();
@@ -215,10 +219,6 @@ function capabilityStatus() {
 
 function passwallInstalled() {
 	return access('/etc/init.d/passwall') && access('/etc/config/passwall');
-}
-
-function podkopInstalled() {
-	return access('/etc/init.d/podkop') && access('/etc/config/podkop') && access('/etc/init.d/zapret');
 }
 
 function packageVersion(name) {
