@@ -1,0 +1,147 @@
+#!/bin/sh
+
+set -e
+
+LOCK_DIR=/tmp/oum-device-policy.lock
+RULE_FILE=/etc/openclash/custom/openclash_custom_rules.list
+RULE_BLOCK=/tmp/oum-device-rules.block
+RULE_OUTPUT=/tmp/oum-device-rules.output
+RUNTIME_RULES=/tmp/oum-device-runtime.rules
+OLD_IPS=/tmp/oum-device-old.ips
+RUNTIME_BACKUP=/tmp/oum-device-runtime.backup
+BEGIN_MARKER='# OUM-DEVICE-RULES-BEGIN'
+END_MARKER='# OUM-DEVICE-RULES-END'
+
+mkdir "$LOCK_DIR" 2>/dev/null || exit 0
+trap 'rm -rf "$LOCK_DIR"; rm -f "$RULE_BLOCK" "$RULE_OUTPUT" "$RUNTIME_RULES" "$OLD_IPS" "$RUNTIME_BACKUP"' EXIT INT TERM
+
+# Several UI changes made together are coalesced into one OpenClash reload.
+[ "${1:-}" = apply ] && sleep 2
+
+IPKG_INSTROOT="${IPKG_INSTROOT:-}"
+export IPKG_INSTROOT
+. /lib/functions.sh
+
+if [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ]; then
+	[ -x /usr/libexec/oum-passwall-policy ] || exit 1
+	/usr/libexec/oum-passwall-policy
+	exit $?
+fi
+
+valid_mac() {
+	printf '%s' "$1" | grep -Eq '^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$'
+}
+
+valid_ipv4() {
+	printf '%s' "$1" | awk -F. '
+		NF != 4 { exit 1 }
+		{ for (i = 1; i <= 4; i++) if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1 }
+	'
+}
+
+managed_old="$(uci -q get oum.main.managed_direct_macs || true)"
+for mac in $managed_old; do
+	valid_mac "$mac" && uci -q del_list "openclash.config.lan_ac_black_macs=$mac" || true
+done
+uci -q delete oum.main.managed_direct_macs || true
+
+: > "$OLD_IPS"
+for ip in $(uci -q get oum.main.managed_policy_ips || true); do
+	valid_ipv4 "$ip" && printf '%s\n' "$ip" >> "$OLD_IPS" || true
+done
+uci -q delete oum.main.managed_policy_ips || true
+
+for section in $(uci -q show dhcp | sed -n "s/^dhcp\.\(oum_[A-Za-z0-9_]*\)=host$/\1/p"); do
+	uci -q delete "dhcp.$section" || true
+done
+
+mkdir -p /etc/openclash/custom
+{
+	printf '%s\n' "$BEGIN_MARKER"
+	printf '%s\n' '# Эти правила управляются OUM. Изменяйте их через главную страницу.'
+} > "$RULE_BLOCK"
+
+has_policy=0
+: > "$RUNTIME_RULES"
+
+apply_device() {
+	local section="$1" mac ip name policy id
+	config_get mac "$section" mac ''
+	config_get ip "$section" ip ''
+	config_get name "$section" name 'device'
+	config_get policy "$section" policy 'default'
+	valid_mac "$mac" || return 0
+	id="$(printf '%s' "$mac" | tr -d ':' | tr 'A-F' 'a-f')"
+
+	case "$policy" in
+		direct|vpn)
+			valid_ipv4 "$ip" || return 0
+			if [ "$policy" = direct ]; then
+				target=DIRECT
+			else
+				target=PROXY
+			fi
+			printf '%s\n' "- SRC-IP-CIDR,$ip/32,$target" >> "$RULE_BLOCK"
+			printf '%s\n' "SRC-IP-CIDR,$ip/32,$target" >> "$RUNTIME_RULES"
+			uci -q add_list "oum.main.managed_policy_ips=$ip"
+			uci -q set "dhcp.oum_$id=host"
+			uci -q set "dhcp.oum_$id.mac=$mac"
+			uci -q set "dhcp.oum_$id.ip=$ip"
+			uci -q set "dhcp.oum_$id.name=$name"
+			has_policy=1
+			;;
+	esac
+}
+
+config_load oum
+config_foreach apply_device device
+printf '%s\n' "$END_MARKER" >> "$RULE_BLOCK"
+
+[ -f "$RULE_FILE" ] || printf 'rules:\n' > "$RULE_FILE"
+if [ "$has_policy" = 1 ] || grep -Fq "$BEGIN_MARKER" "$RULE_FILE"; then
+	awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" -v block="$RULE_BLOCK" -v insert="$has_policy" '
+	$0 == begin { skipping = 1; next }
+	$0 == end { skipping = 0; next }
+	skipping { next }
+	/^rules:[[:space:]]*$/ && !done {
+		print
+		if (insert == 1) while ((getline line < block) > 0) print line
+		close(block)
+		done = 1
+		next
+	}
+	{ print }
+	END {
+		if (!done && insert == 1) {
+			print "rules:"
+			while ((getline line < block) > 0) print line
+			close(block)
+		}
+	}
+' "$RULE_FILE" > "$RULE_OUTPUT"
+	mv "$RULE_OUTPUT" "$RULE_FILE"
+	chmod 600 "$RULE_FILE"
+fi
+
+uci -q set openclash.config.lan_ac_mode='0'
+[ "$has_policy" = 0 ] || uci -q set openclash.config.enable_custom_clash_rules='1'
+uci -q commit oum
+uci -q commit dhcp
+uci -q commit openclash
+
+/etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+profile="$(uci -q get openclash.config.config_path || true)"
+runtime_profile="/etc/openclash/$(basename "$profile")"
+if [ "$(uci -q get openclash.config.enable || echo 0)" = 1 ] &&
+	[ -f "$runtime_profile" ] && [ -x /usr/libexec/oum-policy-yaml.rb ] &&
+	{ [ "$has_policy" = 1 ] || [ -s "$OLD_IPS" ]; }; then
+	cp "$runtime_profile" "$RUNTIME_BACKUP"
+	chmod 600 "$RUNTIME_BACKUP"
+	if ! /usr/bin/ruby /usr/libexec/oum-policy-yaml.rb "$runtime_profile" "$OLD_IPS" "$RUNTIME_RULES" ||
+		! env SAFE_PATHS=/usr/share/openclash:/etc/ssl /etc/openclash/clash -t -d /etc/openclash -f "$runtime_profile" >/tmp/oum-device-policy.log 2>&1 ||
+		! /usr/libexec/oum-mihomo-api reload >>/tmp/oum-device-policy.log 2>&1; then
+		cp "$RUNTIME_BACKUP" "$runtime_profile"
+		/usr/libexec/oum-mihomo-api reload >/dev/null 2>&1 || true
+		exit 1
+	fi
+fi

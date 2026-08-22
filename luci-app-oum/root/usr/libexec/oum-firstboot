@@ -1,0 +1,39 @@
+#!/bin/sh
+
+set -eu
+
+[ "$(uci -q get oum.main.setup_complete || echo 0)" = "1" ] && exit 0
+
+# A clean OpenWrt image commonly has an empty root password. Leaving it empty
+# would bypass the restricted OUM account through LuCI and SSH. Lock password
+# authentication until the wizard installs the user-selected final password.
+root_hash="$(awk -F: '$1 == "root" { print $2 }' /etc/shadow)"
+[ -n "$root_hash" ] || /bin/busybox passwd -l root >/dev/null
+
+uci -q batch <<'EOF'
+set rpcd.oum_admin=login
+set rpcd.oum_admin.username='admin'
+set rpcd.oum_admin.password='$1$$CoERg7ynjYLsj2j4glJ34.'
+delete rpcd.oum_admin.read
+add_list rpcd.oum_admin.read='luci-app-oum'
+delete rpcd.oum_admin.write
+add_list rpcd.oum_admin.write='luci-app-oum'
+EOF
+
+for radio in $(uci -q show wireless | sed -n "s/^wireless\.\([^.=]*\)=wifi-device$/\1/p"); do
+	uci -q set "wireless.${radio}.country=US"
+done
+
+for iface in $(uci -q show wireless | sed -n "s/^wireless\.\([^.=]*\)=wifi-iface$/\1/p"); do
+	[ "$(uci -q get "wireless.${iface}.mode")" = "ap" ] || continue
+	uci -q set "wireless.${iface}.network=lan"
+	uci -q set "wireless.${iface}.ssid=FirstRun"
+	uci -q set "wireless.${iface}.encryption=sae-mixed"
+	uci -q set "wireless.${iface}.key=admin123"
+	uci -q set "wireless.${iface}.disabled=0"
+done
+
+uci commit rpcd
+uci commit wireless
+/etc/init.d/rpcd restart
+wifi reload

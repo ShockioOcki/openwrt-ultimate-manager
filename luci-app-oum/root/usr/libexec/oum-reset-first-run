@@ -1,0 +1,21 @@
+#!/bin/sh
+
+set -eu
+
+waited=0
+while [ -d /tmp/oum-device-policy.lock ] && [ "$waited" -lt 60 ]; do
+	sleep 1
+	waited=$((waited + 1))
+done
+[ ! -d /tmp/oum-device-policy.lock ] || rmdir /tmp/oum-device-policy.lock 2>/dev/null || true
+
+/usr/libexec/oum-reset-vpn
+
+uci -q set oum.main.setup_complete='0'
+uci -q set oum.main.setup_step='internet'
+uci -q set oum.main.active_source='none'
+uci -q set oum.main.pending_source='none'
+uci -q commit oum
+
+/bin/busybox passwd -l root >/dev/null
+/usr/libexec/oum-firstboot

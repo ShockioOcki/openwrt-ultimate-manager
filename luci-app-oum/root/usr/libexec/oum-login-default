@@ -1,0 +1,23 @@
+#!/bin/sh
+
+set -eu
+
+DISPATCHER="${OUM_DISPATCHER:-/usr/share/ucode/luci/dispatcher.uc}"
+ORIGINAL="/tmp/oum-dispatcher.$$"
+OLD="let scope = { duser: 'root', fuser: user };"
+NEW="let scope = { duser: (resolved.ctx.request_path?.[0] == 'oum') ? 'admin' : 'root', fuser: user }; /* OUM default login */"
+
+[ -f "$DISPATCHER" ] || { echo 'LuCI dispatcher not found' >&2; exit 1; }
+grep -Fq '/* OUM default login */' "$DISPATCHER" && exit 0
+grep -Fq "$OLD" "$DISPATCHER" || { echo 'Unsupported LuCI dispatcher version' >&2; exit 1; }
+
+cp "$DISPATCHER" "$ORIGINAL"
+if ! sed -i "s#${OLD}#${NEW}#" "$DISPATCHER" || \
+	! ucode -L '/usr/share/ucode/*.uc' -e \
+		"import dispatch from 'luci.dispatcher'; exit(type(dispatch) == 'function' ? 0 : 1);" >/dev/null 2>&1; then
+	cp "$ORIGINAL" "$DISPATCHER"
+	rm -f "$ORIGINAL"
+	echo 'Unable to apply OUM login default' >&2
+	exit 1
+fi
+rm -f "$ORIGINAL"

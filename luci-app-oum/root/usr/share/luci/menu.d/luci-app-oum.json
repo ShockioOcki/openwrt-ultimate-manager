@@ -1,0 +1,58 @@
+{
+	"oum": {
+		"title": "OUM",
+		"order": 90,
+		"action": {
+			"type": "firstchild"
+		},
+		"auth": {
+			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ],
+			"login": true
+		}
+	},
+	"oum/setup": {
+		"firstchild_ineligible": true,
+		"action": {
+			"type": "view",
+			"path": "oum/first-run-v2"
+		},
+		"depends": {
+			"acl": [ "luci-app-oum" ]
+		}
+	},
+	"oum/dashboard": {
+		"title": "Главная",
+		"order": 2,
+		"action": {
+			"type": "view",
+			"path": "oum/dashboard-v9"
+		},
+		"depends": {
+			"acl": [ "luci-app-oum" ],
+			"uci": { "oum": true }
+		}
+	},
+	"oum/settings": {
+		"title": "Настройки",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "oum/settings-v3"
+		},
+		"depends": {
+			"acl": [ "luci-app-oum" ],
+			"uci": { "oum": true }
+		}
+	},
+	"oum/logout": {
+		"firstchild_ineligible": true,
+		"action": {
+			"type": "function",
+			"module": "luci.controller.oum",
+			"function": "action_logout"
+		},
+		"depends": {
+			"acl": [ "luci-app-oum" ]
+		}
+	}
+}

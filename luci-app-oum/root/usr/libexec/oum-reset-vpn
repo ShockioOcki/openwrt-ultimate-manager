@@ -1,0 +1,56 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ROLLBACK=/etc/oum/rollback
+mkdir -p "$ROLLBACK"
+chmod 700 /etc/oum "$ROLLBACK"
+
+# PassWall nodes and its carefully tuned shunt are user data. A VPN reset
+# disables that engine and removes only OUM-managed device addresses. Keep a
+# one-step private snapshot instead of destroying the imported configuration.
+if [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ]; then
+	cp /etc/config/passwall "$ROLLBACK/passwall-before-vpn-reset"
+	chmod 600 "$ROLLBACK/passwall-before-vpn-reset"
+fi
+
+for section in $(uci -q show oum | sed -n "s/^oum\.\([^.=]*\)=device$/\1/p"); do
+	uci -q delete "oum.$section" || true
+done
+uci -q commit oum
+/usr/libexec/oum-device-policy reset >/dev/null 2>&1 || true
+
+if [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ]; then
+	uci -q set passwall.@global[0].enabled='0'
+	uci -q commit passwall
+	/etc/init.d/passwall stop >/dev/null 2>&1 || true
+	/etc/init.d/passwall disable >/dev/null 2>&1 || true
+fi
+
+if [ -x /etc/init.d/openclash ] && [ -f /etc/config/openclash ]; then
+	/etc/init.d/openclash stop >/dev/null 2>&1 || true
+	/etc/init.d/openclash disable >/dev/null 2>&1 || true
+	for profile in Subscription.yaml AWG_Tunnel.yaml Proxy.yaml \
+		oum-subscription.yaml oum-amnezia.yaml oum-reality.yaml oum.yaml; do
+		rm -f "/etc/openclash/config/$profile" "/etc/openclash/$profile"
+	done
+	rm -f /etc/openclash/proxy_provider/oum-*.yaml
+	uci -q delete openclash.oum_subscription_info || true
+	uci -q delete openclash.config.config_path || true
+	uci -q set openclash.config.enable='0'
+	uci -q commit openclash
+fi
+
+uci -q set oum.main.active_source='none'
+uci -q set oum.main.pending_source='none'
+uci -q delete oum.main.managed_direct_macs || true
+uci -q delete oum.main.managed_policy_ips || true
+uci -q delete oum.main.managed_passwall_direct_ips || true
+uci -q delete oum.main.managed_passwall_vpn_ips || true
+uci -q commit oum
+
+rm -f /etc/oum/active_source /etc/oum/active_profile /etc/oum/proxy_backend
+rm -rf /tmp/oum-vpn-job /tmp/oum-mihomo-api
+rm -f /tmp/oum-vpn-job.log /tmp/oum-subscription-info.json \
+	/tmp/oum-subscription-info.log /tmp/oum-passwall-nodes.cache

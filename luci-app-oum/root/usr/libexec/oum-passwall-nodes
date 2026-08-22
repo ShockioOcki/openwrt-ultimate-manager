@@ -1,0 +1,120 @@
+#!/bin/sh
+
+umask 077
+
+. /lib/functions.sh
+
+ACTION="${1:-}"
+LOCK_DIR=/tmp/oum-passwall-nodes.lock
+START_LOCK=/tmp/oum-passwall-nodes.start
+CACHE=/tmp/oum-passwall-nodes.cache
+RESULTS=/tmp/oum-passwall-nodes.results
+BACKUP=/tmp/oum-passwall-before-switch
+
+case "$ACTION" in measure|switch) ;; *) exit 2 ;; esac
+mkdir "$LOCK_DIR" 2>/dev/null || exit 3
+rm -rf "$START_LOCK"
+cleanup() {
+	rm -rf "$LOCK_DIR"
+	rm -rf "$START_LOCK"
+	rm -f "$RESULTS" "$BACKUP"
+}
+trap cleanup EXIT INT TERM
+
+excluded_label() {
+	case "$1" in
+		*Мобильн*|*мобильн*|*Mobile*|*mobile*|*LTE*|*lte*|*Авто*|*АВТО*|*auto*|*AUTO*|*⬇️*|*🇪🇺*|*SS*) return 0 ;;
+	esac
+	return 1
+}
+
+ensure_passwall_compat() {
+	local util=/usr/lib/lua/luci/passwall/util_xray.lua
+	[ -f "$util" ] || return 0
+	if grep -Fq 'if not tag then tag = node[".name"] end' "$util"; then
+		mkdir -p /etc/oum/compat
+		[ -f /etc/oum/compat/passwall-util_xray.lua.original ] ||
+			cp "$util" /etc/oum/compat/passwall-util_xray.lua.original
+		sed -i 's/if not tag then tag = node\["\.name"\] end/if node and not tag then tag = node[".name"] end/' "$util"
+		chmod 644 "$util"
+	fi
+}
+
+measure_one() {
+	local section="$1" protocol address port remarks value delay
+	config_get protocol "$section" protocol
+	config_get address "$section" address
+	config_get port "$section" port
+	config_get remarks "$section" remarks "$section"
+	case "$protocol" in _*) return ;; esac
+	[ -n "$address" ] && [ -n "$port" ] || return
+	excluded_label "$remarks" && return
+	value="$(tcping -c 2 -i 0 -t 2 -p "$port" "$address" 2>/dev/null |
+		sed -n 's/.*time=\([0-9.]*\) ms.*/\1/p' |
+		awk 'NR == 1 { min = $1 } $1 < min { min = $1 } END { if (NR) print min }')"
+	delay=0
+	[ -z "$value" ] || delay="$(awk -v value="$value" 'BEGIN { printf "%.0f", value }')"
+	printf '%s %s\n' "$section" "$delay" >> "$RESULTS"
+}
+
+measure_nodes() {
+	: > "$RESULTS"
+	config_load passwall
+	local sections section pids='' running=0 pid
+	sections="$(config_foreach echo nodes)"
+	for section in $sections; do
+		measure_one "$section" &
+		pids="$pids $!"
+		running=$((running + 1))
+		if [ "$running" -ge 6 ]; then
+			for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+			pids=''
+			running=0
+		fi
+	done
+	for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+	sort -u "$RESULTS" > "${CACHE}.tmp"
+	printf 'timestamp %s\n' "$(date +%s)" >> "${CACHE}.tmp"
+	mv "${CACHE}.tmp" "$CACHE"
+	chmod 600 "$CACHE"
+}
+
+switch_node() {
+	local target="${2:-}" shunt old enabled ready=0 waited=0
+	case "$target" in ''|*[!A-Za-z0-9_]*) exit 4 ;; esac
+	[ "$(uci -q get "passwall.${target}")" = nodes ] || exit 4
+	[ -n "$(uci -q get "passwall.${target}.address")" ] || exit 4
+	[ -n "$(uci -q get "passwall.${target}.port")" ] || exit 4
+	shunt="$(uci -q get 'passwall.@global[0].tcp_node')"
+	[ -n "$shunt" ] && [ "$(uci -q get "passwall.${shunt}.protocol")" = _shunt ] || exit 5
+	ensure_passwall_compat || exit 8
+	old="$(uci -q get "passwall.${shunt}.default_node")"
+	[ "$old" = "$target" ] && exit 0
+	cp /etc/config/passwall "$BACKUP" || exit 6
+	chmod 600 "$BACKUP"
+	uci set "passwall.${shunt}.default_node=${target}" || exit 6
+	uci commit passwall || exit 6
+	enabled="$(uci -q get 'passwall.@global[0].enabled')"
+	if [ "$enabled" = 1 ]; then
+		/etc/init.d/passwall restart >/tmp/oum-passwall-restart.log 2>&1 || true
+		while [ "$waited" -lt 45 ]; do
+			if pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1; then
+				ready=1
+				break
+			fi
+			sleep 1
+			waited=$((waited + 1))
+		done
+	else
+		ready=1
+	fi
+	[ "$ready" = 1 ] && exit 0
+	cp "$BACKUP" /etc/config/passwall
+	/etc/init.d/passwall restart >/tmp/oum-passwall-rollback.log 2>&1 || true
+	exit 7
+}
+
+case "$ACTION" in
+	measure) measure_nodes ;;
+	switch) switch_node "$@" ;;
+esac

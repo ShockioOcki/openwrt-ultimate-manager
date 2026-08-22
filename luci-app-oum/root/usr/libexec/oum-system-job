@@ -1,0 +1,118 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-}"
+JOB_DIR=/tmp/oum-system-job
+LOCK_DIR=/tmp/oum-system-job.lock
+REQUEST="$JOB_DIR/request.json"
+STATUS="$JOB_DIR/status"
+ROLLBACK=/etc/oum/rollback
+
+[ -d "$LOCK_DIR" ] || exit 3
+
+write_status() {
+	state="$1"
+	code="$2"
+	message="$3"
+	tmp="$STATUS.tmp"
+	printf 'state=%s\naction=%s\ncode=%s\nmessage=%s\n' "$state" "$ACTION" "$code" "$message" > "$tmp"
+	mv "$tmp" "$STATUS"
+}
+
+cleanup() {
+	rm -f "$REQUEST"
+	rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'write_status failed interrupted "Операция остановлена."; exit 130' INT TERM
+
+fail() {
+	write_status failed "$1" "$2"
+	exit 1
+}
+
+json_value() {
+	jsonfilter -i "$REQUEST" -e "@$1"
+}
+
+apply_wifi() {
+	mode="$(json_value .wifi_mode)"
+	ssid24="$(json_value .ssid_24)"
+	ssid5="$(json_value .ssid_5)"
+	password="$(json_value .wifi_password)"
+	[ "$mode" = smart ] || [ "$mode" = separate ] || fail invalid_input 'Некорректный режим Wi-Fi.'
+	[ -n "$ssid24" ] || fail invalid_input 'Имя Wi-Fi не задано.'
+	[ "$mode" != separate ] || [ -n "$ssid5" ] || fail invalid_input 'Имя сети 5 ГГц не задано.'
+	mkdir -p "$ROLLBACK"
+	cp /etc/config/wireless "$ROLLBACK/wireless"
+	chmod 600 "$ROLLBACK/wireless"
+	for radio in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-device$/\1/p'); do
+		uci -q set "wireless.$radio.country=US"
+	done
+	for section in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-iface$/\1/p'); do
+		[ "$(uci -q get "wireless.$section.mode")" = ap ] || continue
+		device="$(uci -q get "wireless.$section.device")"
+		band="$(uci -q get "wireless.$device.band")"
+		ssid="$ssid24"
+		[ "$mode" != separate ] || [ "$band" != 5g ] || ssid="$ssid5"
+		uci -q set "wireless.$section.ssid=$ssid"
+		uci -q set "wireless.$section.encryption=sae-mixed"
+		uci -q set "wireless.$section.disabled=0"
+		[ -z "$password" ] || uci -q set "wireless.$section.key=$password"
+	done
+	uci -q commit wireless || fail commit_failed 'Не удалось сохранить Wi-Fi.'
+	if ! wifi reload >/dev/null 2>&1; then
+		cp "$ROLLBACK/wireless" /etc/config/wireless
+		wifi reload >/dev/null 2>&1 || true
+		fail reload_failed 'Wi-Fi не перезапустился; предыдущие настройки восстановлены.'
+	fi
+	write_status success applied 'Настройки Wi-Fi применены. Подключитесь к сети заново, если её имя изменилось.'
+}
+
+apply_wan() {
+	wan_type="$(json_value .wan_type)"
+	username="$(json_value .pppoe_user)"
+	password="$(json_value .pppoe_password)"
+	[ "$wan_type" = dhcp ] || [ "$wan_type" = pppoe ] || fail invalid_input 'Некорректный тип подключения.'
+	[ "$wan_type" != pppoe ] || [ -n "$username" ] || fail invalid_input 'Логин PPPoE не задан.'
+	mkdir -p "$ROLLBACK"
+	cp /etc/config/network "$ROLLBACK/network"
+	chmod 600 "$ROLLBACK/network"
+	uci -q set "network.wan.proto=$wan_type"
+	if [ "$wan_type" = pppoe ]; then
+		uci -q set "network.wan.username=$username"
+		[ -z "$password" ] || uci -q set "network.wan.password=$password"
+	else
+		uci -q delete network.wan.username || true
+		uci -q delete network.wan.password || true
+	fi
+	uci -q commit network || fail commit_failed 'Не удалось сохранить подключение.'
+	if ! /etc/init.d/network reload >/dev/null 2>&1; then
+		cp "$ROLLBACK/network" /etc/config/network
+		/etc/init.d/network reload >/dev/null 2>&1 || true
+		fail reload_failed 'Сеть не перезапустилась; предыдущие настройки восстановлены.'
+	fi
+	write_status success applied 'Настройки WAN применены. Проверяем подключение…'
+}
+
+rollback_config() {
+	kind="$1"
+	[ -f "$ROLLBACK/$kind" ] || fail rollback_missing 'Предыдущая конфигурация не найдена.'
+	cp "$ROLLBACK/$kind" "/etc/config/$kind"
+	if [ "$kind" = wireless ]; then wifi reload >/dev/null 2>&1; else /etc/init.d/network reload >/dev/null 2>&1; fi
+	write_status success rolled_back 'Предыдущие настройки восстановлены.'
+}
+
+case "$ACTION" in
+	wifi) write_status running applying 'Применяем настройки Wi-Fi…'; apply_wifi ;;
+	wan) write_status running applying 'Применяем настройки подключения…'; apply_wan ;;
+	rollback_wifi) write_status running rollback 'Восстанавливаем Wi-Fi…'; rollback_config wireless ;;
+	rollback_wan) write_status running rollback 'Восстанавливаем подключение…'; rollback_config network ;;
+	engine) target="$(json_value .engine)"; write_status running preparing 'Готовим безопасную замену VPN-движка…'; if ! OUM_ENGINE_STATUS="$STATUS" /usr/libexec/oum-engine-manager switch "$target"; then message="$(cat /tmp/oum-engine-error 2>/dev/null || true)"; fail engine_failed "${message:-Не удалось заменить VPN-движок; выполнен автоматический возврат.}"; fi; write_status success switched 'VPN-движок заменён. Если у него ещё нет конфигурации, добавьте подключение ниже.' ;;
+	restore) write_status running restoring 'Проверяем и восстанавливаем резервную копию…'; /usr/libexec/oum-backup restore || fail restore_failed 'Резервная копия отклонена; текущие настройки сохранены.'; write_status success restored 'Резервная копия восстановлена.' ;;
+	reset_vpn) write_status running resetting 'Удаляем настройки VPN…'; /usr/libexec/oum-reset-vpn || fail reset_failed 'Не удалось сбросить VPN.'; write_status success reset 'VPN сброшен. Можно добавить новый источник.' ;;
+	reset_all) write_status running resetting 'Возвращаем мастер первого запуска…'; /usr/libexec/oum-reset-first-run || fail reset_failed 'Не удалось вернуть мастер первого запуска.'; write_status success reset 'Мастер первого запуска восстановлен.' ;;
+	*) fail invalid_action 'Неизвестная системная операция.' ;;
+esac

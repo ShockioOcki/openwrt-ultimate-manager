@@ -1,0 +1,95 @@
+#!/bin/sh
+
+set -u
+umask 077
+
+JOB_DIR=/tmp/oum-vpn-job
+LOCK_DIR=/tmp/oum-vpn-job.lock
+STATUS_FILE="$JOB_DIR/status"
+RUNTIME=/usr/libexec/oum-runtime.sh
+CONVERTER=/usr/libexec/oum/source_converter.rb
+
+write_status() {
+	state="$1"
+	code="$2"
+	message="$3"
+	tmp="$STATUS_FILE.tmp"
+	{
+		printf 'state=%s\n' "$state"
+		printf 'code=%s\n' "$code"
+		printf 'message=%s\n' "$message"
+	} > "$tmp"
+	mv "$tmp" "$STATUS_FILE"
+	chmod 600 "$STATUS_FILE"
+}
+
+kind="${1:-}"
+input="${2:-}"
+display_name='AWG_Node'
+
+[ -d "$LOCK_DIR" ] || exit 3
+
+case "$kind" in subscription|awg|proxy) ;; *) write_status failed invalid_type 'Неизвестный тип подключения'; exit 1 ;; esac
+[ "$input" = "$JOB_DIR/input" ] && [ -s "$input" ] || { write_status failed missing_input 'Данные подключения не найдены'; exit 1; }
+trap 'rm -f "$input"; rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
+[ -r "$RUNTIME" ] && [ -r "$CONVERTER" ] || { write_status failed runtime_missing 'Компоненты импорта OUM не установлены'; exit 1; }
+
+write_status running preparing 'Подготавливаем профиль'
+OUM_LIBRARY_MODE=1
+OUM_CONVERTER_PATH="$CONVERTER"
+export OUM_LIBRARY_MODE OUM_CONVERTER_PATH
+# shellcheck source=/dev/null
+. "$RUNTIME"
+oum_prepare_dirs
+trap 'oum_cleanup; rm -f "$input"; rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
+
+case "$kind" in
+	subscription)
+		url="$(sed -n '1p' "$input")"
+		case "$url" in http://*|https://*) ;; *) write_status failed invalid_url 'Нужна ссылка http(s)'; exit 1 ;; esac
+		download="$OUM_TMP_DIR/subscription.input"
+		write_status running downloading 'Загружаем подписку'
+		if ! oum_download "$url" "$download" >/tmp/oum-vpn-job.log 2>&1; then
+			write_status failed download_failed 'Не удалось загрузить подписку'
+			exit 1
+		fi
+		write_status running activating 'Проверяем и запускаем Subscription.yaml'
+		if oum_install_source subscription "$download" '' subscription "$url" >>/tmp/oum-vpn-job.log 2>&1; then
+			uci set oum.main.active_source='subscription'
+			uci set oum.main.pending_source='none'
+			uci commit oum
+			write_status success active 'Subscription.yaml активирован'
+		else
+			write_status failed activation_failed 'OpenClash отклонил подписку; предыдущий профиль восстановлен'
+			exit 1
+		fi
+		;;
+	awg)
+		write_status running activating 'Проверяем и запускаем AWG_Tunnel.yaml'
+		if oum_install_source awg "$input" "$display_name" awg >/tmp/oum-vpn-job.log 2>&1; then
+			uci set oum.main.active_source='awg'
+			uci set oum.main.pending_source='none'
+			uci commit oum
+			write_status success active 'AWG_Tunnel.yaml активирован'
+		else
+			write_status failed activation_failed 'OpenClash отклонил AWG-конфигурацию; предыдущий профиль восстановлен'
+			exit 1
+		fi
+		;;
+	proxy)
+		write_status running activating 'Проверяем и запускаем Proxy.yaml'
+		if oum_install_source uris "$input" '' reality >/tmp/oum-vpn-job.log 2>&1; then
+			uci set oum.main.active_source='proxy'
+			uci set oum.main.pending_source='none'
+			uci commit oum
+			write_status success active 'Proxy.yaml активирован'
+		else
+			write_status failed activation_failed 'OpenClash отклонил Proxy; предыдущий профиль восстановлен'
+			exit 1
+		fi
+		;;
+esac
+
+rm -f "$input"
+/usr/libexec/oum-device-policy sync >/tmp/oum-device-policy-start.log 2>&1 || true
+(/usr/libexec/oum-subscription-info) >/tmp/oum-subscription-info.log 2>&1 &

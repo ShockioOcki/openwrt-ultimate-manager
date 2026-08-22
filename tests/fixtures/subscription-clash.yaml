@@ -1,0 +1,13 @@
+proxies:
+  - name: KEEP-YAML
+    type: vless
+    server: 192.0.2.20
+    port: 443
+    uuid: 00000000-0000-4000-8000-000000000020
+    tls: true
+  - name: LTE Mobile
+    type: vless
+    server: 192.0.2.21
+    port: 443
+    uuid: 00000000-0000-4000-8000-000000000021
+    tls: true

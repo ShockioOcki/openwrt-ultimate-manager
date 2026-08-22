@@ -1,0 +1,76 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-}"
+WORK_DIR=/tmp/oum-mihomo-api
+CURL_CONFIG="$WORK_DIR/curl.conf"
+RESPONSE="$WORK_DIR/response.json"
+REQUEST="$WORK_DIR/request.json"
+trap 'rm -f "$CURL_CONFIG" "$REQUEST"' EXIT INT TERM
+
+case "$ACTION" in list|delay|switch|reload) ;; *) exit 2 ;; esac
+
+source_kind="$(uci -q get oum.main.active_source || echo none)"
+case "$source_kind" in
+	subscription) group='Subscription' ;;
+	awg) group='AWG_Tunnel' ;;
+	proxy) group='Proxy_Nodes' ;;
+	*) exit 3 ;;
+esac
+
+port="$(uci -q get openclash.config.cn_port || echo 9090)"
+secret="$(uci -q get openclash.config.dashboard_password || true)"
+case "$port" in ''|*[!0-9]*) exit 4 ;; esac
+[ "$port" -ge 1 ] && [ "$port" -le 65535 ] || exit 4
+[ "${#secret}" -le 256 ] || exit 4
+case "$secret" in *'
+'*|*''*) exit 4 ;; esac
+escaped_secret="$(printf '%s' "$secret" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+
+mkdir -p "$WORK_DIR"
+chmod 700 "$WORK_DIR"
+rm -f "$RESPONSE"
+{
+	printf 'silent\n'
+	printf 'show-error\n'
+	printf 'fail\n'
+	printf 'connect-timeout = 2\n'
+	printf 'max-time = 12\n'
+	printf 'header = "Content-Type: application/json"\n'
+	printf 'header = "Authorization: Bearer %s"\n' "$escaped_secret"
+	printf 'output = "%s"\n' "$RESPONSE"
+} > "$CURL_CONFIG"
+chmod 600 "$CURL_CONFIG"
+
+case "$ACTION" in
+	list)
+		url="http://127.0.0.1:${port}/proxies"
+		curl --config "$CURL_CONFIG" "$url"
+		;;
+	delay)
+		url="http://127.0.0.1:${port}/group/${group}/delay?timeout=6000&url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204"
+		# Mihomo returns 504 when every node is offline but still updates each
+		# node history. Treat the completed probe as usable and read history next.
+		curl --config "$CURL_CONFIG" --no-fail "$url" >/dev/null
+		;;
+	switch)
+		[ -s "$REQUEST" ] || exit 5
+		url="http://127.0.0.1:${port}/proxies/${group}"
+		curl --config "$CURL_CONFIG" --request PUT --data-binary "@$REQUEST" "$url"
+		;;
+	reload)
+		profile="$(uci -q get openclash.config.config_path || true)"
+		case "$profile" in /etc/openclash/config/*.yaml|/etc/openclash/config/*.yml) ;; *) exit 6 ;; esac
+		profile="/etc/openclash/$(basename "$profile")"
+		case "$profile" in /etc/openclash/*.yaml|/etc/openclash/*.yml) ;; *) exit 6 ;; esac
+		[ -f "$profile" ] || exit 6
+		case "$profile" in *[!A-Za-z0-9_./-]*) exit 6 ;; esac
+		printf '{"path":"%s","payload":""}\n' "$profile" > "$REQUEST"
+		url="http://127.0.0.1:${port}/configs?force=true"
+		curl --config "$CURL_CONFIG" --request PUT --data-binary "@$REQUEST" "$url"
+		;;
+esac
+
+chmod 600 "$RESPONSE" 2>/dev/null || true

@@ -1,0 +1,225 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-}"
+WORK=/tmp/oum-backup-work
+STAGE="$WORK/stage"
+ARCHIVE="$WORK/oum-backup.tar.gz"
+ENCODED=/tmp/oum-backup.b64
+INPUT=/tmp/oum-restore.b64
+RESTORE_ARCHIVE="$WORK/restore.tar.gz"
+ROLLBACK="$WORK/rollback"
+COMMON_CONFIGS='oum network wireless dhcp firewall'
+OPENCLASH_PROFILES='Subscription.yaml AWG_Tunnel.yaml Proxy.yaml'
+
+cleanup() {
+	rm -rf "$WORK"
+	[ "$ACTION" != restore ] || rm -f "$INPUT"
+}
+trap cleanup EXIT INT TERM
+
+copy_if_present() {
+	source="$1"
+	destination="$2"
+	[ ! -f "$source" ] || {
+		mkdir -p "$(dirname "$destination")"
+		cp "$source" "$destination"
+	}
+}
+
+current_engine() {
+	if [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ]; then
+		printf '%s\n' passwall
+	elif [ -x /etc/init.d/openclash ] && [ -f /etc/config/openclash ]; then
+		printf '%s\n' openclash
+	else
+		printf '%s\n' none
+	fi
+}
+
+copy_openclash_files() {
+	source_root="$1"
+	destination_root="$2"
+	for profile in $OPENCLASH_PROFILES; do
+		copy_if_present "$source_root/etc/openclash/config/$profile" "$destination_root/etc/openclash/config/$profile"
+	done
+	copy_if_present "$source_root/etc/openclash/custom/openclash_custom_rules.list" \
+		"$destination_root/etc/openclash/custom/openclash_custom_rules.list"
+}
+
+copy_oum_state() {
+	source_root="$1"
+	destination_root="$2"
+	for state in active_source active_profile proxy_backend; do
+		copy_if_present "$source_root/etc/oum/$state" "$destination_root/etc/oum/$state"
+	done
+}
+
+create_backup() {
+	rm -rf "$WORK"
+	mkdir -p "$STAGE/etc/config" "$STAGE/etc/oum"
+	board="$(ubus call system board | jsonfilter -e '@.board_name' 2>/dev/null || echo unknown)"
+	engine="$(current_engine)"
+	{
+		printf 'OUM_BACKUP_VERSION=2\n'
+		printf 'BOARD=%s\n' "$board"
+		printf 'ENGINE=%s\n' "$engine"
+		printf 'CREATED=%s\n' "$(date +%s)"
+	} > "$STAGE/manifest"
+	for config in $COMMON_CONFIGS; do
+		copy_if_present "/etc/config/$config" "$STAGE/etc/config/$config"
+	done
+	case "$engine" in
+		openclash)
+			copy_if_present /etc/config/openclash "$STAGE/etc/config/openclash"
+			copy_openclash_files '' "$STAGE"
+			;;
+		passwall)
+			copy_if_present /etc/config/passwall "$STAGE/etc/config/passwall"
+			;;
+	esac
+	copy_oum_state '' "$STAGE"
+	(cd "$STAGE" && tar -czf "$ARCHIVE" .)
+	/usr/bin/ruby /usr/libexec/oum-backup-codec.rb encode "$ARCHIVE" "$ENCODED"
+}
+
+valid_archive() {
+	# Only regular files and directories are accepted. This prevents symlink
+	# traversal while keeping the expanded backup bounded for small routers.
+	tar -tvzf "$RESTORE_ARCHIVE" | awk '
+		substr($1, 1, 1) == "-" || substr($1, 1, 1) == "d" {
+			if ($3 > 4194304) exit 1
+			total += $3
+			if (total > 8388608) exit 1
+			next
+		}
+		{ exit 1 }
+	' || return 1
+	tar -tzf "$RESTORE_ARCHIVE" | sed 's#^\./##' | awk '
+		$0 == "" || $0 == "manifest" ||
+		$0 ~ /^etc\/?$/ || $0 ~ /^etc\/config\/?$/ ||
+		$0 ~ /^etc\/config\/(oum|network|wireless|dhcp|firewall|openclash|passwall)$/ ||
+		$0 ~ /^etc\/openclash\/?$/ || $0 ~ /^etc\/openclash\/config\/?$/ ||
+		$0 ~ /^etc\/openclash\/config\/(Subscription|AWG_Tunnel|Proxy)\.yaml$/ ||
+		$0 ~ /^etc\/openclash\/custom\/?$/ ||
+		$0 == "etc/openclash/custom/openclash_custom_rules.list" ||
+		$0 ~ /^etc\/oum\/?$/ || $0 ~ /^etc\/oum\/(active_source|active_profile|proxy_backend)$/ { next }
+		{ exit 1 }
+	'
+}
+
+restore_runtime() {
+	engine="$1"
+	/etc/init.d/network reload >/dev/null 2>&1 || return 1
+	wifi reload >/dev/null 2>&1 || return 1
+	/etc/init.d/firewall restart >/dev/null 2>&1 || return 1
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1 || return 1
+	case "$engine" in
+		openclash)
+			if [ "$(uci -q get openclash.config.enable || echo 0)" = 1 ]; then
+				/etc/init.d/openclash restart >/dev/null 2>&1 || return 1
+			else
+				/etc/init.d/openclash stop >/dev/null 2>&1 || true
+			fi
+			;;
+		passwall)
+			if [ "$(uci -q get passwall.@global[0].enabled || echo 0)" = 1 ]; then
+				/etc/init.d/passwall restart >/dev/null 2>&1 || return 1
+			else
+				/etc/init.d/passwall stop >/dev/null 2>&1 || true
+			fi
+			;;
+	esac
+}
+
+clear_managed_files() {
+	root="$1"
+	for profile in $OPENCLASH_PROFILES; do
+		rm -f "$root/etc/openclash/config/$profile"
+	done
+	rm -f "$root/etc/openclash/custom/openclash_custom_rules.list"
+	for state in active_source active_profile proxy_backend; do
+		rm -f "$root/etc/oum/$state"
+	done
+}
+
+rollback_restore() {
+	engine="$1"
+	for config in $COMMON_CONFIGS $engine; do
+		[ "$config" = none ] && continue
+		[ ! -f "$ROLLBACK/etc/config/$config" ] || cp "$ROLLBACK/etc/config/$config" "/etc/config/$config"
+	done
+	clear_managed_files ''
+	copy_openclash_files "$ROLLBACK" ''
+	copy_oum_state "$ROLLBACK" ''
+	restore_runtime "$engine" || true
+}
+
+restore_backup() {
+	[ -s "$INPUT" ] || { echo 'restore input missing' >&2; return 1; }
+	rm -rf "$WORK"
+	mkdir -p "$STAGE" "$ROLLBACK/etc/config" "$ROLLBACK/etc/oum"
+	/usr/bin/ruby /usr/libexec/oum-backup-codec.rb decode "$INPUT" "$RESTORE_ARCHIVE"
+	rm -f "$INPUT"
+	valid_archive || { echo 'backup contains forbidden paths' >&2; return 1; }
+	tar -xzf "$RESTORE_ARCHIVE" -C "$STAGE"
+	version="$(sed -n 's/^OUM_BACKUP_VERSION=//p' "$STAGE/manifest")"
+	case "$version" in 1|2) ;; *) echo 'unsupported backup' >&2; return 1 ;; esac
+	archive_board="$(sed -n 's/^BOARD=//p' "$STAGE/manifest")"
+	current_board="$(ubus call system board | jsonfilter -e '@.board_name' 2>/dev/null || echo unknown)"
+	[ "$archive_board" = "$current_board" ] || { echo 'backup belongs to another router model' >&2; return 1; }
+	archive_engine="$(sed -n 's/^ENGINE=//p' "$STAGE/manifest")"
+	[ -n "$archive_engine" ] || archive_engine=openclash
+	case "$archive_engine" in openclash|passwall|none) ;; *) echo 'invalid backup engine' >&2; return 1 ;; esac
+	running_engine="$(current_engine)"
+	[ "$archive_engine" = none ] || [ "$running_engine" = "$archive_engine" ] || {
+		echo "backup requires $archive_engine but $running_engine is installed" >&2
+		return 1
+	}
+	for config in $COMMON_CONFIGS; do
+		[ -f "$STAGE/etc/config/$config" ] || { echo "missing config: $config" >&2; return 1; }
+		uci -c "$STAGE/etc/config" -q show "$config" >/dev/null || { echo "invalid config: $config" >&2; return 1; }
+	done
+	if [ "$archive_engine" != none ]; then
+		[ -f "$STAGE/etc/config/$archive_engine" ] || { echo "missing config: $archive_engine" >&2; return 1; }
+		uci -c "$STAGE/etc/config" -q show "$archive_engine" >/dev/null || { echo "invalid config: $archive_engine" >&2; return 1; }
+	fi
+	if [ "$archive_engine" = openclash ]; then
+		for profile in "$STAGE"/etc/openclash/config/*.yaml; do
+			[ ! -f "$profile" ] || ruby -ryaml -e 'value=YAML.load_file(ARGV[0]); abort unless value.is_a?(Hash)' "$profile"
+		done
+	fi
+
+	for config in $COMMON_CONFIGS; do
+		copy_if_present "/etc/config/$config" "$ROLLBACK/etc/config/$config"
+	done
+	[ "$running_engine" = none ] || copy_if_present "/etc/config/$running_engine" "$ROLLBACK/etc/config/$running_engine"
+	copy_openclash_files '' "$ROLLBACK"
+	copy_oum_state '' "$ROLLBACK"
+
+	case "$running_engine" in
+		openclash) /etc/init.d/openclash stop >/dev/null 2>&1 || true ;;
+		passwall) /etc/init.d/passwall stop >/dev/null 2>&1 || true ;;
+	esac
+	apply_ok=1
+	for config in $COMMON_CONFIGS; do
+		cp "$STAGE/etc/config/$config" "/etc/config/$config" || apply_ok=0
+	done
+	if [ "$archive_engine" != none ]; then
+		cp "$STAGE/etc/config/$archive_engine" "/etc/config/$archive_engine" || apply_ok=0
+	fi
+	clear_managed_files ''
+	copy_openclash_files "$STAGE" '' || apply_ok=0
+	copy_oum_state "$STAGE" '' || apply_ok=0
+	[ "$apply_ok" = 1 ] || { rollback_restore "$running_engine"; return 1; }
+	restore_runtime "$running_engine" || { rollback_restore "$running_engine"; return 1; }
+	/usr/libexec/oum-device-policy sync >/dev/null 2>&1 || true
+}
+
+case "$ACTION" in
+	create) create_backup ;;
+	restore) restore_backup ;;
+	*) exit 2 ;;
+esac
