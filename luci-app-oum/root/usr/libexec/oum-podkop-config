@@ -18,20 +18,105 @@ tunnel_ready() {
 	[ -n "$device" ] && ip link show dev "$device" 2>/dev/null | grep -q 'UP'
 }
 
+prepare_zapret_runtime() {
+	config=/opt/zapret/config
+	[ -f "$config" ] || return 1
+	for file in /opt/zapret/ipset/*.txt; do
+		[ -f "$file" ] || continue
+		chmod 644 "$file"
+		chown root:root "$file"
+	done
+	for file in /opt/zapret/files/fake/*.bin; do
+		[ -f "$file" ] || continue
+		chmod 644 "$file"
+		chown root:root "$file"
+	done
+}
+
+podkop_ready() {
+	pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1
+}
+
+wait_for_podkop() {
+	limit="$1"
+	waited=0
+	sing_box_restarted=0
+	while [ "$waited" -lt "$limit" ]; do
+		podkop_ready && return 0
+		if [ "$waited" -ge 15 ] && [ "$sing_box_restarted" = 0 ] &&
+			nft list table inet PodkopTable >/dev/null 2>&1 &&
+			sing-box check -c /etc/sing-box/config.json >/dev/null 2>&1; then
+			/etc/init.d/sing-box restart >>/tmp/oum-podkop.log 2>&1 || true
+			sing_box_restarted=1
+		fi
+		sleep 1
+		waited=$((waited + 1))
+	done
+	return 1
+}
+
+schedule_zapret_start() {
+	(
+		sleep 5
+		/etc/init.d/zapret restart >/tmp/oum-zapret.log 2>&1
+		sleep 15
+		pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1 ||
+			/etc/init.d/zapret restart >>/tmp/oum-zapret.log 2>&1
+	) >/dev/null 2>&1 &
+}
+
+wait_for_list_update() {
+	waited=0
+	# The background shell function may leave a stale or reused PID behind.
+	# Give first-run list and firewall initialization a bounded settling window,
+	# then rely on the real Zapret process+nft health check below.
+	while [ "$waited" -lt 15 ]; do
+		sleep 1
+		waited=$((waited + 1))
+	done
+	return 0
+}
+
 save_rollback() {
 	rm -rf "$ROLLBACK"
 	mkdir -p "$ROLLBACK"
 	cp /etc/config/podkop "$ROLLBACK/podkop"
+	cp /etc/config/oum "$ROLLBACK/oum"
+	cp /etc/config/dhcp "$ROLLBACK/dhcp"
+	[ ! -f /etc/config/sing-box ] || cp /etc/config/sing-box "$ROLLBACK/sing-box"
 	[ ! -f /etc/config/zapret ] || cp /etc/config/zapret "$ROLLBACK/zapret"
 	[ ! -f /opt/zapret/config ] || cp /opt/zapret/config "$ROLLBACK/zapret-main"
+	/etc/init.d/podkop enabled >/dev/null 2>&1 && printf '1\n' > "$ROLLBACK/podkop-enabled" || printf '0\n' > "$ROLLBACK/podkop-enabled"
+	/etc/init.d/zapret enabled >/dev/null 2>&1 && printf '1\n' > "$ROLLBACK/zapret-enabled" || printf '0\n' > "$ROLLBACK/zapret-enabled"
 }
 
 restore_rollback() {
-	[ ! -f "$ROLLBACK/podkop" ] || cp "$ROLLBACK/podkop" /etc/config/podkop
-	[ ! -f "$ROLLBACK/zapret" ] || cp "$ROLLBACK/zapret" /etc/config/zapret
-	[ ! -f "$ROLLBACK/zapret-main" ] || cp "$ROLLBACK/zapret-main" /opt/zapret/config
 	/etc/init.d/podkop stop >/dev/null 2>&1 || true
 	/etc/init.d/zapret stop >/dev/null 2>&1 || true
+	/etc/init.d/sing-box stop >/dev/null 2>&1 || true
+	[ ! -f "$ROLLBACK/podkop" ] || cp "$ROLLBACK/podkop" /etc/config/podkop
+	[ ! -f "$ROLLBACK/oum" ] || cp "$ROLLBACK/oum" /etc/config/oum
+	[ ! -f "$ROLLBACK/dhcp" ] || cp "$ROLLBACK/dhcp" /etc/config/dhcp
+	[ ! -f "$ROLLBACK/sing-box" ] || cp "$ROLLBACK/sing-box" /etc/config/sing-box
+	[ ! -f "$ROLLBACK/zapret" ] || cp "$ROLLBACK/zapret" /etc/config/zapret
+	[ ! -f "$ROLLBACK/zapret-main" ] || cp "$ROLLBACK/zapret-main" /opt/zapret/config
+	podkop_was_enabled="$(cat "$ROLLBACK/podkop-enabled" 2>/dev/null || echo 0)"
+	if [ "$podkop_was_enabled" = 1 ]; then
+		/etc/init.d/podkop enable >/dev/null 2>&1 || true
+		/etc/init.d/podkop restart >/dev/null 2>&1 || true
+		wait_for_podkop 30 || true
+		wait_for_list_update || true
+	else
+		/etc/init.d/podkop disable >/dev/null 2>&1 || true
+	fi
+	if [ "$(cat "$ROLLBACK/zapret-enabled" 2>/dev/null || echo 0)" = 1 ]; then
+		/etc/init.d/zapret enable >/dev/null 2>&1 || true
+		prepare_zapret_runtime
+		schedule_zapret_start
+	else
+		/etc/init.d/zapret disable >/dev/null 2>&1 || true
+	fi
+	[ "$podkop_was_enabled" = 1 ] || /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
 }
 
 configure() {
@@ -39,10 +124,21 @@ configure() {
 		echo 'Podkop + Zapret are not installed' >&2
 		return 1
 	}
+	prepare_zapret_runtime
 	valid_interface "$INTERFACE" || { echo 'Select a WireGuard or AmneziaWG interface' >&2; return 1; }
-	ifup "$INTERFACE" >/dev/null 2>&1 || true
-	tunnel_ready "$INTERFACE" || { echo 'Selected tunnel is not up' >&2; return 1; }
+	if ! tunnel_ready "$INTERFACE"; then
+		ifup "$INTERFACE" >/dev/null 2>&1 || true
+		waited=0
+		while ! tunnel_ready "$INTERFACE"; do
+			[ "$waited" -lt 20 ] || { echo 'Selected tunnel is not up' >&2; return 1; }
+			sleep 1
+			waited=$((waited + 1))
+		done
+	fi
 	save_rollback
+	/etc/init.d/zapret stop >/dev/null 2>&1 || true
+	/etc/init.d/podkop stop >/dev/null 2>&1 || true
+	/etc/init.d/sing-box stop >/dev/null 2>&1 || true
 
 	uci -q set podkop.settings=settings
 	uci -q set podkop.settings.dns_type='udp'
@@ -65,29 +161,23 @@ configure() {
 	uci -q set podkop.youtube_direct.connection_type='exclusion'
 	uci -q add_list podkop.youtube_direct.community_lists='youtube'
 	uci -q commit podkop || { restore_rollback; return 1; }
+	# Apply per-device lists while Podkop is stopped. Applying them after start
+	# would trigger a second engine reload and race with Zapret startup.
+	/usr/libexec/oum-device-policy sync >/dev/null 2>&1 || { restore_rollback; return 1; }
+
+	/etc/init.d/podkop enable >/dev/null 2>&1 || true
+	/etc/init.d/zapret enable >/dev/null 2>&1 || true
+	/etc/init.d/podkop restart >/tmp/oum-podkop.log 2>&1 || { restore_rollback; return 1; }
+	wait_for_podkop 60 || { restore_rollback; return 1; }
+	wait_for_list_update || { restore_rollback; return 1; }
+	prepare_zapret_runtime
 
 	uci -q set oum.main.active_source='podkop'
 	uci -q set oum.main.pending_source='none'
 	uci -q set "oum.main.podkop_interface=$INTERFACE"
 	uci -q commit oum
-
-	/etc/init.d/podkop enable >/dev/null 2>&1 || true
-	/etc/init.d/zapret enable >/dev/null 2>&1 || true
-	/etc/init.d/podkop restart >/tmp/oum-podkop.log 2>&1 || { restore_rollback; return 1; }
-	/etc/init.d/zapret restart >/tmp/oum-zapret.log 2>&1 || { restore_rollback; return 1; }
-
-	waited=0
-	while [ "$waited" -lt 60 ]; do
-		if pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1 &&
-			pidof nfqws >/dev/null 2>&1; then
-			/usr/libexec/oum-device-policy sync >/dev/null 2>&1 || true
-			return 0
-		fi
-		sleep 1
-		waited=$((waited + 1))
-	done
-	restore_rollback
-	return 1
+	schedule_zapret_start
+	return 0
 }
 
 status() {
@@ -95,7 +185,7 @@ status() {
 	printf 'interface=%s\n' "$INTERFACE"
 	printf 'tunnel=%s\n' "$(valid_interface "$INTERFACE" && tunnel_ready "$INTERFACE" && echo 1 || echo 0)"
 	printf 'podkop=%s\n' "$(pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1 && echo 1 || echo 0)"
-	printf 'zapret=%s\n' "$(pidof nfqws >/dev/null 2>&1 && echo 1 || echo 0)"
+	printf 'zapret=%s\n' "$(pgrep -f '/opt/zapret/nfq/nfqws' >/dev/null 2>&1 && echo 1 || echo 0)"
 }
 
 case "$ACTION" in

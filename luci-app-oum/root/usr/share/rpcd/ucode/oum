@@ -332,7 +332,7 @@ function podkopStatusData() {
 		installed: true,
 		enabled: system('/etc/init.d/podkop enabled >/dev/null 2>&1') == 0,
 		ready: system('pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1') == 0,
-		zapret: system('pidof nfqws >/dev/null 2>&1') == 0,
+		zapret: system("pgrep -f '/opt/zapret/nfq/nfqws' >/dev/null 2>&1") == 0,
 		interface: iface,
 		tunnel_up: tunnel.up == true,
 		version: packageVersion('podkop'),
@@ -891,12 +891,12 @@ const methods = {
 				if (enabled) {
 					system('/etc/init.d/podkop enable >/dev/null 2>&1');
 					system('/etc/init.d/zapret enable >/dev/null 2>&1');
-					system('(/etc/init.d/podkop restart && /etc/init.d/zapret restart) >/tmp/oum-vpn-control.log 2>&1 &');
+					system('(/etc/init.d/podkop restart; sleep 20; /etc/init.d/zapret restart; sleep 15; pgrep -f "^/opt/zapret/nfq/nfqws " >/dev/null 2>&1 || /etc/init.d/zapret restart) >/tmp/oum-vpn-control.log 2>&1 &');
 				}
 				else {
 					system('/etc/init.d/podkop disable >/dev/null 2>&1');
 					system('/etc/init.d/zapret disable >/dev/null 2>&1');
-					system('(/etc/init.d/podkop stop; /etc/init.d/zapret stop) >/tmp/oum-vpn-control.log 2>&1 &');
+					system('(/etc/init.d/podkop stop; /etc/init.d/zapret stop; for pid in $(pgrep -f "^/opt/zapret/nfq/nfqws " 2>/dev/null); do kill "$pid" 2>/dev/null; done; nft delete table inet zapret >/dev/null 2>&1 || true; /etc/init.d/dnsmasq restart) >/tmp/oum-vpn-control.log 2>&1 &');
 				}
 				return { ok: true, enabled, engine: 'podkop', message: enabled ? 'Podkop и Zapret запускаются…' : 'Podkop и Zapret отключаются…' };
 			}
