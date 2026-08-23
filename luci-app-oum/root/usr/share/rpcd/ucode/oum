@@ -1154,9 +1154,11 @@ const methods = {
 				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
 			let kind = request.args.vpn_type;
 			let payload = request.args.payload;
-			if (passwallInstalled())
-				return failure('engine_not_supported', 'Импорт источников PassWall будет добавлен отдельным этапом. Сейчас доступно только управление существующей конфигурацией.');
-			if (!access('/usr/libexec/oum-source-job'))
+			let passwall = passwallInstalled();
+			let runner = passwall ? '/usr/libexec/oum-passwall-source-job' : '/usr/libexec/oum-source-job';
+			if (passwall && kind == 'awg')
+				return failure('engine_not_supported', 'AWG является отдельным сетевым туннелем. Для него выберите Podkop + Zapret.');
+			if (!access(runner))
 				return failure('runtime_missing', 'Компонент импорта OUM не установлен.');
 			if (!(kind in [ 'subscription', 'awg', 'proxy' ]))
 				return failure('invalid_vpn', 'Неизвестный тип подключения.');
@@ -1181,7 +1183,7 @@ const methods = {
 				system(`rmdir ${VPN_JOB_LOCK}`);
 				return failure('status_write', 'Не удалось создать состояние задания.');
 			}
-			if (system(`(/usr/libexec/oum-source-job ${kind} ${VPN_JOB_DIR}/input) >/dev/null 2>&1 &`) != 0) {
+			if (system(`(${runner} ${kind} ${VPN_JOB_DIR}/input) >/dev/null 2>&1 &`) != 0) {
 				system(`rmdir ${VPN_JOB_LOCK}`);
 				return failure('job_start', 'Не удалось запустить импорт.');
 			}

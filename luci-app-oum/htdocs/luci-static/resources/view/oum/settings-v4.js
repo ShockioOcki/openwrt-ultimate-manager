@@ -31,9 +31,9 @@ function choice(name, value, title, description, checked) {
 	]);
 }
 
-function sourceChoice(value, title, description, checked) {
-	return E('label', { 'class': 'oum-source-choice' }, [
-		E('input', { type: 'radio', name: 'vpn_source', value, checked: checked ? '' : null }),
+function sourceChoice(value, title, description, checked, disabled) {
+	return E('label', { 'class': `oum-source-choice${disabled ? ' is-disabled' : ''}` }, [
+		E('input', { type: 'radio', name: 'vpn_source', value, checked: checked ? '' : null, disabled: disabled ? '' : null }),
 		E('span', {}, [ E('strong', {}, title), E('small', {}, description) ])
 	]);
 }
@@ -108,7 +108,14 @@ return view.extend({
 		const engineTitle = engines.current === 'passwall' ? 'PassWall' : (engines.current === 'podkop' ? 'Podkop + Zapret' : (engines.current === 'openclash' ? 'OpenClash' : 'не установлен'));
 		const engineVersion = engines.current === 'passwall' ? engines.passwall.version : (engines.current === 'podkop' ? engines.podkop.version : engines.openclash.version);
 		const podkopInterfaces = Array.from(new Set([ engines.podkop?.interface || '', ...unmanagedTunnels.map((item) => item.name) ].filter(Boolean)));
-		const sourceSupported = engines.current === 'openclash';
+		const sourceSupported = engines.current === 'openclash' || engines.current === 'passwall';
+		const sourceHelp = engines.current === 'openclash' ?
+			'Новый источник полностью заменяет предыдущий OUM-профиль. При ошибке старый профиль восстанавливается.' :
+			(engines.current === 'podkop' ?
+				'Podkop использует отдельный сетевой туннель; выберите его в разделе VPN-движка выше.' :
+				(engines.current === 'passwall' ?
+					'PassWall принимает Subscription и Proxy через собственный парсер с резервной копией. AWG является отдельным туннелем и используется с Podkop + Zapret.' :
+					'Сначала установите VPN-движок. После успешной установки здесь появятся подходящие способы подключения.'));
 		const capabilities = settings.capabilities || {};
 		const meshState = !capabilities.mesh_driver ? 'Режим 802.11s не поддерживается радиодрайвером.' :
 			(capabilities.mesh_runtime ? 'Mesh поддерживается и программный компонент установлен.' : 'Радиомодуль поддерживает Mesh. Для включения потребуется безопасная установка wpad-mesh.');
@@ -116,10 +123,11 @@ return view.extend({
 			[ capabilities.usb_storage ? 'накопитель' : '', capabilities.usb_network ? 'сетевое устройство' : '', capabilities.usb_modem ? 'модем' : '' ].filter(Boolean).join(', ') || 'USB-порт доступен, подключённых устройств нет.';
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
+		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
 		const root = E('div', { 'class': 'oum-settings' }, [
 			E('style', {}, `
 				.oum-settings{max-width:1000px;margin:0 auto}.oum-page-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-page-head h2{margin:0}.oum-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.oum-settings-panel{border:1px solid #ccd3dc;border-radius:12px;padding:18px;margin-bottom:16px}.oum-settings-panel h3{margin-top:0}
-				.oum-setting-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.oum-setting-choice{display:flex;gap:9px;padding:12px;border:1px solid #ccd3dc;border-radius:9px;cursor:pointer}.oum-setting-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-setting-choice span{display:flex;flex-direction:column;gap:4px}.oum-setting-choice small,.oum-help{opacity:.7;line-height:1.45}
+				.oum-setting-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.oum-setting-choice{display:flex;gap:9px;padding:12px;border:1px solid #ccd3dc;border-radius:9px;cursor:pointer}.oum-setting-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-setting-choice span{display:flex;flex-direction:column;gap:4px}.oum-setting-choice small,.oum-help{opacity:.7;line-height:1.45}.oum-source-choice.is-disabled{opacity:.5;cursor:not-allowed}
 				.oum-setting-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-setting-field{margin:11px 0}.oum-setting-field label{display:block;font-weight:600;margin-bottom:6px}.oum-setting-field input{width:100%;box-sizing:border-box}.oum-setting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.oum-job-state{padding:11px 13px;border-radius:8px;background:#eef4fa;margin:0 0 16px}.oum-job-state[data-state="failed"]{background:#ffe9e7}.oum-job-state[data-state="success"]{background:#e6f7eb}
 				.oum-maintenance{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.oum-maintenance-card{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
 				.oum-capability-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-capability{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-capability h4{margin:0 0 8px}.oum-capability-state{line-height:1.45}
@@ -220,11 +228,11 @@ return view.extend({
 			}, [
 				E('summary', {}, 'Защищённое подключение'),
 				E('div', { 'class': 'oum-protected-content' }, [
-					E('p', { 'class': 'oum-help' }, sourceSupported ? 'Новый источник полностью заменяет предыдущий OUM-профиль. При ошибке старый профиль восстанавливается.' : (engines.current === 'podkop' ? 'Podkop использует отдельный сетевой туннель; выберите его в разделе VPN-движка выше.' : 'Сейчас работает PassWall. Управление его существующими нодами доступно на главной; безопасный импорт новых источников добавим следующим этапом.')),
+					E('p', { 'class': 'oum-help' }, sourceHelp),
 					E('div', { 'class': 'oum-sources', hidden: sourceSupported ? null : '' }, [
-						sourceChoice('subscription', 'Subscription', 'Ссылка на набор серверов', selectedSource === 'subscription'),
-						sourceChoice('awg', 'AWG Tunnel', 'Конфигурация AmneziaWG', selectedSource === 'awg'),
-						sourceChoice('proxy', 'Proxy', 'VLESS Reality или Hysteria2', selectedSource === 'proxy')
+						sourceChoice('subscription', 'Subscription', 'Ссылка на набор серверов', selectedSource === 'subscription', false),
+						sourceChoice('awg', 'AWG Tunnel', engines.current === 'passwall' ? 'Для Podkop + Zapret' : 'Конфигурация AmneziaWG', selectedSource === 'awg', engines.current === 'passwall'),
+						sourceChoice('proxy', 'Proxy', 'VLESS Reality или Hysteria2', selectedSource === 'proxy', false)
 					]),
 					E('div', { 'class': 'oum-vpn-input', hidden: sourceSupported ? null : '' }, [
 						E('label', { id: 'source-label' }, ''),

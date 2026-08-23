@@ -103,9 +103,11 @@ assets are ready, and restores the previous engine automatically if installation
 or readiness checks fail. PassWall 26.5.11-r1 packages are kept without
 configuration or credentials in the private `openwrt-ultimate-manager-assets`
 repository. Development routers use a checksum-verified local cache under
-`/etc/oum/packages`; no GitHub token is stored on the router. Source import
-remains disabled in PassWall mode until its native
-import adapter is complete; existing PassWall nodes and policies remain usable.
+`/etc/oum/packages`; no GitHub token is stored on the router. The native
+PassWall adapter accepts Subscription URLs and direct proxy links through
+PassWall's own parser, keeps them in an isolated OUM group and rolls the full
+UCI configuration back when parsing or startup fails. AWG remains an
+independent tunnel configured with Podkop + Zapret rather than an Xray node.
 
 Podkop uses a dedicated, already configured WireGuard or AmneziaWG interface.
 The managed default sends the `Russia inside` list through that tunnel while a

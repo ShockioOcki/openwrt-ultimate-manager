@@ -323,8 +323,33 @@ patch_passwall_compat() {
 
 install_passwall() {
 	apk add --allow-untrusted "$WORK"/passwall/*.apk >> "$LOG" 2>&1 || return 1
-	[ -x /etc/init.d/passwall ] && command -v xray >/dev/null 2>&1 || return 1
-	[ "$(apk list --installed luci-app-passwall 2>/dev/null | sed -n 's/^luci-app-passwall-\([^ ]*\).*/\1/p')" = "$PASSWALL_VERSION" ] || return 1
+	[ -x /etc/init.d/passwall ] && command -v xray >/dev/null 2>&1 || {
+		log 'PassWall package installed without its init script or Xray binary.'
+		return 1
+	}
+	installed_version="$(apk list --installed luci-app-passwall 2>/dev/null | sed -n 's/^luci-app-passwall-\([^ ]*\).*/\1/p')"
+	[ "$installed_version" = "$PASSWALL_VERSION" ] || {
+		log "Unexpected PassWall version after installation: ${installed_version:-missing}."
+		return 1
+	}
+	# The standalone APK ships its initial UCI configuration through an
+	# OpenWrt uci-defaults script. apk does not execute that script when these
+	# private packages are installed directly, so bootstrap it explicitly on a
+	# clean router. Existing PassWall configuration is never overwritten.
+	if [ ! -s /etc/config/passwall ]; then
+		[ -x /etc/uci-defaults/luci-passwall ] || {
+			log 'PassWall default configuration bootstrap is missing.'
+			return 1
+		}
+		/etc/uci-defaults/luci-passwall >> "$LOG" 2>&1 || {
+			log 'PassWall default configuration bootstrap failed.'
+			return 1
+		}
+	fi
+	[ -s /etc/config/passwall ] || {
+		log 'PassWall configuration was not created.'
+		return 1
+	}
 	[ ! -f "$STATE/passwall/passwall" ] || cp "$STATE/passwall/passwall" /etc/config/passwall
 	chmod 600 /etc/config/passwall
 	patch_passwall_compat

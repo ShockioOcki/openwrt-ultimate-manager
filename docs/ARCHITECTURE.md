@@ -176,6 +176,16 @@ ordering defect in `util_xray.lua`; the helper applies a one-line guarded
 compatibility fix only when the exact vulnerable statement is present and
 keeps the original under `/etc/oum/compat`.
 
+PassWall source import reuses its bundled `subscribe.lua` parser instead of
+translating nodes through the OpenClash converter. Subscription downloads are
+first written to a private local file so PassWall does not log the
+credential-bearing URL while parsing. OUM-managed subscription and direct URI
+nodes live in an isolated `OUM` group; a private snapshot of the complete
+PassWall UCI file is restored if parsing, Xray startup or nftables readiness
+fails. A minimal dedicated shunt is selected only after at least one valid node
+exists. AWG is rejected in PassWall mode because it is an independent network
+interface used by Podkop rather than an Xray-compatible proxy node.
+
 Subscription traffic and expiry are fetched on the router from the provider's
 `Subscription-Userinfo` response header. OUM stores only the parsed numeric
 values in `/tmp` for 30 minutes; the restricted browser session never receives
@@ -212,6 +222,10 @@ release contains no configuration, nodes, subscription URLs or credentials.
 Development routers receive it in `/etc/oum/packages/passwall`; every asset is
 checked against the compiled SHA-256 manifest before use, so no personal GitHub
 token is stored on the router.
+On a clean direct APK installation the package leaves its initial UCI file in
+`/etc/uci-defaults/luci-passwall`; the engine manager executes that official
+bootstrap only when `/etc/config/passwall` is absent and never overwrites an
+existing configuration.
 Other engines use a checksum-verified controlled release manifest rather than
 sharing PassWall's product version pin. Podkop + Zapret uses Podkop 0.7.22 and
 Zapret 72.20260307 on the tested OpenWrt 25.12 aarch64 target. Podkop binds to
