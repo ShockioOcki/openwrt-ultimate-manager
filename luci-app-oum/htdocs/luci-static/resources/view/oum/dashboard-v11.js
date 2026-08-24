@@ -418,7 +418,7 @@ return view.extend({
 		podkopQuicToggle.addEventListener('click', (event) => {
 			event.preventDefault();
 			const next = !podkopQuicDisabled;
-			if (!window.confirm(next ? 'Отключить QUIC? Видео перейдёт на TCP/TLS, Podkop кратковременно перезапустится.' : 'Снова разрешить QUIC и перезапустить Podkop?')) return;
+			if (!window.confirm(next ? 'Отключить QUIC? Видео перейдёт на TCP/TLS, правила firewall кратковременно перезапустятся.' : 'Снова разрешить QUIC? Правила firewall кратковременно перезапустятся.')) return;
 			podkopQuicToggle.disabled = true;
 			callSetZapretQuic(next).then((result) => {
 				if (!result.ok) throw new Error(result.message || 'Не удалось изменить режим QUIC.');
