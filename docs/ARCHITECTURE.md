@@ -258,9 +258,11 @@ an exact SHA-256-pinned snapshot of StressOzz/Zapret-Manager revision
 installer is never executed. Catalog validation runs before every mutation.
 The adapter replaces only the first YouTube-specific nfqws segment and carries
 the existing `--new` segments forward unchanged, so Discord and other local
-rules survive selection. Tests bind curl to the current WAN L3 device, avoiding
-the paid AWG path. System-job locking prevents an engine switch or routing edit
-during a test. The full Zapret UCI configuration is restored when a candidate
+rules survive selection. Tests resolve every probe hostname through Podkop's
+external bootstrap DNS, pin that real IPv4 address in curl, and bind curl to the
+current WAN L3 device. This avoids both the paid AWG path and Podkop FakeIP
+addresses, which cannot be sent directly over WAN. System-job locking prevents
+an engine switch or routing edit during a test. The full Zapret UCI configuration is restored when a candidate
 fails to start, fewer than three of four probes succeed, or the job is
 interrupted.
 

@@ -195,7 +195,19 @@ probe_one() {
 	url="$2"
 	device="$3"
 	result="$WORK/probe.$index"
-	metrics="$(curl -4 -sS -L --interface "$device" --connect-timeout 5 --max-time 8 --range 0-65535 \
+	host="${url#https://}"
+	host="${host%%/*}"
+	resolver="$(uci -q get podkop.settings.bootstrap_dns_server || echo 77.88.8.8)"
+	real_ip="$(nslookup "$host" "$resolver" 2>/dev/null |
+		sed -n 's/^Address:[[:space:]]*\([0-9][0-9.]*\)$/\1/p' | head -n 1)"
+	if ! printf '%s' "$real_ip" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then
+		printf '0 8000\n' > "$result"
+		return 0
+	fi
+	# Podkop DNS deliberately returns FakeIP addresses (198.18.0.0/15). A WAN-bound
+	# probe must pin the real address, otherwise curl bypasses FakeIP handling and
+	# every working Zapret strategy is reported as failed.
+	metrics="$(curl -4 -sS -L --interface "$device" --resolve "$host:443:$real_ip" --connect-timeout 5 --max-time 8 --range 0-65535 \
 		-o /dev/null -w '%{http_code} %{time_total}' "$url" 2>/dev/null || true)"
 	code="${metrics%% *}"
 	time_value="${metrics#* }"
