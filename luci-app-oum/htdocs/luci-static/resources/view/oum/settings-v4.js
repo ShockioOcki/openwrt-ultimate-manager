@@ -20,6 +20,8 @@ const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', pa
 const callSwitchEngine = rpc.declare({ object: 'oum', method: 'switchVpnEngine', params: [ 'engine' ], expect: { '': {} } });
 const callConfigurePodkop = rpc.declare({ object: 'oum', method: 'configurePodkop', params: [ 'interface' ], expect: { '': {} } });
 const callImportPodkopAwg = rpc.declare({ object: 'oum', method: 'importPodkopAwg', params: [ 'payload' ], expect: { '': {} } });
+const callImportPodkopReality = rpc.declare({ object: 'oum', method: 'importPodkopReality', params: [ 'payload' ], expect: { '': {} } });
+const callSetPodkopYoutubeMode = rpc.declare({ object: 'oum', method: 'setPodkopYoutubeMode', params: [ 'mode' ], expect: { '': {} } });
 const callZapretStrategyStatus = rpc.declare({ object: 'oum', method: 'zapretStrategyStatus', expect: { '': {} } });
 const callStartZapretStrategy = rpc.declare({ object: 'oum', method: 'startZapretStrategy', params: [ 'action', 'strategy' ], expect: { '': {} } });
 const callCreateBackup = rpc.declare({ object: 'oum', method: 'createBackup', expect: { '': {} } });
@@ -112,6 +114,7 @@ return view.extend({
 		const engineTitle = engines.current === 'passwall' ? 'PassWall' : (engines.current === 'podkop' ? 'Podkop + Zapret' : (engines.current === 'openclash' ? 'OpenClash' : 'не установлен'));
 		const engineVersion = engines.current === 'passwall' ? engines.passwall.version : (engines.current === 'podkop' ? engines.podkop.version : engines.openclash.version);
 		const podkopInterfaces = Array.from(new Set([ engines.podkop?.interface || '', ...unmanagedTunnels.map((item) => item.name) ].filter(Boolean)));
+		const youtubeMode = engines.podkop?.youtube_mode || 'zapret';
 		const sourceSupported = engines.current === 'openclash' || engines.current === 'passwall';
 		const sourceHelp = engines.current === 'openclash' ?
 			'Новый источник полностью заменяет предыдущий OUM-профиль. При ошибке старый профиль восстанавливается.' :
@@ -136,9 +139,9 @@ return view.extend({
 				.oum-maintenance{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.oum-maintenance-card{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
 				.oum-capability-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-capability{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-capability h4{margin:0 0 8px}.oum-capability-state{line-height:1.45}
 				.oum-engine-current{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px;border-radius:9px;background:#eef4fa;margin-bottom:14px}.oum-engine-current small{opacity:.7}.oum-engine-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-engine-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-engine-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-engine-choice span{display:flex;flex-direction:column;gap:5px}.oum-engine-choice small{opacity:.72;line-height:1.4}.oum-engine-choice.is-disabled{opacity:.55;cursor:not-allowed}.oum-engine-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
-				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:14px}.oum-inline-warning{padding:11px 13px;border:1px solid #e4b04d;background:#fff4df;border-radius:9px;margin:12px 0;line-height:1.45}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}
+				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:14px}.oum-inline-warning{padding:11px 13px;border:1px solid #e4b04d;background:#fff4df;border-radius:9px;margin:12px 0;line-height:1.45}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}.oum-podkop-transports{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-transport-card{border:1px solid #ccd3dc;border-radius:11px;padding:14px}.oum-transport-card[data-active="true"]{border-color:#2b9b68}.oum-transport-card h4{margin:0 0 7px}.oum-transport-card textarea{width:100%;min-height:150px;font-family:monospace;box-sizing:border-box;margin:8px 0}
 				.oum-vpn-input{margin:18px 0}.oum-vpn-input label{display:block;font-weight:600;margin-bottom:7px}.oum-vpn-input input,.oum-vpn-input textarea{width:100%;box-sizing:border-box}.oum-vpn-input textarea{min-height:180px;font-family:monospace}.oum-vpn-job{padding:12px;border-radius:8px;background:#eef4fa;margin:14px 0}.oum-vpn-job[data-state="failed"]{background:#ffe9e7}.oum-vpn-job[data-state="success"]{background:#e6f7eb}
-				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid,.oum-engine-choices{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
+				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid,.oum-engine-choices,.oum-podkop-transports{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
 			`),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('h2', {}, 'Настройки OUM'),
@@ -226,16 +229,37 @@ return view.extend({
 				E('summary', {}, 'Защищённое подключение'),
 				E('div', { 'class': 'oum-protected-content' }, [
 					E('div', { hidden: engines.current === 'podkop' ? null : '' }, [
-						E('h4', {}, 'AWG-туннель'),
-						E('p', { 'class': 'oum-help' }, 'Вставьте AmneziaWG-конфигурацию целиком. DNS из файла игнорируется, а маршрут по умолчанию не создаётся. После проверки OUM свяжет туннель с Podkop.'),
-						E('textarea', { id: 'podkop-awg-config', autocomplete: 'off', spellcheck: 'false', placeholder: '[Interface]\nPrivateKey = …\nAddress = …\n…\n\n[Peer]\nPublicKey = …\nEndpoint = …', style: 'width:100%;min-height:180px;font-family:monospace;box-sizing:border-box;margin:8px 0' }),
-						E('div', { 'class': 'oum-setting-actions' }, [
-							E('button', { 'class': 'btn cbi-button-action', id: 'import-podkop-awg', 'data-system-action': '' }, 'Импортировать AWG и запустить'),
-							E('select', { id: 'podkop-interface' }, podkopInterfaces.length ? podkopInterfaces.map((name) => E('option', { value: name, selected: name === engines.podkop?.interface ? '' : null }, name)) : E('option', { value: '' }, 'Другой туннель не найден')),
-							E('button', { 'class': 'btn', id: 'configure-podkop', 'data-system-action': '', disabled: podkopInterfaces.length ? null : '' }, 'Использовать выбранный')
+						E('h4', {}, 'Подключение Podkop'),
+						E('p', { 'class': 'oum-help' }, 'AWG и Reality взаимоисключающие: успешно проверенное новое подключение заменяет текущее.'),
+						E('div', { 'class': 'oum-podkop-transports' }, [
+							E('section', { 'class': 'oum-transport-card', 'data-active': engines.podkop?.transport !== 'reality' ? 'true' : 'false' }, [
+								E('h4', {}, 'AWG-туннель'),
+								E('p', { 'class': 'oum-help' }, 'DNS из файла игнорируется, маршрут по умолчанию не создаётся.'),
+								E('textarea', { id: 'podkop-awg-config', autocomplete: 'off', spellcheck: 'false', placeholder: '[Interface]\nPrivateKey = …\nAddress = …\n…\n\n[Peer]\nPublicKey = …\nEndpoint = …' }),
+								E('div', { 'class': 'oum-setting-actions' }, [
+									E('button', { 'class': 'btn cbi-button-action', id: 'import-podkop-awg', 'data-system-action': '' }, 'Импортировать AWG'),
+									E('select', { id: 'podkop-interface' }, podkopInterfaces.length ? podkopInterfaces.map((name) => E('option', { value: name, selected: name === engines.podkop?.interface ? '' : null }, name)) : E('option', { value: '' }, 'Туннель не найден')),
+									E('button', { 'class': 'btn', id: 'configure-podkop', 'data-system-action': '', disabled: podkopInterfaces.length ? null : '' }, 'Использовать выбранный')
+								])
+							]),
+							E('section', { 'class': 'oum-transport-card', 'data-active': engines.podkop?.transport === 'reality' ? 'true' : 'false' }, [
+								E('h4', {}, 'Reality-прокси'),
+								E('p', { 'class': 'oum-help' }, 'Одна полная VLESS Reality-ссылка. Секрет после сохранения не отображается.'),
+								E('textarea', { id: 'podkop-reality-config', autocomplete: 'off', spellcheck: 'false', placeholder: 'vless://UUID@server:443?security=reality&pbk=…&fp=…&sni=…' }),
+								E('button', { 'class': 'btn cbi-button-action', id: 'import-podkop-reality', 'data-system-action': '' }, 'Проверить и использовать Reality')
+							])
 						]),
 						E('hr'),
-						E('h4', {}, 'Zapret для YouTube'),
+						E('h4', {}, 'Маршрут YouTube'),
+						E('p', { 'class': 'oum-help' }, 'YouTube может идти напрямую через Zapret без расхода VPN-трафика либо через текущее защищённое подключение.'),
+						E('div', { 'class': 'oum-setting-choices' }, [
+							choice('youtube_mode', 'zapret', 'Напрямую + Zapret', 'Экономит VPN-трафик; используется выбранная DPI-стратегия.', youtubeMode === 'zapret'),
+							choice('youtube_mode', 'vpn', 'Через VPN', 'Zapret и его правила останавливаются; YouTube использует AWG или Reality.', youtubeMode === 'vpn')
+						]),
+						E('button', { 'class': 'btn cbi-button-action', id: 'apply-youtube-mode', 'data-system-action': '' }, 'Применить режим YouTube'),
+						E('hr'),
+						E('div', { hidden: youtubeMode === 'zapret' ? null : '' }, [
+						E('h4', {}, 'Стратегия Zapret'),
 						E('p', { 'class': 'oum-help' }, `Закреплённый каталог содержит ${zapret.catalog_total || 27} стратегий. Автоподбор проверяет их через прямой WAN, выбирает наиболее стабильную и возвращает предыдущую конфигурацию при ошибке.`),
 						E('div', { 'class': 'oum-engine-current' }, [
 							E('span', {}, [ E('small', {}, 'Текущая стратегия'), E('br'), E('strong', { id: 'zapret-current' }, zapret.current || 'не выбрана OUM') ]),
@@ -249,6 +273,8 @@ return view.extend({
 							E('button', { 'class': 'btn', id: 'zapret-restore', 'data-system-action': '', disabled: zapret.rollback ? null : '' }, 'Вернуть предыдущую')
 						]),
 						E('p', { 'class': 'oum-help', id: 'zapret-status' }, initialJob.action?.startsWith('zapret_') ? initialJob.message : 'Во время автоподбора YouTube-соединения будут кратковременно перезапускаться.')
+						]),
+						E('p', { 'class': 'oum-help', hidden: youtubeMode === 'vpn' ? null : '' }, 'Zapret остановлен: YouTube использует защищённое подключение Podkop.')
 					]),
 					E('div', { hidden: sourceSupported ? null : '' }, [
 						E('p', { 'class': 'oum-help' }, sourceHelp),
@@ -328,7 +354,7 @@ return view.extend({
 				const zapretStatus = root.querySelector('#zapret-status');
 				if (zapretStatus && status.action?.startsWith('zapret_'))
 					zapretStatus.textContent = status.message || 'Операция Zapret выполняется…';
-				if ((status.action === 'engine' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action?.startsWith('zapret_')) && status.state === 'success')
+				if ((status.action === 'engine' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
 					window.setTimeout(() => window.location.reload(), 900);
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
@@ -394,6 +420,15 @@ return view.extend({
 			if (await confirmation('Импортировать AWG?', 'OUM проверит пакеты и конфигурацию, создаст отдельный интерфейс oum_awg и запустит Podkop. При ошибке сеть будет восстановлена.', 'Импортировать', false))
 				start(callImportPodkopAwg(payload));
 		});
+		const podkopRealityButton = root.querySelector('#import-podkop-reality');
+		if (podkopRealityButton) podkopRealityButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			const payload = root.querySelector('#podkop-reality-config')?.value.trim() || '';
+			if (!/^vless:\/\/\S+$/i.test(payload) || !/[?&]security=reality(?:&|$)/i.test(payload))
+				return ui.addNotification(null, E('p', {}, 'Вставьте одну полную VLESS Reality-ссылку.'), 'warning');
+			if (await confirmation('Переключиться на Reality?', 'OUM проверит ссылку и реальный выход через прокси. AWG будет отключён только после успешной проверки.', 'Проверить Reality', false))
+				start(callImportPodkopReality(payload));
+		});
 		const runZapret = async (action) => {
 			const strategy = root.querySelector('#zapret-strategy')?.value || '';
 			const descriptions = {
@@ -405,6 +440,17 @@ return view.extend({
 			if (await confirmation('Настроить Zapret?', descriptions[action], action === 'auto' ? 'Начать подбор' : 'Продолжить', action === 'restore'))
 				start(callStartZapretStrategy(action, strategy));
 		};
+		const youtubeModeButton = root.querySelector('#apply-youtube-mode');
+		if (youtubeModeButton) youtubeModeButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			const mode = selected('youtube_mode') || 'zapret';
+			if (mode === youtubeMode) return ui.addNotification(null, E('p', {}, 'Этот режим YouTube уже используется.'), 'warning');
+			const text = mode === 'vpn' ?
+				'YouTube будет направлен через текущее защищённое подключение. Zapret остановится, автозапуск и nftables-правила будут отключены.' :
+				'YouTube будет исключён из VPN. OUM запустит последнюю стратегию Zapret и проверит прямой доступ.';
+			if (await confirmation('Изменить маршрут YouTube?', text, 'Переключить', false))
+				start(callSetPodkopYoutubeMode(mode));
+		});
 		for (const action of [ 'auto', 'apply', 'check', 'restore' ]) {
 			const button = root.querySelector(`#zapret-${action}`);
 			if (button) button.addEventListener('click', (event) => { event.preventDefault(); runZapret(action); });

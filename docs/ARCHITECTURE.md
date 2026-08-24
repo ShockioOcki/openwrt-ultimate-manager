@@ -147,10 +147,12 @@ termination. A new Subscription, AWG Tunnel or Proxy still replaces the old
 OUM profile only after Mihomo validation and successful OpenClash startup.
 
 `dashboardStatus` is a read-only rpcd method. It combines netifd WAN state,
-enabled wireless SSIDs, DHCP leases, current wireless associations and thermal
-zone readings. The browser refreshes these values every ten seconds. Client
-names come from DHCP leases; unknown names are displayed explicitly rather
-than guessed from MAC vendors.
+enabled wireless SSIDs, DHCP leases, LAN IPv4 neighbours, current wireless
+associations and thermal-zone readings. The browser refreshes these values
+every ten seconds. Neighbour discovery keeps statically addressed clients
+visible even when the DHCP lease file is empty, but filters addresses outside
+the configured LAN. Client names come from DHCP/OUM state; unknown names are
+displayed explicitly rather than guessed from MAC vendors.
 
 `oum-reset-first-run` is a test and recovery helper. It clears OUM-managed
 profiles and device policies, disables the installed VPN engine, locks root
@@ -202,6 +204,10 @@ managed client addresses to the `full_exception` or `full_redirection` source
 lists. Existing service addresses are never replaced. A policy change backs
 up PassWall, DHCP and OUM state, restarts PassWall, waits for Xray, its DNS
 instance and nftables, and restores the previous files if readiness fails.
+In Podkop mode the same selector resolves the current LAN address by MAC,
+creates an OUM-managed DHCP reservation, and changes only managed entries in
+`settings.routing_excluded_ips` or `main.fully_routed_ips`. Returning a device
+to the default removes both the reservation and OUM-owned route entry.
 
 Native WireGuard and AmneziaWG interfaces configured outside OUM are reported
 on the dashboard and Settings page. OUM does not silently delete or adopt them,
@@ -230,9 +236,14 @@ bootstrap only when `/etc/config/passwall` is absent and never overwrites an
 existing configuration.
 Other engines use a checksum-verified controlled release manifest rather than
 sharing PassWall's product version pin. Podkop + Zapret uses Podkop 0.7.22 and
-Zapret 72.20260307 on the tested OpenWrt 25.12 aarch64 target. Podkop binds to
-an independent AWG/WireGuard interface, routes `Russia inside` through it and
-adds a higher-priority `YouTube` exclusion for direct Zapret processing.
+Zapret 72.20260307 on the tested OpenWrt 25.12 aarch64 target. Podkop accepts
+one active outbound: an independent AWG/WireGuard interface or a native VLESS
+Reality URL validated by Podkop and sing-box. Its service catalog has only
+protected and direct destinations. YouTube can be direct through Zapret or
+protected through the active outbound; moving it to the protected route stops
+and disables Zapret and removes its runtime table. Moving it back validates the
+current strategy, falls back to the pinned automatic strategy selection, and
+rolls the complete transaction back if no strategy passes.
 The Settings importer pins the OpenWrt 25.12.3 MT7622 builds of
 `amneziawg-tools`, `kmod-amneziawg` and `luci-proto-amneziawg` with individual
 SHA-256 digests. It parses one interface and one peer, retains AWG v1/v2 fields

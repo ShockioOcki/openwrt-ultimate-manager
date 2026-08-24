@@ -12,7 +12,7 @@ const callSetVpnEnabled = rpc.declare({ object: 'oum', method: 'setVpnEnabled', 
 const callSetDevicePolicy = rpc.declare({ object: 'oum', method: 'setDevicePolicy', params: [ 'mac', 'policy' ], expect: { '': {} } });
 const callRefreshSubscriptionInfo = rpc.declare({ object: 'oum', method: 'refreshSubscriptionInfo', expect: { '': {} } });
 const callPodkopRoutingStatus = rpc.declare({ object: 'oum', method: 'podkopRoutingStatus', expect: { '': {} } });
-const callApplyPodkopRouting = rpc.declare({ object: 'oum', method: 'applyPodkopRouting', params: [ 'proxy_lists', 'proxy_domains', 'proxy_subnets', 'direct_lists', 'direct_domains', 'direct_subnets' ], expect: { '': {} } });
+const callApplyPodkopRouting = rpc.declare({ object: 'oum', method: 'applyPodkopRouting', params: [ 'proxy_lists', 'proxy_domains', 'proxy_subnets', 'direct_lists', 'direct_domains', 'direct_subnets', 'youtube_mode' ], expect: { '': {} } });
 const callPodkopDiagnostics = rpc.declare({ object: 'oum', method: 'podkopDiagnostics', expect: { '': {} } });
 const callSetZapretQuic = rpc.declare({ object: 'oum', method: 'setZapretQuic', params: [ 'enabled' ], expect: { '': {} } });
 const callPrepareZapretManager = rpc.declare({ object: 'oum', method: 'prepareZapretManager', expect: { '': {} } });
@@ -101,10 +101,31 @@ return view.extend({
 		const dashboardHost = window.location.hostname.includes(':') ? `[${window.location.hostname}]` : window.location.hostname;
 		const zashboardUrl = `http://${dashboardHost}:9090/ui/zashboard/`;
 		const routingSet = (values) => new Set(values || []);
-		const communityGrid = (prefix, selected) => E('div', { 'class': 'oum-community-grid' },
-			(podkopRouting.catalog || []).map((item) => E('label', { 'class': 'oum-community-item' }, [
-				E('input', { type: 'checkbox', 'data-community': prefix, value: item.id, checked: selected.has(item.id) ? '' : null }),
-				E('span', {}, item.label)
+		const proxyRoutes = routingSet(podkopRouting.proxy?.lists);
+		const youtubeInitialMode = dashboard.podkop?.youtube_mode || (proxyRoutes.has('youtube') ? 'vpn' : 'zapret');
+		const categoryDefinitions = [
+			[ 'Основные правила', [ 'russia_inside', 'russia_outside', 'geoblock', 'block', 'youtube' ], true ],
+			[ 'Социальные сети', [ 'discord', 'meta', 'twitter', 'telegram', 'tiktok' ], false ],
+			[ 'Видео и развлечения', [ 'hdrezka', 'anime', 'roblox', 'porn' ], false ],
+			[ 'Google и AI', [ 'google_ai', 'google_play' ], false ],
+			[ 'Инфраструктура', [ 'cloudflare', 'cloudfront', 'digitalocean', 'hetzner', 'ovh' ], false ],
+			[ 'Дополнительно', [ 'ukraine_inside', 'news', 'hodca' ], false ]
+		];
+		const catalogById = Object.fromEntries((podkopRouting.catalog || []).map((item) => [ item.id, item ]));
+		const routeRow = (item) => {
+			const viaVpn = item.id === 'youtube' ? youtubeInitialMode === 'vpn' : proxyRoutes.has(item.id);
+			return E('div', { 'class': 'oum-route-row', 'data-route-row': item.id }, [
+				E('div', { 'class': 'oum-route-service' }, [ E('strong', {}, item.label), item.id === 'youtube' ? E('small', {}, viaVpn ? 'Zapret остановлен' : 'обрабатывается Zapret') : null ]),
+				E('div', { 'class': 'oum-route-switch' }, [
+					E('label', {}, [ E('input', { type: 'radio', name: `route_${item.id}`, value: 'vpn', 'data-community-route': item.id, checked: viaVpn ? '' : null }), E('span', {}, 'Через VPN') ]),
+					E('label', {}, [ E('input', { type: 'radio', name: `route_${item.id}`, value: 'direct', 'data-community-route': item.id, checked: !viaVpn ? '' : null }), E('span', {}, item.id === 'youtube' ? 'Напрямую + Zapret' : 'Напрямую') ])
+				])
+			]);
+		};
+		const communityCatalog = () => E('div', { 'class': 'oum-route-catalog' }, categoryDefinitions.map(([ title, ids, open ]) =>
+			E('details', { 'class': 'oum-route-category', open: open ? '' : null }, [
+				E('summary', {}, [ E('strong', {}, title), E('span', { 'class': 'oum-muted' }, `${ids.filter((id) => catalogById[id]).length} сервисов`) ]),
+				E('div', { 'class': 'oum-route-category-list' }, ids.filter((id) => catalogById[id]).map((id) => routeRow(catalogById[id])))
 			])));
 
 		const root = E('div', { 'class': 'oum-dashboard' }, [
@@ -119,7 +140,7 @@ return view.extend({
 				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-hint{font-size:.86em;margin:2px 0 8px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
 				.oum-node-all{margin-top:13px}.oum-node-all>summary{cursor:pointer;font-weight:600;padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
 				.oum-passwall-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.oum-passwall-state{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-passwall-state small{display:block;opacity:.68;margin-bottom:5px}.oum-passwall-state strong[data-ok="false"],.oum-passwall-diagnostic strong[data-ok="false"]{color:#c0392b}.oum-passwall-route{background:#eef4fa;border-radius:9px;padding:12px;margin-top:12px}.oum-passwall-route small{display:block;margin-bottom:4px}.oum-passwall-versions{margin-top:12px}.oum-passwall-rules{margin-top:8px}.oum-passwall-diagnostics{margin-top:12px}.oum-passwall-diagnostics>summary{cursor:pointer;font-weight:600}.oum-passwall-diagnostic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.oum-passwall-diagnostic{border:1px solid #d8dde5;border-radius:9px;padding:10px}.oum-passwall-diagnostic small{display:block;opacity:.68;margin-bottom:4px}.oum-node-controls[data-engine="passwall"]{border-top:1px solid #d8dde5;margin-top:16px;padding-top:14px}
-				.oum-tabs{display:flex;gap:6px;border-bottom:1px solid #ccd3dc;margin:16px 0 13px}.oum-tab{border:0;background:transparent;padding:9px 13px;border-bottom:3px solid transparent;cursor:pointer}.oum-tab[data-active="true"]{border-color:#2673ec;color:#2673ec;font-weight:600}.oum-route-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.oum-route-box{border:1px solid #d8dde5;border-radius:10px;padding:13px}.oum-route-box h4{margin:0 0 5px}.oum-community-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0}.oum-community-item{display:flex;align-items:center;gap:7px;border:1px solid #d8dde5;border-radius:7px;padding:7px 8px;min-width:0}.oum-community-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-route-box textarea{width:100%;min-height:92px;box-sizing:border-box;margin-top:6px}.oum-route-label{display:block;font-weight:600;margin-top:11px}.oum-route-actions{display:flex;align-items:center;gap:12px;margin-top:14px}.oum-route-message[data-state="failed"]{color:#c0392b}
+				.oum-tabs{display:flex;gap:6px;border-bottom:1px solid #ccd3dc;margin:16px 0 13px}.oum-tab{border:0;background:transparent;padding:9px 13px;border-bottom:3px solid transparent;cursor:pointer}.oum-tab[data-active="true"]{border-color:#2673ec;color:#2673ec;font-weight:600}.oum-route-intro{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:13px;border-radius:10px;background:#eef4fa;margin-bottom:12px}.oum-route-intro strong{display:block;margin-bottom:4px}.oum-route-catalog{display:grid;gap:9px}.oum-route-category{border:1px solid #d8dde5;border-radius:10px;overflow:hidden}.oum-route-category>summary{display:flex;justify-content:space-between;cursor:pointer;padding:12px 14px}.oum-route-category[open]>summary{border-bottom:1px solid #d8dde5}.oum-route-category-list{display:grid}.oum-route-row{display:grid;grid-template-columns:minmax(180px,1fr) auto;align-items:center;gap:12px;padding:10px 13px;border-bottom:1px solid #e4e8ed}.oum-route-row:last-child{border-bottom:0}.oum-route-service small{display:block;opacity:.65;margin-top:3px}.oum-route-switch{display:grid;grid-template-columns:1fr 1fr;border:1px solid #ccd3dc;border-radius:8px;overflow:hidden}.oum-route-switch label{cursor:pointer}.oum-route-switch input{position:absolute;opacity:0;pointer-events:none}.oum-route-switch span{display:block;padding:7px 11px;text-align:center;min-width:105px}.oum-route-switch label:has(input:checked) span{background:#2673ec;color:white}.oum-custom-rules{border:1px solid #d8dde5;border-radius:10px;margin-top:12px;padding:0 13px}.oum-custom-rules>summary{cursor:pointer;font-weight:600;padding:12px 0}.oum-custom-rules[open]>summary{border-bottom:1px solid #d8dde5}.oum-route-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:13px 0}.oum-route-box{border:1px solid #d8dde5;border-radius:10px;padding:13px}.oum-route-box h4{margin:0 0 5px}.oum-route-box textarea{width:100%;min-height:92px;box-sizing:border-box;margin-top:6px}.oum-route-label{display:block;font-weight:600;margin-top:11px}.oum-route-actions{position:sticky;bottom:0;display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:14px;padding:11px;background:Canvas;color:CanvasText;border:1px solid #d8dde5;border-radius:10px}.oum-route-message{margin-right:auto}.oum-route-message[data-state="failed"]{color:#c0392b}
 				.oum-diagnostic-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(250px,1fr);gap:12px}.oum-diagnostic-run{width:100%;margin-bottom:10px}.oum-diagnostic-sections{display:grid;gap:10px}.oum-diagnostic-section{border:2px solid #2b9b68;border-radius:8px;padding:12px}.oum-diagnostic-section[data-state="warning"]{border-color:#b28a29}.oum-diagnostic-section[data-state="error"]{border-color:#c94b4b}.oum-diagnostic-title{display:flex;align-items:flex-start;gap:10px}.oum-diagnostic-icon{font-size:1.25rem;line-height:1}.oum-diagnostic-title strong{display:block}.oum-diagnostic-items{display:grid;gap:5px;margin:10px 0 0 32px}.oum-diagnostic-item{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:6px;align-items:start}.oum-diagnostic-item[data-state="success"] .oum-diagnostic-mark{color:#2b9b68}.oum-diagnostic-item[data-state="warning"] .oum-diagnostic-mark{color:#b28a29}.oum-diagnostic-item[data-state="error"] .oum-diagnostic-mark{color:#c94b4b}.oum-diagnostic-value{opacity:.72;text-align:right}.oum-diagnostic-side{display:grid;align-content:start;gap:10px}.oum-diagnostic-side-card{border:1px solid #d8dde5;border-radius:9px;padding:12px}.oum-diagnostic-side-card h4{margin:0 0 10px}.oum-diagnostic-actions{display:grid;gap:8px}.oum-system-info{display:grid;grid-template-columns:auto 1fr;gap:7px 9px;font-size:.9em}.oum-system-info strong{white-space:nowrap}.oum-expert-tools>summary{cursor:pointer;font-weight:600}.oum-expert-tools p{font-size:.86em}
 				@media(max-width:900px){.oum-cards,.oum-passwall-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid,.oum-passwall-diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.oum-route-columns,.oum-diagnostic-layout{grid-template-columns:1fr}.oum-community-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route,.oum-passwall-diagnostic-grid,.oum-community-grid{grid-template-columns:1fr}.oum-clients .optional{display:none}.oum-diagnostic-item{grid-template-columns:18px 1fr}.oum-diagnostic-value{grid-column:2;text-align:left}}
 			`),
@@ -191,32 +212,38 @@ return view.extend({
 					]),
 					E('div', { id: 'podkop-panel', hidden: '' }, [
 						E('div', { 'class': 'oum-node-head' }, [
-							E('h3', {}, 'Podkop + Zapret'),
+							E('h3', { id: 'podkop-title' }, 'Podkop + Zapret'),
 							E('span', { 'class': 'oum-muted', id: 'podkop-version' }, '')
 						]),
 						E('div', { 'class': 'oum-passwall-grid' }, [
-							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'AWG-туннель'), E('strong', { id: 'podkop-tunnel' }, '—') ]),
+							E('div', { 'class': 'oum-passwall-state' }, [ E('small', { id: 'podkop-transport-label' }, 'AWG-туннель'), E('strong', { id: 'podkop-tunnel' }, '—') ]),
 							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Podkop'), E('strong', { id: 'podkop-routing' }, '—') ]),
 							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Zapret / YouTube'), E('strong', { id: 'podkop-zapret' }, '—') ]),
-							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Маршрут'), E('strong', {}, 'Russia inside') ])
+							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Защищённый маршрут'), E('strong', { id: 'podkop-route-kind' }, '—') ])
 						]),
 						E('div', { 'class': 'oum-tabs' }, [
 							E('button', { 'class': 'oum-tab', 'data-podkop-tab': 'routing', 'data-active': 'true' }, 'Маршрутизация'),
 							E('button', { 'class': 'oum-tab', 'data-podkop-tab': 'diagnostics', 'data-active': 'false' }, 'Диагностика')
 						]),
 						E('div', { id: 'podkop-routing-tab' }, [
-							E('div', { 'class': 'oum-route-columns' }, [
-								E('div', { 'class': 'oum-route-box' }, [
-									E('h4', {}, 'Через AWG'), E('p', { 'class': 'oum-muted' }, 'Выбранные сообщества, домены и подсети идут через туннель.'),
-									communityGrid('proxy', routingSet(podkopRouting.proxy?.lists)),
-					E('label', { 'class': 'oum-route-label' }, 'Свои домены'), E('textarea', { id: 'podkop-proxy-domains', placeholder: 'example.com\n.example.org' }, (podkopRouting.proxy?.domains || []).join('\n')),
-									E('label', { 'class': 'oum-route-label' }, 'Свои подсети'), E('textarea', { id: 'podkop-proxy-subnets', placeholder: '203.0.113.0/24\n198.51.100.10' }, (podkopRouting.proxy?.subnets || []).join('\n'))
-								]),
-								E('div', { 'class': 'oum-route-box' }, [
-									E('h4', {}, 'Напрямую / исключения'), E('p', { 'class': 'oum-muted' }, 'Эти назначения обходят AWG; YouTube может обрабатываться Zapret.'),
-									communityGrid('direct', routingSet(podkopRouting.direct?.lists)),
-									E('label', { 'class': 'oum-route-label' }, 'Свои домены'), E('textarea', { id: 'podkop-direct-domains', placeholder: 'local.example.com' }, (podkopRouting.direct?.domains || []).join('\n')),
-									E('label', { 'class': 'oum-route-label' }, 'Свои подсети'), E('textarea', { id: 'podkop-direct-subnets', placeholder: '192.0.2.0/24' }, (podkopRouting.direct?.subnets || []).join('\n'))
+							E('div', { 'class': 'oum-route-intro' }, [
+								E('div', {}, [ E('strong', {}, 'Куда направлять сервисы'), E('span', { 'class': 'oum-muted' }, 'Podkop отправляет трафик через текущее защищённое подключение либо напрямую через провайдера.') ]),
+								E('span', { id: 'podkop-route-summary', 'class': 'oum-muted' }, '')
+							]),
+							communityCatalog(),
+							E('details', { 'class': 'oum-custom-rules' }, [
+								E('summary', {}, 'Свои домены и подсети'),
+								E('div', { 'class': 'oum-route-columns' }, [
+									E('div', { 'class': 'oum-route-box' }, [
+										E('h4', {}, 'Через VPN'), E('p', { 'class': 'oum-muted' }, 'Дополнительные назначения для защищённого подключения.'),
+										E('label', { 'class': 'oum-route-label' }, 'Домены'), E('textarea', { id: 'podkop-proxy-domains', placeholder: 'example.com\n.example.org' }, (podkopRouting.proxy?.domains || []).join('\n')),
+										E('label', { 'class': 'oum-route-label' }, 'Подсети'), E('textarea', { id: 'podkop-proxy-subnets', placeholder: '203.0.113.0/24\n198.51.100.10' }, (podkopRouting.proxy?.subnets || []).join('\n'))
+									]),
+									E('div', { 'class': 'oum-route-box' }, [
+										E('h4', {}, 'Напрямую'), E('p', { 'class': 'oum-muted' }, 'Явные исключения из защищённого подключения.'),
+										E('label', { 'class': 'oum-route-label' }, 'Домены'), E('textarea', { id: 'podkop-direct-domains', placeholder: 'local.example.com' }, (podkopRouting.direct?.domains || []).join('\n')),
+										E('label', { 'class': 'oum-route-label' }, 'Подсети'), E('textarea', { id: 'podkop-direct-subnets', placeholder: '192.0.2.0/24' }, (podkopRouting.direct?.subnets || []).join('\n'))
+									])
 								])
 							]),
 							E('div', { 'class': 'oum-route-actions' }, [ E('button', { 'class': 'btn cbi-button-action', id: 'podkop-routing-save' }, 'Сохранить маршрутизацию'), E('span', { 'class': 'oum-route-message oum-muted', id: 'podkop-routing-message' }, '') ])
@@ -311,15 +338,26 @@ return view.extend({
 			root.querySelector('#podkop-diagnostics-tab').hidden = selected !== 'diagnostics';
 		});
 
-		const selectedCommunities = (name) => Array.from(root.querySelectorAll(`[data-community="${name}"]:checked`)).map((item) => item.value).join('\n');
+		const selectedCommunities = (route) => Array.from(root.querySelectorAll('[data-community-route]:checked')).filter((item) => item.value === route).map((item) => item.dataset.communityRoute).join('\n');
+		const selectedYoutubeMode = () => root.querySelector('[data-community-route="youtube"]:checked')?.value === 'vpn' ? 'vpn' : 'zapret';
+		const updateRouteSummary = () => {
+			const vpnCount = selectedCommunities('vpn').split('\n').filter(Boolean).length;
+			const directCount = selectedCommunities('direct').split('\n').filter(Boolean).length;
+			root.querySelector('#podkop-route-summary').textContent = `Через VPN: ${vpnCount} · напрямую: ${directCount}`;
+			const youtubeHint = root.querySelector('[data-route-row="youtube"] small');
+			if (youtubeHint) youtubeHint.textContent = selectedYoutubeMode() === 'vpn' ? 'Zapret будет остановлен' : 'будет обработан Zapret';
+		};
+		root.querySelector('#podkop-routing-tab').addEventListener('change', updateRouteSummary);
+		updateRouteSummary();
 		podkopRoutingSave.addEventListener('click', (event) => {
 			event.preventDefault();
 			podkopRoutingSave.disabled = true;
 			podkopRoutingMessage.dataset.state = 'idle';
 			podkopRoutingMessage.textContent = 'Проверяем и применяем правила…';
 			callApplyPodkopRouting(
-				selectedCommunities('proxy'), root.querySelector('#podkop-proxy-domains').value, root.querySelector('#podkop-proxy-subnets').value,
-				selectedCommunities('direct'), root.querySelector('#podkop-direct-domains').value, root.querySelector('#podkop-direct-subnets').value
+				selectedCommunities('vpn'), root.querySelector('#podkop-proxy-domains').value, root.querySelector('#podkop-proxy-subnets').value,
+				selectedCommunities('direct'), root.querySelector('#podkop-direct-domains').value, root.querySelector('#podkop-direct-subnets').value,
+				selectedYoutubeMode()
 			).then((result) => {
 				if (!result.ok) throw new Error(result.message || 'Не удалось запустить применение.');
 				let attempts = 0;
@@ -533,10 +571,15 @@ return view.extend({
 			panel.hidden = !podkopInstalled;
 			updateVpnPanelVisibility();
 			if (panel.hidden) return;
-			root.querySelector('#podkop-version').textContent = `Podkop ${state.version || '—'} · Zapret ${state.zapret_version || '—'}`;
-			root.querySelector('#podkop-tunnel').textContent = state.tunnel_up ? `${state.interface || 'AWG'} поднят` : 'Требует внимания';
+			const youtubeViaVpn = state.youtube_mode === 'vpn';
+			const reality = state.transport === 'reality';
+			root.querySelector('#podkop-title').textContent = youtubeViaVpn ? 'Podkop' : 'Podkop + Zapret';
+			root.querySelector('#podkop-version').textContent = `Podkop ${state.version || '—'}${youtubeViaVpn ? '' : ` · Zapret ${state.zapret_version || '—'}`}`;
+			root.querySelector('#podkop-transport-label').textContent = reality ? 'Reality-прокси' : 'AWG-туннель';
+			root.querySelector('#podkop-tunnel').textContent = reality ? (state.ready ? (state.proxy_endpoint || 'Работает') : 'Требует внимания') : (state.tunnel_up ? `${state.interface || 'AWG'} поднят` : 'Требует внимания');
 			root.querySelector('#podkop-routing').textContent = state.ready ? 'Работает' : 'Требует внимания';
-			root.querySelector('#podkop-zapret').textContent = state.zapret ? `Работает${state.zapret_strategy ? ` · ${state.zapret_strategy}` : ''}` : 'Требует внимания';
+			root.querySelector('#podkop-zapret').textContent = youtubeViaVpn ? 'Отключён · YouTube через VPN' : (state.zapret ? `Работает${state.zapret_strategy ? ` · ${state.zapret_strategy}` : ''}` : 'Требует внимания');
+			root.querySelector('#podkop-route-kind').textContent = reality ? 'Через Reality' : 'Через AWG';
 		};
 
 		const updatePasswall = (state) => {

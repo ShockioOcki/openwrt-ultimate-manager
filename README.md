@@ -109,17 +109,23 @@ PassWall's own parser, keeps them in an isolated OUM group and rolls the full
 UCI configuration back when parsing or startup fails. AWG remains an
 independent tunnel configured with Podkop + Zapret rather than an Xray node.
 
-Podkop can use a dedicated, already configured WireGuard or AmneziaWG interface,
-or import a complete AmneziaWG profile directly in Settings. On the tested
+Podkop can use either a dedicated WireGuard/AmneziaWG interface or a VLESS
+Reality URL as its single outbound. Switching transport is transactional: the
+new outbound must start and pass Podkop validation before the previous one is
+released, and secrets are never returned by RPC. A complete AmneziaWG profile
+can be imported directly in Settings. On the tested
 OpenWrt 25.12.3 MT7622 target, OUM installs a pinned, SHA-256-verified AWG
 runtime, preserves every v1/v2 obfuscation field, deliberately ignores profile
 DNS, and creates an OUM-owned `oum_awg` interface transactionally. A failed
 package check, handshake or Podkop startup restores the previous network and
 Podkop configuration.
-The managed default sends the `Russia inside` list through that tunnel while a
-higher-priority `YouTube` exclusion stays direct and is handled by Zapret. This
-keeps video traffic out of the paid tunnel. OUM never copies tunnel secrets
-into Podkop and does not enable `route_allowed_ips`.
+The routing catalog presents exactly two destinations for every service:
+protected connection or direct. YouTube additionally offers two transactional
+modes: direct with Zapret, or protected connection with Zapret disabled and its
+runtime nftables rules removed. When direct mode is requested, OUM checks the
+current DPI strategy, automatically tests the pinned catalog if necessary, and
+restores the VPN mode if no direct strategy works. OUM never copies AWG tunnel
+secrets into Podkop and does not enable `route_allowed_ips`.
 
 The restricted Settings page keeps Podkop connection setup in one place: AWG
 import and Zapret strategy management are shown under Protected connection only

@@ -125,6 +125,25 @@ wait_for_list_update() {
 	return 0
 }
 
+wait_for_zapret_health() {
+	waited=0
+	while [ "$waited" -lt 20 ]; do
+		if pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1 &&
+			nft list table inet zapret >/dev/null 2>&1; then
+			return 0
+		fi
+		sleep 1
+		waited=$((waited + 1))
+	done
+	return 1
+}
+
+check_zapret_route() {
+	/usr/libexec/oum-zapret-strategy check >>/tmp/oum-zapret-check.log 2>&1 && return 0
+	printf '%s\n' 'Текущая стратегия не подошла; запускаем безопасный автоподбор.' >>/tmp/oum-zapret-check.log
+	/usr/libexec/oum-zapret-strategy auto >>/tmp/oum-zapret-check.log 2>&1
+}
+
 save_rollback() {
 	rm -rf "$ROLLBACK"
 	mkdir -p "$ROLLBACK"
@@ -173,6 +192,7 @@ configure() {
 		return 1
 	}
 	prepare_zapret_runtime
+	youtube_mode="$(uci -q get oum.main.youtube_mode || echo zapret)"
 	valid_interface "$INTERFACE" || { echo 'Select a WireGuard or AmneziaWG interface' >&2; return 1; }
 	if ! tunnel_ready "$INTERFACE"; then
 		ifup "$INTERFACE" >/dev/null 2>&1 || true
@@ -203,18 +223,19 @@ configure() {
 	uci -q delete podkop.main.proxy_string || true
 	uci -q delete podkop.main.community_lists || true
 	uci -q add_list podkop.main.community_lists='russia_inside'
+	[ "$youtube_mode" != vpn ] || uci -q add_list podkop.main.community_lists='youtube'
 
 	uci -q delete podkop.youtube_direct || true
 	uci -q set podkop.oum_exclusion=section
 	uci -q set podkop.oum_exclusion.connection_type='exclusion'
-	uci -q add_list podkop.oum_exclusion.community_lists='youtube'
+	[ "$youtube_mode" != zapret ] || uci -q add_list podkop.oum_exclusion.community_lists='youtube'
 	uci -q commit podkop || { restore_rollback; return 1; }
 	# Apply per-device lists while Podkop is stopped. Applying them after start
 	# would trigger a second engine reload and race with Zapret startup.
 	/usr/libexec/oum-device-policy sync >/dev/null 2>&1 || { restore_rollback; return 1; }
 
 	/etc/init.d/podkop enable >/dev/null 2>&1 || true
-	/etc/init.d/zapret enable >/dev/null 2>&1 || true
+	if [ "$youtube_mode" = zapret ]; then /etc/init.d/zapret enable >/dev/null 2>&1 || true; else /etc/init.d/zapret disable >/dev/null 2>&1 || true; fi
 	/etc/init.d/podkop restart >/tmp/oum-podkop.log 2>&1 || { restore_rollback; return 1; }
 	wait_for_podkop 60 || { restore_rollback; return 1; }
 	wait_for_list_update || { restore_rollback; return 1; }
@@ -222,10 +243,71 @@ configure() {
 
 	uci -q set oum.main.active_source='podkop'
 	uci -q set oum.main.pending_source='none'
+	uci -q set oum.main.podkop_transport='awg'
 	uci -q set "oum.main.podkop_interface=$INTERFACE"
 	uci -q commit oum
-	schedule_zapret_start
+	[ "$youtube_mode" != zapret ] || schedule_zapret_start
 	return 0
+}
+
+proxy() {
+	request="${1:-}"
+	[ -f "$request" ] || { echo 'Reality request is missing' >&2; return 1; }
+	[ -x /etc/init.d/podkop ] && [ -x /etc/init.d/zapret ] || return 1
+	proxy_string="$(jsonfilter -i "$request" -e '@.payload')"
+	[ -n "$proxy_string" ] && [ "${#proxy_string}" -le 8192 ] || return 1
+	printf '%s' "$proxy_string" | grep -Eq '^vless://[^[:space:]]+$' || return 1
+	printf '%s' "$proxy_string" | grep -Eqi '[?&]security=reality(&|$)' || return 1
+	for field in pbk fp sni; do
+		printf '%s' "$proxy_string" | grep -Eqi "[?&]$field=[^&]+" || return 1
+	done
+
+	previous_interface="$(uci -q get podkop.main.interface || true)"
+	youtube_mode="$(uci -q get oum.main.youtube_mode || echo zapret)"
+	save_rollback
+	/etc/init.d/zapret stop >/dev/null 2>&1 || true
+	/etc/init.d/podkop stop >/dev/null 2>&1 || true
+	/etc/init.d/sing-box stop >/dev/null 2>&1 || true
+
+	uci -q set podkop.settings=settings
+	uci -q set podkop.settings.dns_type='udp'
+	uci -q set podkop.settings.dns_server='77.88.8.8'
+	uci -q set podkop.settings.bootstrap_dns_server='77.88.8.8'
+	uci -q set podkop.settings.dont_touch_dhcp='0'
+	uci -q set podkop.main=section
+	uci -q set podkop.main.connection_type='proxy'
+	uci -q set podkop.main.proxy_config_type='url'
+	uci -q set "podkop.main.proxy_string=$proxy_string"
+	uci -q delete podkop.main.interface || true
+	if [ -z "$(uci -q get podkop.main.community_lists || true)" ]; then
+		uci -q add_list podkop.main.community_lists='russia_inside'
+	fi
+	uci -q set podkop.oum_exclusion=section
+	uci -q set podkop.oum_exclusion.connection_type='exclusion'
+	uci -q del_list podkop.main.community_lists='youtube' || true
+	uci -q del_list podkop.oum_exclusion.community_lists='youtube' || true
+	if [ "$youtube_mode" = zapret ]; then uci -q add_list podkop.oum_exclusion.community_lists='youtube'; else uci -q add_list podkop.main.community_lists='youtube'; fi
+	uci -q commit podkop || { restore_rollback; return 1; }
+	chmod 600 /etc/config/podkop
+	/usr/libexec/oum-device-policy sync >/dev/null 2>&1 || { restore_rollback; return 1; }
+	/etc/init.d/podkop enable >/dev/null 2>&1 || true
+	/etc/init.d/podkop restart >/tmp/oum-podkop.log 2>&1 || { restore_rollback; return 1; }
+	wait_for_podkop 60 || { restore_rollback; return 1; }
+	/usr/bin/podkop check_proxy >/tmp/oum-podkop-proxy-check.log 2>&1 || { restore_rollback; return 1; }
+
+	uci -q set oum.main.active_source='podkop'
+	uci -q set oum.main.pending_source='none'
+	uci -q set oum.main.podkop_transport='reality'
+	uci -q delete oum.main.podkop_interface || true
+	uci -q commit oum
+	[ "$previous_interface" != oum_awg ] || ifdown oum_awg >/dev/null 2>&1 || true
+	if [ "$youtube_mode" = zapret ]; then
+		prepare_zapret_runtime || { restore_rollback; return 1; }
+		/etc/init.d/zapret enable >/dev/null 2>&1 || true
+		schedule_zapret_start
+	else
+		/etc/init.d/zapret disable >/dev/null 2>&1 || true
+	fi
 }
 
 routing() {
@@ -237,12 +319,19 @@ routing() {
 	for field in proxy_lists proxy_domains proxy_subnets direct_lists direct_domains direct_subnets; do
 		jsonfilter -i "$request" -e "@.$field" > "$tmp/$field.raw" || return 1
 	done
+	youtube_mode="$(jsonfilter -i "$request" -e '@.youtube_mode')"
+	[ "$youtube_mode" = zapret ] || [ "$youtube_mode" = vpn ] || { echo 'Invalid YouTube mode' >&2; return 1; }
 	normalize_lines community "$tmp/proxy_lists.raw" "$tmp/proxy_lists" || { echo 'Invalid proxy community list' >&2; return 1; }
 	normalize_lines domain "$tmp/proxy_domains.raw" "$tmp/proxy_domains" || { echo 'Invalid proxy domain' >&2; return 1; }
 	normalize_lines subnet "$tmp/proxy_subnets.raw" "$tmp/proxy_subnets" || { echo 'Invalid proxy subnet' >&2; return 1; }
 	normalize_lines community "$tmp/direct_lists.raw" "$tmp/direct_lists" || { echo 'Invalid direct community list' >&2; return 1; }
 	normalize_lines domain "$tmp/direct_domains.raw" "$tmp/direct_domains" || { echo 'Invalid direct domain' >&2; return 1; }
 	normalize_lines subnet "$tmp/direct_subnets.raw" "$tmp/direct_subnets" || { echo 'Invalid direct subnet' >&2; return 1; }
+	grep -Fvx youtube "$tmp/proxy_lists" > "$tmp/proxy_lists.clean" || true
+	grep -Fvx youtube "$tmp/direct_lists" > "$tmp/direct_lists.clean" || true
+	mv "$tmp/proxy_lists.clean" "$tmp/proxy_lists"
+	mv "$tmp/direct_lists.clean" "$tmp/direct_lists"
+	if [ "$youtube_mode" = vpn ]; then printf '%s\n' youtube >> "$tmp/proxy_lists"; else printf '%s\n' youtube >> "$tmp/direct_lists"; fi
 	[ -s "$tmp/proxy_lists" ] || [ -s "$tmp/proxy_domains" ] || [ -s "$tmp/proxy_subnets" ] || {
 		echo 'At least one AWG routing rule is required' >&2; return 1
 	}
@@ -265,13 +354,59 @@ routing() {
 	uci -q commit podkop || { restore_rollback; return 1; }
 	/etc/init.d/podkop restart >/tmp/oum-podkop.log 2>&1 || { restore_rollback; return 1; }
 	wait_for_podkop 60 || { restore_rollback; return 1; }
-	prepare_zapret_runtime || { restore_rollback; return 1; }
-	/etc/init.d/zapret enable >/dev/null 2>&1 || true
-	/etc/init.d/zapret restart >/tmp/oum-zapret.log 2>&1 || { restore_rollback; return 1; }
-	sleep 3
-	pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1 || { restore_rollback; return 1; }
+	if [ "$youtube_mode" = zapret ]; then
+		prepare_zapret_runtime || { restore_rollback; return 1; }
+		/etc/init.d/zapret enable >/dev/null 2>&1 || true
+		/etc/init.d/zapret restart >/tmp/oum-zapret.log 2>&1 || { restore_rollback; return 1; }
+		sleep 3
+		pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1 || { restore_rollback; return 1; }
+	else
+		/etc/init.d/zapret disable >/dev/null 2>&1 || true
+		nft delete table inet zapret >/dev/null 2>&1 || true
+	fi
+	uci -q set "oum.main.youtube_mode=$youtube_mode"
+	uci -q commit oum
 	rm -rf "$tmp"
 	trap - EXIT INT TERM
+}
+
+youtube() {
+	request="${1:-}"
+	[ -f "$request" ] || return 1
+	mode="$(jsonfilter -i "$request" -e '@.mode')"
+	[ "$mode" = zapret ] || [ "$mode" = vpn ] || return 1
+	save_rollback
+	/etc/init.d/zapret stop >/dev/null 2>&1 || true
+	/etc/init.d/podkop stop >/dev/null 2>&1 || true
+	uci -q del_list podkop.main.community_lists='youtube' || true
+	uci -q set podkop.oum_exclusion=section
+	uci -q set podkop.oum_exclusion.connection_type='exclusion'
+	uci -q del_list podkop.oum_exclusion.community_lists='youtube' || true
+	if [ "$mode" = vpn ]; then
+		uci -q add_list podkop.main.community_lists='youtube'
+	else
+		uci -q add_list podkop.oum_exclusion.community_lists='youtube'
+	fi
+	uci -q commit podkop || { restore_rollback; return 1; }
+	/etc/init.d/podkop enable >/dev/null 2>&1 || true
+	/etc/init.d/podkop restart >/tmp/oum-podkop.log 2>&1 || { restore_rollback; return 1; }
+	wait_for_podkop 60 || { restore_rollback; return 1; }
+	if [ "$mode" = vpn ]; then
+		/etc/init.d/zapret disable >/dev/null 2>&1 || true
+		/etc/init.d/zapret stop >/dev/null 2>&1 || true
+		for pid in $(pgrep -f '^/opt/zapret/nfq/nfqws ' 2>/dev/null || true); do kill "$pid" 2>/dev/null || true; done
+		nft delete table inet zapret >/dev/null 2>&1 || true
+	else
+		prepare_zapret_runtime || { restore_rollback; return 1; }
+		/etc/init.d/zapret enable >/dev/null 2>&1 || true
+		/etc/init.d/zapret restart >/tmp/oum-zapret.log 2>&1 || { restore_rollback; return 1; }
+		wait_for_list_update || { restore_rollback; return 1; }
+		wait_for_zapret_health || { restore_rollback; return 1; }
+		: > /tmp/oum-zapret-check.log
+		check_zapret_route || { restore_rollback; return 1; }
+	fi
+	uci -q set "oum.main.youtube_mode=$mode"
+	uci -q commit oum
 }
 
 status() {
@@ -284,7 +419,9 @@ status() {
 
 case "$ACTION" in
 	configure) configure ;;
+	proxy) proxy "${2:-}" ;;
 	routing) routing "${2:-}" ;;
+	youtube) youtube "${2:-}" ;;
 	status) status ;;
-	*) printf 'usage: %s {configure INTERFACE|routing REQUEST_JSON|status}\n' "$0" >&2; exit 2 ;;
+	*) printf 'usage: %s {configure INTERFACE|proxy REQUEST_JSON|routing REQUEST_JSON|youtube REQUEST_JSON|status}\n' "$0" >&2; exit 2 ;;
 esac
