@@ -15,7 +15,7 @@ const callPodkopRoutingStatus = rpc.declare({ object: 'oum', method: 'podkopRout
 const callApplyPodkopRouting = rpc.declare({ object: 'oum', method: 'applyPodkopRouting', params: [ 'proxy_lists', 'proxy_domains', 'proxy_subnets', 'direct_lists', 'direct_domains', 'direct_subnets' ], expect: { '': {} } });
 const callPodkopDiagnostics = rpc.declare({ object: 'oum', method: 'podkopDiagnostics', expect: { '': {} } });
 const callSystemJobStatus = rpc.declare({ object: 'oum', method: 'systemJobStatus', expect: { '': {} } });
-const sourceNames = { none: 'Не настроено', subscription: 'Subscription', awg: 'AWG Tunnel', proxy: 'Proxy', passwall: 'PassWall', podkop: 'Podkop + Zapret' };
+const sourceNames = { none: 'Не настроено', subscription: 'Subscription', awg: 'AWG Tunnel', proxy: 'Reality / Proxy', passwall: 'PassWall', podkop: 'Podkop + Zapret' };
 
 function countryKey(name) {
 	const flag = String(name).match(/[\u{1F1E6}-\u{1F1FF}]{2}/u);

@@ -104,12 +104,18 @@ or readiness checks fail. PassWall 26.5.11-r1 packages are kept without
 configuration or credentials in the private `openwrt-ultimate-manager-assets`
 repository. Development routers use a checksum-verified local cache under
 `/etc/oum/packages`; no GitHub token is stored on the router. The native
-PassWall adapter accepts Subscription URLs and direct proxy links through
+PassWall adapter accepts Subscription URLs and direct Reality/proxy links through
 PassWall's own parser, keeps them in an isolated OUM group and rolls the full
 UCI configuration back when parsing or startup fails. AWG remains an
 independent tunnel configured with Podkop + Zapret rather than an Xray node.
 
-Podkop uses a dedicated, already configured WireGuard or AmneziaWG interface.
+Podkop can use a dedicated, already configured WireGuard or AmneziaWG interface,
+or import a complete AmneziaWG profile directly in Settings. On the tested
+OpenWrt 25.12.3 MT7622 target, OUM installs a pinned, SHA-256-verified AWG
+runtime, preserves every v1/v2 obfuscation field, deliberately ignores profile
+DNS, and creates an OUM-owned `oum_awg` interface transactionally. A failed
+package check, handshake or Podkop startup restores the previous network and
+Podkop configuration.
 The managed default sends the `Russia inside` list through that tunnel while a
 higher-priority `YouTube` exclusion stays direct and is handled by Zapret. This
 keeps video traffic out of the paid tunnel. OUM never copies tunnel secrets

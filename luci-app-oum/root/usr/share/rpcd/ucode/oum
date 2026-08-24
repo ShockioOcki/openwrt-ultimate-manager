@@ -865,6 +865,22 @@ const methods = {
 		}
 	},
 
+	importPodkopAwg: {
+		args: { payload: '' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Сначала установите движок Podkop + Zapret.');
+			let payload = request.args.payload ?? '';
+			if (type(payload) != 'string' || length(payload) < 32 || length(payload) > 65536)
+				return failure('invalid_payload', 'Вставьте AWG-конфигурацию целиком.');
+			if (!match(payload, /\[Interface\]/i) || !match(payload, /\[Peer\]/i))
+				return failure('invalid_payload', 'AWG-конфигурация должна содержать секции Interface и Peer.');
+			if (!access('/usr/libexec/oum-awg-manager'))
+				return failure('runtime_missing', 'Компонент импорта AWG не установлен.');
+			return startSystemJob('podkop_awg', { payload });
+		}
+	},
+
 	podkopRoutingStatus: {
 		call: function() {
 			return podkopRoutingData();

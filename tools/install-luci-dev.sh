@@ -32,6 +32,7 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-reset-vpn" /usr/libexec/oum-reset-vpn
 cp "$SOURCE_DIR/root/usr/libexec/oum-system-job" /usr/libexec/oum-system-job
 cp "$SOURCE_DIR/root/usr/libexec/oum-engine-manager" /usr/libexec/oum-engine-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-podkop-config" /usr/libexec/oum-podkop-config
+cp "$SOURCE_DIR/root/usr/libexec/oum-awg-manager" /usr/libexec/oum-awg-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-login-default" /usr/libexec/oum-login-default
 cp "$REPO_DIR/dist/oum-test.sh" /usr/libexec/oum-runtime.sh
 cp "$REPO_DIR/helpers/source_converter.rb" /usr/libexec/oum/source_converter.rb
@@ -54,6 +55,7 @@ chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/ou
 	/usr/libexec/oum-system-job \
 	/usr/libexec/oum-engine-manager \
 	/usr/libexec/oum-podkop-config \
+	/usr/libexec/oum-awg-manager \
 	/usr/libexec/oum-login-default \
 	/usr/libexec/oum-runtime.sh
 chmod 600 /usr/libexec/oum/source_converter.rb

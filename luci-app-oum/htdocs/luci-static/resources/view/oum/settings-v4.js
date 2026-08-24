@@ -19,6 +19,7 @@ const callApplyWan = rpc.declare({
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
 const callSwitchEngine = rpc.declare({ object: 'oum', method: 'switchVpnEngine', params: [ 'engine' ], expect: { '': {} } });
 const callConfigurePodkop = rpc.declare({ object: 'oum', method: 'configurePodkop', params: [ 'interface' ], expect: { '': {} } });
+const callImportPodkopAwg = rpc.declare({ object: 'oum', method: 'importPodkopAwg', params: [ 'payload' ], expect: { '': {} } });
 const callCreateBackup = rpc.declare({ object: 'oum', method: 'createBackup', expect: { '': {} } });
 const callRestoreBackup = rpc.declare({ object: 'oum', method: 'restoreBackup', params: [ 'data' ], expect: { '': {} } });
 const callResetVpn = rpc.declare({ object: 'oum', method: 'resetVpn', expect: { '': {} } });
@@ -204,7 +205,7 @@ return view.extend({
 					E('div', { 'class': 'oum-inline-warning', hidden: unmanagedTunnels.length ? null : '' }, unmanagedTunnels.length ?
 						`Найдены туннели вне OUM: ${unmanagedTunnels.map((item) => item.name).join(', ')}. Перед включением другого движка проверьте их маршруты.` : ''),
 					E('div', { 'class': 'oum-engine-choices' }, [
-						engineChoice('openclash', 'OpenClash', `Управляемый выпуск ${engines.openclash.target_version || ''}. Удобен для подписок, AWG и Proxy.`, engines.current === 'openclash', false),
+						engineChoice('openclash', 'OpenClash', `Управляемый выпуск ${engines.openclash.target_version || ''}. Удобен для подписок, AWG и прокси.`, engines.current === 'openclash', false),
 						engineChoice('passwall', 'PassWall', `Закреплённая версия ${engines.passwall.target_version || '26.5.11-r1'}. Тонкая маршрутизация через Xray.`, engines.current === 'passwall', false),
 						engineChoice('podkop', 'Podkop + Zapret', `Podkop ${engines.podkop?.target_version || 'с AWG-туннелем'}. YouTube напрямую через Zapret.`, engines.current === 'podkop', false)
 					]),
@@ -215,7 +216,11 @@ return view.extend({
 					]),
 					E('div', { 'class': 'oum-inline-warning', hidden: engines.current === 'podkop' ? null : '' }, [
 						E('strong', {}, 'Отдельный туннель Podkop'),
-						E('p', { 'class': 'oum-help' }, 'Podkop направляет Russia inside через выбранный AWG/WireGuard. YouTube исключается из туннеля и обрабатывается Zapret напрямую.'),
+						E('p', { 'class': 'oum-help' }, 'Вставьте AmneziaWG-конфигурацию целиком. OUM установит проверенный комплект для этого роутера, проигнорирует DNS из файла и создаст отдельный туннель без маршрута по умолчанию. Podkop направит Russia inside через него, а YouTube — напрямую через Zapret.'),
+						E('textarea', { id: 'podkop-awg-config', autocomplete: 'off', spellcheck: 'false', placeholder: '[Interface]\nPrivateKey = …\nAddress = …\n…\n\n[Peer]\nPublicKey = …\nEndpoint = …', style: 'width:100%;min-height:180px;font-family:monospace;box-sizing:border-box;margin:8px 0' }),
+						E('button', { 'class': 'btn cbi-button-action', id: 'import-podkop-awg', 'data-system-action': '' }, 'Импортировать AWG и запустить'),
+						E('hr'),
+						E('p', { 'class': 'oum-help' }, 'Либо используйте уже существующий отдельный интерфейс:'),
 						E('select', { id: 'podkop-interface' }, podkopInterfaces.length ? podkopInterfaces.map((name) => E('option', { value: name, selected: name === engines.podkop?.interface ? '' : null }, name)) : E('option', { value: '' }, 'AWG/WireGuard не найден')),
 						' ',
 						E('button', { 'class': 'btn cbi-button-action', id: 'configure-podkop', 'data-system-action': '', disabled: podkopInterfaces.length ? null : '' }, 'Настроить и запустить')
@@ -232,7 +237,7 @@ return view.extend({
 					E('div', { 'class': 'oum-sources', hidden: sourceSupported ? null : '' }, [
 						sourceChoice('subscription', 'Subscription', 'Ссылка на набор серверов', selectedSource === 'subscription', false),
 						sourceChoice('awg', 'AWG Tunnel', engines.current === 'passwall' ? 'Для Podkop + Zapret' : 'Конфигурация AmneziaWG', selectedSource === 'awg', engines.current === 'passwall'),
-						sourceChoice('proxy', 'Proxy', 'VLESS Reality или Hysteria2', selectedSource === 'proxy', false)
+						sourceChoice('proxy', 'Reality / Proxy', 'VLESS Reality, Hysteria2 и другие ссылки', selectedSource === 'proxy', false)
 					]),
 					E('div', { 'class': 'oum-vpn-input', hidden: sourceSupported ? null : '' }, [
 						E('label', { id: 'source-label' }, ''),
@@ -301,7 +306,7 @@ return view.extend({
 				if (status.state === 'running') return window.setTimeout(tick, 1500);
 				watching = false;
 				setBusy(false);
-				if ((status.action === 'engine' || status.action === 'podkop_configure') && status.state === 'success')
+				if ((status.action === 'engine' || status.action === 'podkop_configure' || status.action === 'podkop_awg') && status.state === 'success')
 					window.setTimeout(() => window.location.reload(), 900);
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
@@ -357,6 +362,15 @@ return view.extend({
 			if (!iface) return ui.addNotification(null, E('p', {}, 'Не найден отдельный AWG/WireGuard-интерфейс.'), 'warning');
 			if (await confirmation('Запустить Podkop + Zapret?', `Трафик Russia inside пойдёт через ${iface}, а YouTube — напрямую через Zapret.`, 'Настроить', false))
 				start(callConfigurePodkop(iface));
+		});
+		const podkopAwgButton = root.querySelector('#import-podkop-awg');
+		if (podkopAwgButton) podkopAwgButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			const payload = root.querySelector('#podkop-awg-config')?.value.trim() || '';
+			if (!/^\s*\[Interface\]\s*$/mi.test(payload) || !/^\s*\[Peer\]\s*$/mi.test(payload))
+				return ui.addNotification(null, E('p', {}, 'Вставьте полный AWG-конфиг с секциями [Interface] и [Peer].'), 'warning');
+			if (await confirmation('Импортировать AWG?', 'OUM проверит пакеты и конфигурацию, создаст отдельный интерфейс oum_awg и запустит Podkop. При ошибке сеть будет восстановлена.', 'Импортировать', false))
+				start(callImportPodkopAwg(payload));
 		});
 		importButton.addEventListener('click', (event) => {
 			event.preventDefault();

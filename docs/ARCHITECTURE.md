@@ -183,8 +183,10 @@ credential-bearing URL while parsing. OUM-managed subscription and direct URI
 nodes live in an isolated `OUM` group; a private snapshot of the complete
 PassWall UCI file is restored if parsing, Xray startup or nftables readiness
 fails. A minimal dedicated shunt is selected only after at least one valid node
-exists. AWG is rejected in PassWall mode because it is an independent network
-interface used by Podkop rather than an Xray-compatible proxy node.
+exists. VLESS Reality is handled by Xray as a native direct proxy source and is
+labelled `Reality / Proxy` in the restricted UI. AWG is rejected in PassWall
+mode because it is an independent network interface used by Podkop rather than
+an Xray-compatible proxy node.
 
 Subscription traffic and expiry are fetched on the router from the provider's
 `Subscription-Userinfo` response header. OUM stores only the parsed numeric
@@ -231,6 +233,12 @@ sharing PassWall's product version pin. Podkop + Zapret uses Podkop 0.7.22 and
 Zapret 72.20260307 on the tested OpenWrt 25.12 aarch64 target. Podkop binds to
 an independent AWG/WireGuard interface, routes `Russia inside` through it and
 adds a higher-priority `YouTube` exclusion for direct Zapret processing.
+The Settings importer pins the OpenWrt 25.12.3 MT7622 builds of
+`amneziawg-tools`, `kmod-amneziawg` and `luci-proto-amneziawg` with individual
+SHA-256 digests. It parses one interface and one peer, retains AWG v1/v2 fields
+Jc/Jmin/Jmax, S1-S4, H1-H4 and I1-I5, ignores the client DNS directive and sets
+`route_allowed_ips=0`. Network, Podkop and OUM UCI files are restored if the
+interface cannot establish a handshake or Podkop cannot pass readiness checks.
 
 ## Settings and recovery
 
