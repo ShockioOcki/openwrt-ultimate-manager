@@ -24,6 +24,8 @@ sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-system-job"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-podkop-config"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-awg-manager"
+sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-zapret-strategy"
+OUM_ZAPRET_CATALOG="$ROOT/luci-app-oum/root/usr/share/oum/zapret-youtube-strategies" "$ROOT/luci-app-oum/root/usr/libexec/oum-zapret-strategy" validate
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-login-default"
 sh -n "$ROOT/tests/test_subscription_info.sh"
 sh -n "$ROOT/tests/test_login_default.sh"

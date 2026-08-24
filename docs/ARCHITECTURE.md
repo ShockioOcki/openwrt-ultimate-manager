@@ -240,6 +240,19 @@ Jc/Jmin/Jmax, S1-S4, H1-H4 and I1-I5, ignores the client DNS directive and sets
 `route_allowed_ips=0`. Network, Podkop and OUM UCI files are restored if the
 interface cannot establish a handshake or Podkop cannot pass readiness checks.
 
+Zapret strategy selection is implemented by `/usr/libexec/oum-zapret-strategy`
+and is available only with the Podkop engine. The bundled strategy catalog is
+an exact SHA-256-pinned snapshot of StressOzz/Zapret-Manager revision
+`189abafd50aed17f8c7414695d0d47d129a6b0dd`; the large upstream interactive
+installer is never executed. Catalog validation runs before every mutation.
+The adapter replaces only the first YouTube-specific nfqws segment and carries
+the existing `--new` segments forward unchanged, so Discord and other local
+rules survive selection. Tests bind curl to the current WAN L3 device, avoiding
+the paid AWG path. System-job locking prevents an engine switch or routing edit
+during a test. The full Zapret UCI configuration is restored when a candidate
+fails to start, fewer than three of four probes succeed, or the job is
+interrupted.
+
 ## Settings and recovery
 
 The restricted `/oum/settings` page uses dedicated RPC methods rather than

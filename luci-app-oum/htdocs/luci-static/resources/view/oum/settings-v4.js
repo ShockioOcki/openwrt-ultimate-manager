@@ -20,6 +20,8 @@ const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', pa
 const callSwitchEngine = rpc.declare({ object: 'oum', method: 'switchVpnEngine', params: [ 'engine' ], expect: { '': {} } });
 const callConfigurePodkop = rpc.declare({ object: 'oum', method: 'configurePodkop', params: [ 'interface' ], expect: { '': {} } });
 const callImportPodkopAwg = rpc.declare({ object: 'oum', method: 'importPodkopAwg', params: [ 'payload' ], expect: { '': {} } });
+const callZapretStrategyStatus = rpc.declare({ object: 'oum', method: 'zapretStrategyStatus', expect: { '': {} } });
+const callStartZapretStrategy = rpc.declare({ object: 'oum', method: 'startZapretStrategy', params: [ 'action', 'strategy' ], expect: { '': {} } });
 const callCreateBackup = rpc.declare({ object: 'oum', method: 'createBackup', expect: { '': {} } });
 const callRestoreBackup = rpc.declare({ object: 'oum', method: 'restoreBackup', params: [ 'data' ], expect: { '': {} } });
 const callResetVpn = rpc.declare({ object: 'oum', method: 'resetVpn', expect: { '': {} } });
@@ -88,7 +90,7 @@ function saveBase64(filename, data) {
 
 return view.extend({
 	load() {
-		return Promise.all([ callSettingsStatus(), callSystemJobStatus(), callStatus(), callVpnJobStatus() ]);
+		return Promise.all([ callSettingsStatus(), callSystemJobStatus(), callStatus(), callVpnJobStatus(), callZapretStrategyStatus() ]);
 	},
 
 	render(data) {
@@ -96,6 +98,7 @@ return view.extend({
 		const initialJob = data[1];
 		const status = data[2];
 		const initialVpnJob = data[3];
+		const zapret = data[4] || { available: false, running: false, strategies: [] };
 		if (!status.setup_complete)
 			return E('div', {}, [
 				E('h2', {}, 'OUM'),
@@ -213,17 +216,6 @@ return view.extend({
 					E('div', { 'class': 'oum-engine-actions' }, [
 						E('button', { 'class': 'btn cbi-button-action', id: 'switch-engine', 'data-system-action': '', disabled: engines.supported ? null : '' }, 'Заменить движок'),
 						E('span', { 'class': 'oum-help' }, engines.supported ? 'Сохранённая конфигурация выбранного движка восстановится автоматически.' : 'Для этой платформы ещё нет проверенного пакета переключения.')
-					]),
-					E('div', { 'class': 'oum-inline-warning', hidden: engines.current === 'podkop' ? null : '' }, [
-						E('strong', {}, 'Отдельный туннель Podkop'),
-						E('p', { 'class': 'oum-help' }, 'Вставьте AmneziaWG-конфигурацию целиком. OUM установит проверенный комплект для этого роутера, проигнорирует DNS из файла и создаст отдельный туннель без маршрута по умолчанию. Podkop направит Russia inside через него, а YouTube — напрямую через Zapret.'),
-						E('textarea', { id: 'podkop-awg-config', autocomplete: 'off', spellcheck: 'false', placeholder: '[Interface]\nPrivateKey = …\nAddress = …\n…\n\n[Peer]\nPublicKey = …\nEndpoint = …', style: 'width:100%;min-height:180px;font-family:monospace;box-sizing:border-box;margin:8px 0' }),
-						E('button', { 'class': 'btn cbi-button-action', id: 'import-podkop-awg', 'data-system-action': '' }, 'Импортировать AWG и запустить'),
-						E('hr'),
-						E('p', { 'class': 'oum-help' }, 'Либо используйте уже существующий отдельный интерфейс:'),
-						E('select', { id: 'podkop-interface' }, podkopInterfaces.length ? podkopInterfaces.map((name) => E('option', { value: name, selected: name === engines.podkop?.interface ? '' : null }, name)) : E('option', { value: '' }, 'AWG/WireGuard не найден')),
-						' ',
-						E('button', { 'class': 'btn cbi-button-action', id: 'configure-podkop', 'data-system-action': '', disabled: podkopInterfaces.length ? null : '' }, 'Настроить и запустить')
 					])
 				])
 			]),
@@ -233,19 +225,46 @@ return view.extend({
 			}, [
 				E('summary', {}, 'Защищённое подключение'),
 				E('div', { 'class': 'oum-protected-content' }, [
-					E('p', { 'class': 'oum-help' }, sourceHelp),
-					E('div', { 'class': 'oum-sources', hidden: sourceSupported ? null : '' }, [
-						sourceChoice('subscription', 'Subscription', 'Ссылка на набор серверов', selectedSource === 'subscription', false),
-						sourceChoice('awg', 'AWG Tunnel', engines.current === 'passwall' ? 'Для Podkop + Zapret' : 'Конфигурация AmneziaWG', selectedSource === 'awg', engines.current === 'passwall'),
-						sourceChoice('proxy', 'Reality / Proxy', 'VLESS Reality, Hysteria2 и другие ссылки', selectedSource === 'proxy', false)
+					E('div', { hidden: engines.current === 'podkop' ? null : '' }, [
+						E('h4', {}, 'AWG-туннель'),
+						E('p', { 'class': 'oum-help' }, 'Вставьте AmneziaWG-конфигурацию целиком. DNS из файла игнорируется, а маршрут по умолчанию не создаётся. После проверки OUM свяжет туннель с Podkop.'),
+						E('textarea', { id: 'podkop-awg-config', autocomplete: 'off', spellcheck: 'false', placeholder: '[Interface]\nPrivateKey = …\nAddress = …\n…\n\n[Peer]\nPublicKey = …\nEndpoint = …', style: 'width:100%;min-height:180px;font-family:monospace;box-sizing:border-box;margin:8px 0' }),
+						E('div', { 'class': 'oum-setting-actions' }, [
+							E('button', { 'class': 'btn cbi-button-action', id: 'import-podkop-awg', 'data-system-action': '' }, 'Импортировать AWG и запустить'),
+							E('select', { id: 'podkop-interface' }, podkopInterfaces.length ? podkopInterfaces.map((name) => E('option', { value: name, selected: name === engines.podkop?.interface ? '' : null }, name)) : E('option', { value: '' }, 'Другой туннель не найден')),
+							E('button', { 'class': 'btn', id: 'configure-podkop', 'data-system-action': '', disabled: podkopInterfaces.length ? null : '' }, 'Использовать выбранный')
+						]),
+						E('hr'),
+						E('h4', {}, 'Zapret для YouTube'),
+						E('p', { 'class': 'oum-help' }, `Закреплённый каталог содержит ${zapret.catalog_total || 27} стратегий. Автоподбор проверяет их через прямой WAN, выбирает наиболее стабильную и возвращает предыдущую конфигурацию при ошибке.`),
+						E('div', { 'class': 'oum-engine-current' }, [
+							E('span', {}, [ E('small', {}, 'Текущая стратегия'), E('br'), E('strong', { id: 'zapret-current' }, zapret.current || 'не выбрана OUM') ]),
+							E('span', { 'class': 'oum-help' }, zapret.last_total ? `Последняя проверка: ${zapret.last_ok}/${zapret.last_total} · ${zapret.last_elapsed_ms} мс` : (zapret.running ? 'Zapret работает' : 'Сначала настройте AWG и запустите Podkop'))
+						]),
+						E('div', { 'class': 'oum-setting-actions' }, [
+							E('select', { id: 'zapret-strategy' }, (zapret.strategies || []).map((item) => E('option', { value: item.id, selected: item.id === zapret.current ? '' : null }, item.label))),
+							E('button', { 'class': 'btn', id: 'zapret-apply', 'data-system-action': '', disabled: zapret.running ? null : '' }, 'Применить выбранную'),
+							E('button', { 'class': 'btn cbi-button-action', id: 'zapret-auto', 'data-system-action': '', disabled: zapret.running ? null : '' }, 'Подобрать автоматически'),
+							E('button', { 'class': 'btn', id: 'zapret-check', 'data-system-action': '', disabled: zapret.running ? null : '' }, 'Проверить текущую'),
+							E('button', { 'class': 'btn', id: 'zapret-restore', 'data-system-action': '', disabled: zapret.rollback ? null : '' }, 'Вернуть предыдущую')
+						]),
+						E('p', { 'class': 'oum-help', id: 'zapret-status' }, initialJob.action?.startsWith('zapret_') ? initialJob.message : 'Во время автоподбора YouTube-соединения будут кратковременно перезапускаться.')
 					]),
-					E('div', { 'class': 'oum-vpn-input', hidden: sourceSupported ? null : '' }, [
-						E('label', { id: 'source-label' }, ''),
-						E('input', { id: 'subscription-input', type: 'url', autocomplete: 'off', spellcheck: 'false' }),
-						E('textarea', { id: 'config-input', autocomplete: 'off', spellcheck: 'false', hidden: '' })
-					]),
-					E('div', { 'class': 'oum-vpn-job', id: 'vpn-job-status', 'data-state': initialVpnJob.state || 'idle' }, initialVpnJob.message || 'Готово к добавлению подключения.'),
-					E('button', { 'class': 'btn cbi-button-action', id: 'import-source', hidden: sourceSupported ? null : '', disabled: sourceSupported ? null : '' }, 'Проверить и активировать')
+					E('div', { hidden: sourceSupported ? null : '' }, [
+						E('p', { 'class': 'oum-help' }, sourceHelp),
+						E('div', { 'class': 'oum-sources' }, [
+							sourceChoice('subscription', 'Subscription', 'Ссылка на набор серверов', selectedSource === 'subscription', false),
+							...(engines.current === 'openclash' ? [ sourceChoice('awg', 'AWG Tunnel', 'Конфигурация AmneziaWG', selectedSource === 'awg', false) ] : []),
+							sourceChoice('proxy', 'Reality / Proxy', 'VLESS Reality, Hysteria2 и другие ссылки', selectedSource === 'proxy', false)
+						]),
+						E('div', { 'class': 'oum-vpn-input' }, [
+							E('label', { id: 'source-label' }, ''),
+							E('input', { id: 'subscription-input', type: 'url', autocomplete: 'off', spellcheck: 'false' }),
+							E('textarea', { id: 'config-input', autocomplete: 'off', spellcheck: 'false', hidden: '' })
+						]),
+						E('div', { 'class': 'oum-vpn-job', id: 'vpn-job-status', 'data-state': initialVpnJob.state || 'idle' }, initialVpnJob.message || 'Готово к добавлению подключения.'),
+						E('button', { 'class': 'btn cbi-button-action', id: 'import-source' }, 'Проверить и активировать')
+					])
 				])
 			]),
 			E('section', { 'class': 'oum-settings-panel' }, [
@@ -306,7 +325,10 @@ return view.extend({
 				if (status.state === 'running') return window.setTimeout(tick, 1500);
 				watching = false;
 				setBusy(false);
-				if ((status.action === 'engine' || status.action === 'podkop_configure' || status.action === 'podkop_awg') && status.state === 'success')
+				const zapretStatus = root.querySelector('#zapret-status');
+				if (zapretStatus && status.action?.startsWith('zapret_'))
+					zapretStatus.textContent = status.message || 'Операция Zapret выполняется…';
+				if ((status.action === 'engine' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action?.startsWith('zapret_')) && status.state === 'success')
 					window.setTimeout(() => window.location.reload(), 900);
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
@@ -372,6 +394,21 @@ return view.extend({
 			if (await confirmation('Импортировать AWG?', 'OUM проверит пакеты и конфигурацию, создаст отдельный интерфейс oum_awg и запустит Podkop. При ошибке сеть будет восстановлена.', 'Импортировать', false))
 				start(callImportPodkopAwg(payload));
 		});
+		const runZapret = async (action) => {
+			const strategy = root.querySelector('#zapret-strategy')?.value || '';
+			const descriptions = {
+				auto: 'OUM последовательно проверит 27 стратегий. Это займёт несколько минут и временно перезапустит YouTube-соединения.',
+				apply: `Стратегия ${strategy} будет применена и проверена. При ошибке вернётся предыдущая.`,
+				check: 'Будет проверена текущая стратегия без изменения конфигурации.',
+				restore: 'Будет восстановлена конфигурация Zapret до последнего выбора через OUM.'
+			};
+			if (await confirmation('Настроить Zapret?', descriptions[action], action === 'auto' ? 'Начать подбор' : 'Продолжить', action === 'restore'))
+				start(callStartZapretStrategy(action, strategy));
+		};
+		for (const action of [ 'auto', 'apply', 'check', 'restore' ]) {
+			const button = root.querySelector(`#zapret-${action}`);
+			if (button) button.addEventListener('click', (event) => { event.preventDefault(); runZapret(action); });
+		}
 		importButton.addEventListener('click', (event) => {
 			event.preventDefault();
 			const payload = (selectedSource === 'subscription' ? urlInput.value : configInput.value).trim();

@@ -404,7 +404,7 @@ return view.extend({
 			root.querySelector('#podkop-version').textContent = `Podkop ${state.version || '—'} · Zapret ${state.zapret_version || '—'}`;
 			root.querySelector('#podkop-tunnel').textContent = state.tunnel_up ? `${state.interface || 'AWG'} поднят` : 'Требует внимания';
 			root.querySelector('#podkop-routing').textContent = state.ready ? 'Работает' : 'Требует внимания';
-			root.querySelector('#podkop-zapret').textContent = state.zapret ? 'Работает' : 'Требует внимания';
+			root.querySelector('#podkop-zapret').textContent = state.zapret ? `Работает${state.zapret_strategy ? ` · ${state.zapret_strategy}` : ''}` : 'Требует внимания';
 		};
 
 		const updatePasswall = (state) => {

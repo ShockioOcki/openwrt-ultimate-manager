@@ -4,14 +4,14 @@
 		"read": {
 			"ubus": {
 				"luci": [ "getFeatures" ],
-				"oum": [ "status", "dashboardStatus", "nodeStatus", "measureNodeDelays", "vpnJobStatus", "settingsStatus", "systemJobStatus", "podkopRoutingStatus", "podkopDiagnostics" ],
+				"oum": [ "status", "dashboardStatus", "nodeStatus", "measureNodeDelays", "vpnJobStatus", "settingsStatus", "systemJobStatus", "podkopRoutingStatus", "podkopDiagnostics", "zapretStrategyStatus" ],
 				"session": [ "access" ]
 			},
 			"uci": [ "oum" ]
 		},
 		"write": {
 			"ubus": {
-				"oum": [ "applySetup", "startVpnImport", "selectNode", "setVpnEnabled", "setDevicePolicy", "refreshSubscriptionInfo", "applyWifiSettings", "applyWanSettings", "rollbackSettings", "switchVpnEngine", "configurePodkop", "importPodkopAwg", "applyPodkopRouting", "createBackup", "restoreBackup", "resetVpn", "resetFirstRun" ]
+				"oum": [ "applySetup", "startVpnImport", "selectNode", "setVpnEnabled", "setDevicePolicy", "refreshSubscriptionInfo", "applyWifiSettings", "applyWanSettings", "rollbackSettings", "switchVpnEngine", "configurePodkop", "importPodkopAwg", "startZapretStrategy", "applyPodkopRouting", "createBackup", "restoreBackup", "resetVpn", "resetFirstRun" ]
 			},
 			"uci": [ "oum" ]
 		}

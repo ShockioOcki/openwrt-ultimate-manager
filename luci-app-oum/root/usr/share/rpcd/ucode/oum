@@ -14,6 +14,7 @@ const SYSTEM_JOB_LOCK = '/tmp/oum-system-job.lock';
 const BACKUP_ENCODED = '/tmp/oum-backup.b64';
 const RESTORE_INPUT = '/tmp/oum-restore.b64';
 const PASSWALL_NODE_CACHE = '/tmp/oum-passwall-nodes.cache';
+const ZAPRET_STRATEGY_STATE = '/etc/oum/zapret-strategy-state';
 
 function shellquote(value) {
 	return `'${replace(value ?? '', "'", "'\\''")}'`;
@@ -60,12 +61,57 @@ function readKeyValues(path, allowed) {
 }
 
 function systemJobStatus() {
-	let values = readKeyValues(`${SYSTEM_JOB_DIR}/status`, [ 'state', 'action', 'code', 'message' ]);
+	let values = readKeyValues(`${SYSTEM_JOB_DIR}/status`, [ 'state', 'action', 'code', 'message', 'progress', 'total', 'best' ]);
 	return {
 		state: values.state ?? 'idle',
 		action: values.action ?? '',
 		code: values.code ?? '',
-		message: values.message ?? ''
+		message: values.message ?? '',
+		progress: +(values.progress ?? 0),
+		total: +(values.total ?? 0),
+		best: values.best ?? ''
+	};
+}
+
+function zapretOptions() {
+	const uci = cursor();
+	let config = null;
+	uci.foreach('zapret', 'main', (section) => {
+		if (!config && section.NFQWS_OPT != null)
+			config = section;
+	});
+	return config?.NFQWS_OPT ?? '';
+}
+
+function zapretStrategyData() {
+	let strategies = [];
+	for (let index = 1; index <= 27; index++)
+		push(strategies, { id: sprintf('Yv%02d', index), label: sprintf('Yv%02d', index) });
+	let options = zapretOptions();
+	let marker = null;
+	for (let line in split(options, '\n')) {
+		let candidate = match(line, /^#OUM_YOUTUBE (Yv[0-9][0-9])$/);
+		if (candidate) marker = candidate;
+	}
+	let state = readKeyValues(ZAPRET_STRATEGY_STATE, [ 'catalog_revision', 'current', 'last_mode', 'last_ok', 'last_total', 'last_elapsed_ms', 'last_checked' ]);
+	let job = systemJobStatus();
+	return {
+		available: access('/usr/libexec/oum-zapret-strategy') && access('/etc/init.d/zapret') ? true : false,
+		running: system("pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1") == 0,
+		current: marker ? marker[1] : '',
+		catalog_revision: state.catalog_revision ?? '189abafd50aed17f8c7414695d0d47d129a6b0dd',
+		catalog_total: 27,
+		rollback: access('/etc/oum/rollback/zapret-before-strategy') ? true : false,
+		last_mode: state.last_mode ?? '',
+		last_ok: +(state.last_ok ?? 0),
+		last_total: +(state.last_total ?? 0),
+		last_elapsed_ms: +(state.last_elapsed_ms ?? 0),
+		last_checked: +(state.last_checked ?? 0),
+		busy: match(job.action ?? '', /^zapret_/) && job.state == 'running' ? true : false,
+		progress: job.progress ?? 0,
+		total: job.total ?? 0,
+		best: job.best ?? '',
+		strategies
 	};
 }
 
@@ -328,6 +374,12 @@ function podkopStatusData() {
 	let iface = uci.get('podkop', 'main', 'interface') ?? '';
 	let bus = connect();
 	let tunnel = length(iface) ? (bus?.call(`network.interface.${iface}`, 'status') ?? {}) : {};
+	let options = zapretOptions();
+	let zapretMarker = null;
+	for (let line in split(options, '\n')) {
+		let candidate = match(line, /^#OUM_YOUTUBE (Yv[0-9][0-9])$/);
+		if (candidate) zapretMarker = candidate;
+	}
 	return {
 		installed: true,
 		enabled: system('/etc/init.d/podkop enabled >/dev/null 2>&1') == 0,
@@ -336,7 +388,8 @@ function podkopStatusData() {
 		interface: iface,
 		tunnel_up: tunnel.up == true,
 		version: packageVersion('podkop'),
-		zapret_version: packageVersion('zapret')
+		zapret_version: packageVersion('zapret'),
+		zapret_strategy: zapretMarker ? zapretMarker[1] : ''
 	};
 }
 
@@ -878,6 +931,29 @@ const methods = {
 			if (!access('/usr/libexec/oum-awg-manager'))
 				return failure('runtime_missing', 'Компонент импорта AWG не установлен.');
 			return startSystemJob('podkop_awg', { payload });
+		}
+	},
+
+	zapretStrategyStatus: {
+		call: function() {
+			return zapretStrategyData();
+		}
+	},
+
+	startZapretStrategy: {
+		args: { action: '', strategy: '' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Сначала установите Podkop + Zapret.');
+			let action = request.args.action ?? '';
+			let strategy = request.args.strategy ?? '';
+			if (!(action in [ 'auto', 'apply', 'check', 'restore' ]))
+				return failure('invalid_action', 'Неизвестная операция Zapret.');
+			if (action == 'apply' && !match(strategy, /^Yv(0[1-9]|1[0-9]|2[0-7])$/))
+				return failure('invalid_strategy', 'Выберите стратегию Yv01–Yv27.');
+			if (!access('/usr/libexec/oum-zapret-strategy'))
+				return failure('runtime_missing', 'Адаптер стратегий Zapret не установлен.');
+			return startSystemJob(`zapret_${action}`, action == 'apply' ? { strategy } : {});
 		}
 	},
 

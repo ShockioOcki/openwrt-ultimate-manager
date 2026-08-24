@@ -121,6 +121,17 @@ higher-priority `YouTube` exclusion stays direct and is handled by Zapret. This
 keeps video traffic out of the paid tunnel. OUM never copies tunnel secrets
 into Podkop and does not enable `route_allowed_ips`.
 
+The restricted Settings page keeps Podkop connection setup in one place: AWG
+import and Zapret strategy management are shown under Protected connection only
+while Podkop + Zapret is the active engine. OUM carries a checksum-pinned copy
+of the 27 `Yv01`–`Yv27` YouTube strategies from StressOzz/Zapret-Manager commit
+`189abafd50aed17f8c7414695d0d47d129a6b0dd`. It does not execute the upstream
+manager. A dedicated adapter changes only the leading YouTube block of
+`NFQWS_OPT`, preserves all remaining Zapret rules, tests candidates through the
+direct WAN interface and restores the complete previous Zapret UCI file on any
+failure. Automatic selection ranks successful candidates by availability and
+aggregate connection time; at least three of four direct probes must pass.
+
 Subscriptions may be base64/plain URI lists or Clash YAML documents containing
 an embedded `proxies` array. Provider YAML is loaded in safe mode before nodes
 are filtered and embedded into the single OUM profile.
