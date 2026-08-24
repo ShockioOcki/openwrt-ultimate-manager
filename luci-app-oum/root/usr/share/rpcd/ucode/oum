@@ -445,29 +445,146 @@ function commandLine(command) {
 	return value;
 }
 
+function podkopJson(command) {
+	let allowed = {
+		check_dns_available: true,
+		check_sing_box: true,
+		check_nft_rules: true,
+		get_system_info: true,
+		outbound_latency: true
+	};
+	if (!(command in allowed))
+		return {};
+	let shell = command == 'outbound_latency' ?
+		'/usr/bin/podkop clash_api get_proxy_latency main-out 8000 2>/dev/null' :
+		`/usr/bin/podkop ${command} 2>/dev/null`;
+	let process = popen(shell);
+	if (!process)
+		return {};
+	let value = {};
+	try {
+		value = json(process) ?? {};
+	}
+	catch (err) {
+		value = {};
+	}
+	process.close();
+	return value;
+}
+
+function flag(value) {
+	return value == true || +value == 1;
+}
+
+function diagnosticSection(id, title, items) {
+	let state = 'success';
+	for (let item in items) {
+		if (item.state == 'error') {
+			state = 'error';
+			break;
+		}
+		if (item.state == 'warning')
+			state = 'warning';
+	}
+	return {
+		id,
+		title,
+		state,
+		description: state == 'success' ? 'Проверки пройдены' : (state == 'warning' ? 'Обнаружены предупреждения' : 'Обнаружены проблемы'),
+		items
+	};
+}
+
 function podkopDiagnosticsData() {
 	if (!podkopInstalled())
-		return { installed: false, checks: [] };
+		return { installed: false, sections: [] };
 	const uci = cursor();
 	let iface = uci.get('podkop', 'main', 'interface') ?? '';
 	let validIface = match(iface, /^[A-Za-z0-9_]{1,15}$/) ? true : false;
 	let tunnelUp = validIface && system(`ubus call network.interface.${iface} status 2>/dev/null | jsonfilter -e '@.up' | grep -qx true`) == 0;
 	let handshake = validIface ? commandLine(`awg show ${iface} latest-handshakes 2>/dev/null | awk 'NR==1 && $2>0 { d=systime()-$2; print d }'`) : '';
 	let handshakeAge = match(handshake, /^[0-9]+$/) ? +handshake : -1;
-	let checks = [
-		{ id: 'tunnel', label: 'AWG-туннель', ok: tunnelUp, detail: tunnelUp ? `${iface} поднят` : 'Интерфейс не поднят' },
-		{ id: 'handshake', label: 'Рукопожатие AWG', ok: handshakeAge >= 0 && handshakeAge < 300, detail: handshakeAge >= 0 ? `${handshakeAge} сек. назад` : 'Нет данных' },
-		{ id: 'singbox', label: 'Конфигурация sing-box', ok: system('sing-box check -c /etc/sing-box/config.json >/dev/null 2>&1') == 0, detail: 'Проверка синтаксиса' },
-		{ id: 'routing', label: 'Маршрутизация Podkop', ok: system('pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1') == 0, detail: 'Процесс и таблица nftables' },
-		{ id: 'fakeip', label: 'FakeIP DNS', ok: system("nslookup fakeip.podkop.fyi 127.0.0.1 2>/dev/null | grep -Eq '198\\.18\\.'") == 0, detail: 'Локальный DNS Podkop' },
-		{ id: 'dns', label: 'Обычный DNS', ok: system("nslookup openwrt.org 127.0.0.1 >/dev/null 2>&1") == 0, detail: 'Разрешение внешнего домена' },
-		{ id: 'zapret', label: 'Zapret', ok: system("pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1") == 0, detail: 'Обход ограничений без VPN' },
-		{ id: 'zapret_nft', label: 'Правила Zapret', ok: system('nft list table inet zapret >/dev/null 2>&1') == 0, detail: 'Таблица nftables' }
+	let dns = podkopJson('check_dns_available');
+	let singbox = podkopJson('check_sing_box');
+	let nft = podkopJson('check_nft_rules');
+	let outbound = podkopJson('outbound_latency');
+	let systemInfo = podkopJson('get_system_info');
+	let zapretRunning = system("pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1") == 0;
+	if (zapretRunning)
+		system('/usr/libexec/oum-zapret-strategy check >/dev/null 2>&1');
+	let zapret = zapretStrategyData();
+	let dontTouchDhcp = uci.get('podkop', 'settings', 'dont_touch_dhcp') == '1';
+	let quicDisabled = uci.get('firewall', 'oum_quic_80', 'target') == 'REJECT' && uci.get('firewall', 'oum_quic_443', 'target') == 'REJECT';
+	let managerInstalled = access('/usr/libexec/oum-zapret-manager') &&
+		system("/usr/libexec/oum-zapret-manager status 2>/dev/null | grep -qx 'installed=1'") == 0;
+	let sections = [
+		diagnosticSection('dns', 'DNS', [
+			{ state: flag(dns.bootstrap_dns_status) ? 'success' : 'error', label: 'Bootstrap DNS', value: dns.bootstrap_dns_server ?? 'не задан' },
+			{ state: flag(dns.dns_status) ? 'success' : 'error', label: 'Основной DNS', value: `${dns.dns_server ?? 'не задан'} [${dns.dns_type ?? '—'}]` },
+			{ state: flag(dns.dns_on_router) ? 'success' : 'error', label: 'DNS на роутере', value: flag(dns.dns_on_router) ? 'отвечает' : 'не отвечает' },
+			{ state: dontTouchDhcp ? 'info' : (flag(dns.dhcp_config_status) ? 'success' : 'warning'), label: 'DHCP содержит DNS Podkop', value: dontTouchDhcp ? 'управляется пользователем' : (flag(dns.dhcp_config_status) ? 'да' : 'отличается от шаблона') }
+		]),
+		diagnosticSection('singbox', 'Sing-box', [
+			{ state: flag(singbox.sing_box_installed) ? 'success' : 'error', label: 'Sing-box установлен', value: systemInfo.sing_box_version ?? '' },
+			{ state: flag(singbox.sing_box_version_ok) ? 'success' : 'error', label: 'Версия совместима', value: 'не ниже 1.12.4' },
+			{ state: flag(singbox.sing_box_service_exist) ? 'success' : 'error', label: 'Служба существует', value: '' },
+			{ state: flag(singbox.sing_box_autostart_disabled) ? 'success' : 'warning', label: 'Автозапуск sing-box отключён', value: 'управляется Podkop' },
+			{ state: flag(singbox.sing_box_process_running) ? 'success' : 'error', label: 'Процесс запущен', value: '' },
+			{ state: flag(singbox.sing_box_ports_listening) ? 'success' : 'error', label: 'Порты прослушиваются', value: '' }
+		]),
+		diagnosticSection('nft', 'Nftables', [
+			{ state: flag(nft.table_exist) ? 'success' : 'error', label: 'Таблица PodkopTable существует', value: '' },
+			{ state: flag(nft.rules_mangle_exist) ? 'success' : 'error', label: 'Правила mangle существуют', value: '' },
+			{ state: flag(nft.rules_mangle_counters) ? 'success' : 'warning', label: 'Счётчики mangle', value: flag(nft.rules_mangle_counters) ? 'есть трафик' : 'пока без трафика' },
+			{ state: flag(nft.rules_mangle_output_exist) ? 'success' : 'error', label: 'Правила mangle output существуют', value: '' },
+			{ state: flag(nft.rules_mangle_output_counters) ? 'success' : 'warning', label: 'Счётчики mangle output', value: flag(nft.rules_mangle_output_counters) ? 'есть трафик' : 'пока без трафика' },
+			{ state: flag(nft.rules_proxy_exist) ? 'success' : 'error', label: 'Правила proxy существуют', value: '' },
+			{ state: flag(nft.rules_proxy_counters) ? 'success' : 'warning', label: 'Счётчики proxy', value: flag(nft.rules_proxy_counters) ? 'есть трафик' : 'пока без трафика' },
+			{ state: flag(nft.rules_other_mark_exist) ? 'warning' : 'success', label: 'Дополнительные правила маркировки', value: flag(nft.rules_other_mark_exist) ? 'обнаружены' : 'не обнаружены' }
+		]),
+		diagnosticSection('outbound', 'Туннель и outbound', [
+			{ state: tunnelUp ? 'success' : 'error', label: 'AWG-интерфейс', value: tunnelUp ? `${iface} поднят` : 'не поднят' },
+			{ state: handshakeAge >= 0 && handshakeAge < 300 ? 'success' : 'error', label: 'Рукопожатие AWG', value: handshakeAge >= 0 ? `${handshakeAge} сек. назад` : 'нет данных' },
+			{ state: +(outbound.delay ?? 0) > 0 ? 'success' : 'error', label: 'Outbound main-out', value: +(outbound.delay ?? 0) > 0 ? `${outbound.delay} мс` : 'не отвечает' }
+		]),
+		diagnosticSection('fakeip', 'FakeIP', [
+			{ state: system("nslookup fakeip.podkop.fyi 127.0.0.1 2>/dev/null | grep -Eq '198\\.18\\.'") == 0 ? 'success' : 'error', label: 'DNS роутера проходит через FakeIP', value: '' },
+			{ state: 'info', label: 'Проверка браузера и маршрута', value: 'выполняется из браузера' }
+		]),
+		diagnosticSection('zapret', 'Zapret / YouTube', [
+			{ state: zapretRunning ? 'success' : 'error', label: 'Процесс nfqws', value: zapretRunning ? 'запущен' : 'не запущен' },
+			{ state: system('nft list table inet zapret >/dev/null 2>&1') == 0 ? 'success' : 'error', label: 'Таблица nftables Zapret', value: '' },
+			{ state: zapret.current ? 'success' : 'warning', label: 'Стратегия YouTube', value: zapret.current || 'не выбрана OUM' },
+			{ state: zapret.last_total > 0 && zapret.last_ok >= 3 ? 'success' : 'error', label: 'Прямой доступ YouTube', value: zapret.last_total > 0 ? `${zapret.last_ok}/${zapret.last_total} · ${zapret.last_elapsed_ms} мс` : 'не проверен' },
+			{ state: 'info', label: 'QUIC', value: quicDisabled ? 'UDP/80 и UDP/443 заблокированы firewall' : 'разрешён' }
+		])
 	];
-	let healthy = true;
-	for (let check in checks)
-		if (!check.ok) healthy = false;
-	return { installed: true, healthy, checked_at: time(), checks };
+	let state = 'success';
+	for (let section in sections) {
+		if (section.state == 'error') { state = 'error'; break; }
+		if (section.state == 'warning') state = 'warning';
+	}
+	return {
+		installed: true,
+		healthy: state == 'success',
+		state,
+		checked_at: time(),
+		sections,
+		quic_disabled: quicDisabled,
+		zapret_manager: {
+			installed: managerInstalled ? true : false,
+			revision: '189abafd50aed17f8c7414695d0d47d129a6b0dd'
+		},
+		fakeip_check_url: 'https://fakeip.podkop.fyi/check',
+		ip_check_url: 'https://ip.podkop.fyi/check',
+		system: {
+			podkop: systemInfo.podkop_version ?? packageVersion('podkop'),
+			luci: systemInfo.luci_app_version ?? packageVersion('luci-app-podkop'),
+			singbox: systemInfo.sing_box_version ?? packageVersion('sing-box'),
+			openwrt: systemInfo.openwrt_version ?? '',
+			device: systemInfo.device_model ?? ''
+		}
+	};
 }
 
 function passwallStatusData() {
@@ -982,6 +1099,28 @@ const methods = {
 	podkopDiagnostics: {
 		call: function() {
 			return podkopDiagnosticsData();
+		}
+	},
+
+	setZapretQuic: {
+		args: { enabled: false },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Podkop не установлен.');
+			let enabled = request.args.enabled;
+			if (type(enabled) != 'bool')
+				return failure('invalid_value', 'Некорректный режим QUIC.');
+			return startSystemJob('zapret_quic', { enabled: enabled ? '1' : '0' });
+		}
+	},
+
+	prepareZapretManager: {
+		call: function() {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Podkop не установлен.');
+			if (!access('/usr/libexec/oum-zapret-manager'))
+				return failure('runtime_missing', 'Адаптер Zapret Manager не установлен.');
+			return startSystemJob('zapret_manager_install', {});
 		}
 	},
 

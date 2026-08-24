@@ -14,6 +14,8 @@ const callRefreshSubscriptionInfo = rpc.declare({ object: 'oum', method: 'refres
 const callPodkopRoutingStatus = rpc.declare({ object: 'oum', method: 'podkopRoutingStatus', expect: { '': {} } });
 const callApplyPodkopRouting = rpc.declare({ object: 'oum', method: 'applyPodkopRouting', params: [ 'proxy_lists', 'proxy_domains', 'proxy_subnets', 'direct_lists', 'direct_domains', 'direct_subnets' ], expect: { '': {} } });
 const callPodkopDiagnostics = rpc.declare({ object: 'oum', method: 'podkopDiagnostics', expect: { '': {} } });
+const callSetZapretQuic = rpc.declare({ object: 'oum', method: 'setZapretQuic', params: [ 'enabled' ], expect: { '': {} } });
+const callPrepareZapretManager = rpc.declare({ object: 'oum', method: 'prepareZapretManager', expect: { '': {} } });
 const callSystemJobStatus = rpc.declare({ object: 'oum', method: 'systemJobStatus', expect: { '': {} } });
 const sourceNames = { none: 'Не настроено', subscription: 'Subscription', awg: 'AWG Tunnel', proxy: 'Reality / Proxy', passwall: 'PassWall', podkop: 'Podkop + Zapret' };
 
@@ -117,8 +119,9 @@ return view.extend({
 				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-hint{font-size:.86em;margin:2px 0 8px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
 				.oum-node-all{margin-top:13px}.oum-node-all>summary{cursor:pointer;font-weight:600;padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
 				.oum-passwall-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.oum-passwall-state{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-passwall-state small{display:block;opacity:.68;margin-bottom:5px}.oum-passwall-state strong[data-ok="false"],.oum-passwall-diagnostic strong[data-ok="false"]{color:#c0392b}.oum-passwall-route{background:#eef4fa;border-radius:9px;padding:12px;margin-top:12px}.oum-passwall-route small{display:block;margin-bottom:4px}.oum-passwall-versions{margin-top:12px}.oum-passwall-rules{margin-top:8px}.oum-passwall-diagnostics{margin-top:12px}.oum-passwall-diagnostics>summary{cursor:pointer;font-weight:600}.oum-passwall-diagnostic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.oum-passwall-diagnostic{border:1px solid #d8dde5;border-radius:9px;padding:10px}.oum-passwall-diagnostic small{display:block;opacity:.68;margin-bottom:4px}.oum-node-controls[data-engine="passwall"]{border-top:1px solid #d8dde5;margin-top:16px;padding-top:14px}
-				.oum-tabs{display:flex;gap:6px;border-bottom:1px solid #ccd3dc;margin:16px 0 13px}.oum-tab{border:0;background:transparent;padding:9px 13px;border-bottom:3px solid transparent;cursor:pointer}.oum-tab[data-active="true"]{border-color:#2673ec;color:#2673ec;font-weight:600}.oum-route-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.oum-route-box{border:1px solid #d8dde5;border-radius:10px;padding:13px}.oum-route-box h4{margin:0 0 5px}.oum-community-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0}.oum-community-item{display:flex;align-items:center;gap:7px;border:1px solid #d8dde5;border-radius:7px;padding:7px 8px;min-width:0}.oum-community-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-route-box textarea{width:100%;min-height:92px;box-sizing:border-box;margin-top:6px}.oum-route-label{display:block;font-weight:600;margin-top:11px}.oum-route-actions{display:flex;align-items:center;gap:12px;margin-top:14px}.oum-route-message[data-state="failed"]{color:#c0392b}.oum-diagnostic-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.oum-diagnostic-card{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-diagnostic-card small{display:block;opacity:.68;margin-bottom:5px}.oum-diagnostic-card strong[data-ok="false"]{color:#c0392b}.oum-diagnostic-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-				@media(max-width:900px){.oum-cards,.oum-passwall-grid,.oum-diagnostic-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid,.oum-passwall-diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.oum-route-columns{grid-template-columns:1fr}.oum-community-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route,.oum-passwall-diagnostic-grid,.oum-diagnostic-grid,.oum-community-grid{grid-template-columns:1fr}.oum-clients .optional{display:none}}
+				.oum-tabs{display:flex;gap:6px;border-bottom:1px solid #ccd3dc;margin:16px 0 13px}.oum-tab{border:0;background:transparent;padding:9px 13px;border-bottom:3px solid transparent;cursor:pointer}.oum-tab[data-active="true"]{border-color:#2673ec;color:#2673ec;font-weight:600}.oum-route-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.oum-route-box{border:1px solid #d8dde5;border-radius:10px;padding:13px}.oum-route-box h4{margin:0 0 5px}.oum-community-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0}.oum-community-item{display:flex;align-items:center;gap:7px;border:1px solid #d8dde5;border-radius:7px;padding:7px 8px;min-width:0}.oum-community-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-route-box textarea{width:100%;min-height:92px;box-sizing:border-box;margin-top:6px}.oum-route-label{display:block;font-weight:600;margin-top:11px}.oum-route-actions{display:flex;align-items:center;gap:12px;margin-top:14px}.oum-route-message[data-state="failed"]{color:#c0392b}
+				.oum-diagnostic-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(250px,1fr);gap:12px}.oum-diagnostic-run{width:100%;margin-bottom:10px}.oum-diagnostic-sections{display:grid;gap:10px}.oum-diagnostic-section{border:2px solid #2b9b68;border-radius:8px;padding:12px}.oum-diagnostic-section[data-state="warning"]{border-color:#b28a29}.oum-diagnostic-section[data-state="error"]{border-color:#c94b4b}.oum-diagnostic-title{display:flex;align-items:flex-start;gap:10px}.oum-diagnostic-icon{font-size:1.25rem;line-height:1}.oum-diagnostic-title strong{display:block}.oum-diagnostic-items{display:grid;gap:5px;margin:10px 0 0 32px}.oum-diagnostic-item{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:6px;align-items:start}.oum-diagnostic-item[data-state="success"] .oum-diagnostic-mark{color:#2b9b68}.oum-diagnostic-item[data-state="warning"] .oum-diagnostic-mark{color:#b28a29}.oum-diagnostic-item[data-state="error"] .oum-diagnostic-mark{color:#c94b4b}.oum-diagnostic-value{opacity:.72;text-align:right}.oum-diagnostic-side{display:grid;align-content:start;gap:10px}.oum-diagnostic-side-card{border:1px solid #d8dde5;border-radius:9px;padding:12px}.oum-diagnostic-side-card h4{margin:0 0 10px}.oum-diagnostic-actions{display:grid;gap:8px}.oum-system-info{display:grid;grid-template-columns:auto 1fr;gap:7px 9px;font-size:.9em}.oum-system-info strong{white-space:nowrap}.oum-expert-tools>summary{cursor:pointer;font-weight:600}.oum-expert-tools p{font-size:.86em}
+				@media(max-width:900px){.oum-cards,.oum-passwall-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid,.oum-passwall-diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.oum-route-columns,.oum-diagnostic-layout{grid-template-columns:1fr}.oum-community-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route,.oum-passwall-diagnostic-grid,.oum-community-grid{grid-template-columns:1fr}.oum-clients .optional{display:none}.oum-diagnostic-item{grid-template-columns:18px 1fr}.oum-diagnostic-value{grid-column:2;text-align:left}}
 			`),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('h2', {}, 'OUM'),
@@ -219,8 +222,33 @@ return view.extend({
 							E('div', { 'class': 'oum-route-actions' }, [ E('button', { 'class': 'btn cbi-button-action', id: 'podkop-routing-save' }, 'Сохранить маршрутизацию'), E('span', { 'class': 'oum-route-message oum-muted', id: 'podkop-routing-message' }, '') ])
 						]),
 						E('div', { id: 'podkop-diagnostics-tab', hidden: '' }, [
-							E('div', { 'class': 'oum-diagnostic-head' }, [ E('p', { 'class': 'oum-muted', id: 'podkop-diagnostic-summary' }, 'Нажмите «Проверить», чтобы выполнить диагностику.'), E('button', { 'class': 'btn cbi-button', id: 'podkop-diagnostics-refresh' }, 'Проверить') ]),
-							E('div', { 'class': 'oum-diagnostic-grid', id: 'podkop-diagnostic-grid' })
+							E('div', { 'class': 'oum-diagnostic-layout' }, [
+								E('div', {}, [
+									E('button', { 'class': 'btn cbi-button oum-diagnostic-run', id: 'podkop-diagnostics-refresh' }, 'Запустить диагностику'),
+									E('p', { 'class': 'oum-muted', id: 'podkop-diagnostic-summary' }, 'Проверяются DNS, sing-box, nftables, AWG, FakeIP и Zapret.'),
+									E('div', { 'class': 'oum-diagnostic-sections', id: 'podkop-diagnostic-grid' })
+								]),
+								E('aside', { 'class': 'oum-diagnostic-side' }, [
+									E('div', { 'class': 'oum-diagnostic-side-card' }, [
+										E('h4', {}, 'Доступные действия'),
+										E('div', { 'class': 'oum-diagnostic-actions' }, [
+											E('button', { 'class': 'btn cbi-button', id: 'podkop-diagnostic-restart' }, 'Перезапустить Podkop + Zapret'),
+											E('button', { 'class': 'btn cbi-button', id: 'podkop-quic-toggle' }, 'Режим QUIC')
+										])
+									]),
+									E('div', { 'class': 'oum-diagnostic-side-card' }, [ E('h4', {}, 'Системная информация'), E('div', { 'class': 'oum-system-info', id: 'podkop-system-info' }, 'После запуска диагностики') ]),
+									E('details', { 'class': 'oum-diagnostic-side-card oum-expert-tools' }, [
+										E('summary', {}, 'Экспертные инструменты'),
+										E('p', { 'class': 'oum-muted' }, 'Полный Zapret Manager может изменять firewall, DNS, сетевые службы и пакеты. OUM проверяет закреплённую версию и запускает её только в интерактивной root SSH-сессии после резервной копии.'),
+										E('p', { 'class': 'oum-muted', id: 'zapret-manager-status' }, 'Статус будет проверен при диагностике.'),
+										E('div', { 'class': 'oum-diagnostic-actions' }, [
+											E('button', { 'class': 'btn cbi-button', id: 'zapret-manager-prepare' }, 'Подготовить Zapret Manager'),
+											E('code', {}, 'root@OpenWrt:~# oum-zapret-manager'),
+											E('a', { 'class': 'btn cbi-button', href: 'https://github.com/StressOzz/Zapret-Manager', target: '_blank', rel: 'noreferrer' }, 'О проекте Zapret Manager')
+										])
+									])
+								])
+							])
 						])
 					]),
 					E('div', { 'class': 'oum-node-controls', id: 'node-controls' }, [
@@ -269,6 +297,10 @@ return view.extend({
 		const podkopRoutingMessage = root.querySelector('#podkop-routing-message');
 		const podkopRoutingSave = root.querySelector('#podkop-routing-save');
 		const podkopDiagnosticsRefresh = root.querySelector('#podkop-diagnostics-refresh');
+		const podkopDiagnosticRestart = root.querySelector('#podkop-diagnostic-restart');
+		const podkopQuicToggle = root.querySelector('#podkop-quic-toggle');
+		const zapretManagerPrepare = root.querySelector('#zapret-manager-prepare');
+		let podkopQuicDisabled = false;
 
 		for (const tab of root.querySelectorAll('[data-podkop-tab]')) tab.addEventListener('click', (event) => {
 			event.preventDefault();
@@ -304,22 +336,122 @@ return view.extend({
 			}).finally(() => { podkopRoutingSave.disabled = false; });
 		});
 
+		const diagnosticMark = (state) => state === 'success' ? '✓' : (state === 'error' ? '✕' : (state === 'warning' ? '⚠' : '•'));
 		const renderPodkopDiagnostics = (diagnostics) => {
 			const grid = root.querySelector('#podkop-diagnostic-grid');
-			grid.replaceChildren(...(diagnostics.checks || []).map((check) => E('div', { 'class': 'oum-diagnostic-card' }, [
-				E('small', {}, check.label), E('strong', { 'data-ok': check.ok ? 'true' : 'false' }, check.ok ? 'Работает' : 'Требует внимания'),
-				E('div', { 'class': 'oum-muted' }, check.detail || '')
+			grid.replaceChildren(...(diagnostics.sections || []).map((section) => E('section', { 'class': 'oum-diagnostic-section', 'data-state': section.state }, [
+				E('div', { 'class': 'oum-diagnostic-title' }, [
+					E('span', { 'class': 'oum-diagnostic-icon' }, diagnosticMark(section.state)),
+					E('div', {}, [ E('strong', {}, section.title), E('div', { 'class': 'oum-muted' }, section.description || '') ])
+				]),
+				E('div', { 'class': 'oum-diagnostic-items' }, (section.items || []).map((item) => E('div', { 'class': 'oum-diagnostic-item', 'data-state': item.state }, [
+					E('span', { 'class': 'oum-diagnostic-mark' }, diagnosticMark(item.state)),
+					E('span', {}, item.label),
+					E('span', { 'class': 'oum-diagnostic-value' }, item.value || '')
+				])))
 			])));
-			root.querySelector('#podkop-diagnostic-summary').textContent = diagnostics.healthy ?
-				'Все проверки пройдены.' : 'Одна или несколько проверок требуют внимания.';
+			root.querySelector('#podkop-diagnostic-summary').textContent = diagnostics.state === 'success' ?
+				'Все проверки пройдены.' : (diagnostics.state === 'warning' ? 'Сервисы работают, но есть предупреждения.' : 'Одна или несколько проверок требуют внимания.');
+			podkopQuicDisabled = diagnostics.quic_disabled === true;
+			podkopQuicToggle.textContent = podkopQuicDisabled ? 'Разрешить QUIC' : 'Отключить QUIC для видео';
+			const manager = diagnostics.zapret_manager || {};
+			zapretManagerPrepare.disabled = manager.installed === true;
+			zapretManagerPrepare.textContent = manager.installed === true ? 'CLI подготовлен' : 'Подготовить Zapret Manager';
+			root.querySelector('#zapret-manager-status').textContent = manager.installed === true ?
+				`Установлена проверенная ревизия ${String(manager.revision || '').slice(0, 12)}.` :
+				'Полная версия не загружена; основные стратегии OUM уже доступны без неё.';
+			const info = diagnostics.system || {};
+			root.querySelector('#podkop-system-info').replaceChildren(...[
+				[ 'Podkop', info.podkop ], [ 'LuCI App', info.luci ], [ 'Sing-box', info.singbox ], [ 'OpenWrt', info.openwrt ], [ 'Устройство', info.device ]
+			].map(([ label, value ]) => [ E('strong', {}, label), E('span', {}, value || '—') ]).flat());
+		};
+		const browserFakeIpCheck = async (diagnostics) => {
+			const fetchJson = (url) => Promise.race([
+				fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } }).then((response) => {
+					if (!response.ok) throw new Error(`HTTP ${response.status}`);
+					return response.json();
+				}),
+				new Promise((_, reject) => window.setTimeout(() => reject(new Error('timeout')), 5000))
+			]);
+			const section = (diagnostics.sections || []).find((item) => item.id === 'fakeip');
+			if (!section) return diagnostics;
+			try {
+				const [ proxied, direct ] = await Promise.all([ fetchJson(diagnostics.fakeip_check_url), fetchJson(diagnostics.ip_check_url) ]);
+				const browserFake = proxied?.fakeip === true;
+				const routed = browserFake && proxied?.IP && direct?.IP && proxied.IP !== direct.IP;
+				section.items = section.items.slice(0, 1).concat([
+					{ state: browserFake ? 'success' : 'error', label: 'Браузер использует FakeIP', value: browserFake ? 'да' : 'нет' },
+					{ state: routed ? 'success' : 'error', label: 'Прокси-трафик отличается от прямого', value: routed ? 'маршрут работает' : 'маршрут не подтверждён' }
+				]);
+				section.state = section.items.some((item) => item.state === 'error') ? 'error' : 'success';
+				section.description = section.state === 'success' ? 'Проверки пройдены' : 'Обнаружены проблемы';
+			}
+			catch (error) {
+				section.items = section.items.slice(0, 1).concat([ { state: 'warning', label: 'Проверка браузера', value: 'сервис проверки недоступен' } ]);
+				section.state = section.items[0]?.state === 'error' ? 'error' : 'warning';
+				section.description = section.state === 'error' ? 'Обнаружены проблемы' : 'Проверка выполнена частично';
+			}
+			return diagnostics;
+		};
+		const runPodkopDiagnostics = () => {
+			podkopDiagnosticsRefresh.disabled = true;
+			root.querySelector('#podkop-diagnostic-summary').textContent = 'Выполняем безопасные проверки…';
+			return callPodkopDiagnostics().then(browserFakeIpCheck).then(renderPodkopDiagnostics).catch((error) => {
+				root.querySelector('#podkop-diagnostic-summary').textContent = error.message;
+			}).finally(() => { podkopDiagnosticsRefresh.disabled = false; });
 		};
 		podkopDiagnosticsRefresh.addEventListener('click', (event) => {
 			event.preventDefault();
-			podkopDiagnosticsRefresh.disabled = true;
-			root.querySelector('#podkop-diagnostic-summary').textContent = 'Выполняем безопасные проверки…';
-			callPodkopDiagnostics().then(renderPodkopDiagnostics).catch((error) => {
+			runPodkopDiagnostics();
+		});
+		podkopDiagnosticRestart.addEventListener('click', (event) => {
+			event.preventDefault();
+			podkopDiagnosticRestart.disabled = true;
+			root.querySelector('#podkop-diagnostic-summary').textContent = 'Перезапускаем Podkop + Zapret…';
+			callSetVpnEnabled(true).then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Не удалось перезапустить сервисы.');
+				window.setTimeout(runPodkopDiagnostics, 22000);
+			}).catch((error) => {
 				root.querySelector('#podkop-diagnostic-summary').textContent = error.message;
-			}).finally(() => { podkopDiagnosticsRefresh.disabled = false; });
+			}).finally(() => { window.setTimeout(() => { podkopDiagnosticRestart.disabled = false; }, 22000); });
+		});
+		podkopQuicToggle.addEventListener('click', (event) => {
+			event.preventDefault();
+			const next = !podkopQuicDisabled;
+			if (!window.confirm(next ? 'Отключить QUIC? Видео перейдёт на TCP/TLS, Podkop кратковременно перезапустится.' : 'Снова разрешить QUIC и перезапустить Podkop?')) return;
+			podkopQuicToggle.disabled = true;
+			callSetZapretQuic(next).then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Не удалось изменить режим QUIC.');
+				let attempts = 0;
+				const watch = () => callSystemJobStatus().then((job) => {
+					root.querySelector('#podkop-diagnostic-summary').textContent = job.message || 'Применяем режим QUIC…';
+					if (job.state === 'running' && attempts++ < 90) return new Promise((resolve) => window.setTimeout(resolve, 1000)).then(watch);
+					if (job.state !== 'success') throw new Error(job.message || 'Не удалось изменить режим QUIC.');
+					return runPodkopDiagnostics();
+				});
+				return watch();
+			}).catch((error) => {
+				root.querySelector('#podkop-diagnostic-summary').textContent = error.message;
+			}).finally(() => { podkopQuicToggle.disabled = false; });
+		});
+		zapretManagerPrepare.addEventListener('click', (event) => {
+			event.preventDefault();
+			zapretManagerPrepare.disabled = true;
+			root.querySelector('#zapret-manager-status').textContent = 'Загружаем и проверяем закреплённую версию…';
+			callPrepareZapretManager().then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Не удалось подготовить Zapret Manager.');
+				let attempts = 0;
+				const watch = () => callSystemJobStatus().then((job) => {
+					root.querySelector('#zapret-manager-status').textContent = job.message || 'Подготавливаем CLI…';
+					if (job.state === 'running' && attempts++ < 90) return new Promise((resolve) => window.setTimeout(resolve, 1000)).then(watch);
+					if (job.state !== 'success') throw new Error(job.message || 'Zapret Manager не подготовлен.');
+					return runPodkopDiagnostics();
+				});
+				return watch();
+			}).catch((error) => {
+				root.querySelector('#zapret-manager-status').textContent = error.message;
+				zapretManagerPrepare.disabled = false;
+			});
 		});
 
 		const updateSubscription = (fresh) => {

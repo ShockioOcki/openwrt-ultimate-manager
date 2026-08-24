@@ -125,12 +125,23 @@ The restricted Settings page keeps Podkop connection setup in one place: AWG
 import and Zapret strategy management are shown under Protected connection only
 while Podkop + Zapret is the active engine. OUM carries a checksum-pinned copy
 of the 27 `Yv01`–`Yv27` YouTube strategies from StressOzz/Zapret-Manager commit
-`189abafd50aed17f8c7414695d0d47d129a6b0dd`. It does not execute the upstream
-manager. A dedicated adapter changes only the leading YouTube block of
+`189abafd50aed17f8c7414695d0d47d129a6b0dd`. The normal OUM workflow does not
+execute the upstream manager. A dedicated adapter changes only the leading YouTube block of
 `NFQWS_OPT`, preserves all remaining Zapret rules, tests candidates through the
 direct WAN interface and restores the complete previous Zapret UCI file on any
 failure. Automatic selection ranks successful candidates by availability and
 aggregate connection time; at least three of four direct probes must pass.
+
+The Podkop diagnostics page combines the installed Podkop project's own DNS,
+sing-box, nftables and system checks with OUM's AWG handshake, FakeIP route and
+Zapret/YouTube probes. Its optional QUIC compatibility switch blocks LAN-to-WAN
+UDP ports 80 and 443 so clients fall back to TCP/TLS. It is off by default and
+restores the exact previous firewall configuration if applying the rules fails.
+
+Expert tools can optionally download the full Zapret Manager at the same pinned
+revision and verify its SHA-256. It is available only as `oum-zapret-manager`
+in an interactive root SSH session and creates a configuration backup before
+execution. The restricted `admin` web account is never given a root terminal.
 
 Subscriptions may be base64/plain URI lists or Clash YAML documents containing
 an embedded `proxies` array. Provider YAML is loaded in safe mode before nodes

@@ -253,6 +253,21 @@ during a test. The full Zapret UCI configuration is restored when a candidate
 fails to start, fewer than three of four probes succeed, or the job is
 interrupted.
 
+`podkopDiagnostics` uses the commands exported by the installed Podkop release
+for DNS, sing-box, nftables and system information, then adds OUM checks for the
+dedicated AWG interface, FakeIP route and Zapret/YouTube strategy. The optional
+`/usr/libexec/oum-zapret-quic` adapter manages only named firewall rules for
+LAN-to-WAN UDP ports 80 and 443. It takes an exact firewall backup, validates the
+new state and rolls back on failure; the default remains QUIC allowed.
+
+The complete upstream Zapret Manager is not embedded in the admin LuCI session.
+`/usr/libexec/oum-zapret-manager` downloads revision
+`189abafd50aed17f8c7414695d0d47d129a6b0dd`, verifies its SHA-256, pins the
+manager's own resource URLs to the same revision and exposes it through the
+interactive root-only `oum-zapret-manager` command. A configuration backup is
+created immediately before execution. This preserves the OUM admin/root
+security boundary while retaining the full upstream maintenance interface.
+
 ## Settings and recovery
 
 The restricted `/oum/settings` page uses dedicated RPC methods rather than
