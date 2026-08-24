@@ -109,13 +109,16 @@ return view.extend({
 			[ 'Видео и развлечения', [ 'hdrezka', 'anime', 'roblox', 'porn' ], false ],
 			[ 'Google и AI', [ 'google_ai', 'google_play' ], false ],
 			[ 'Инфраструктура', [ 'cloudflare', 'cloudfront', 'digitalocean', 'hetzner', 'ovh' ], false ],
-			[ 'Дополнительно', [ 'ukraine_inside', 'news', 'hodca' ], false ]
+			[ 'Дополнительно', [ 'news', 'hodca' ], false ]
 		];
 		const catalogById = Object.fromEntries((podkopRouting.catalog || []).map((item) => [ item.id, item ]));
 		const routeRow = (item) => {
 			const viaVpn = item.id === 'youtube' ? youtubeInitialMode === 'vpn' : proxyRoutes.has(item.id);
 			return E('div', { 'class': 'oum-route-row', 'data-route-row': item.id }, [
-				E('div', { 'class': 'oum-route-service' }, [ E('strong', {}, item.label), item.id === 'youtube' ? E('small', {}, viaVpn ? 'Zapret остановлен' : 'обрабатывается Zapret') : null ]),
+				E('div', { 'class': 'oum-route-service' }, [
+					E('strong', {}, item.label),
+					...(item.id === 'youtube' ? [ E('small', {}, viaVpn ? 'Zapret остановлен' : 'обрабатывается Zapret') ] : [])
+				]),
 				E('div', { 'class': 'oum-route-switch' }, [
 					E('label', {}, [ E('input', { type: 'radio', name: `route_${item.id}`, value: 'vpn', 'data-community-route': item.id, checked: viaVpn ? '' : null }), E('span', {}, 'Через VPN') ]),
 					E('label', {}, [ E('input', { type: 'radio', name: `route_${item.id}`, value: 'direct', 'data-community-route': item.id, checked: !viaVpn ? '' : null }), E('span', {}, item.id === 'youtube' ? 'Напрямую + Zapret' : 'Напрямую') ])

@@ -38,7 +38,7 @@ prepare_zapret_runtime() {
 
 valid_community() {
 	case "$1" in
-		russia_inside|russia_outside|ukraine_inside|geoblock|block|porn|news|anime|youtube|hdrezka|tiktok|google_ai|google_play|hodca|discord|meta|twitter|cloudflare|cloudfront|digitalocean|hetzner|ovh|telegram|roblox) return 0 ;;
+		russia_inside|russia_outside|geoblock|block|porn|news|anime|youtube|hdrezka|tiktok|google_ai|google_play|hodca|discord|meta|twitter|cloudflare|cloudfront|digitalocean|hetzner|ovh|telegram|roblox) return 0 ;;
 		*) return 1 ;;
 	esac
 }
@@ -374,7 +374,9 @@ youtube() {
 	request="${1:-}"
 	[ -f "$request" ] || return 1
 	mode="$(jsonfilter -i "$request" -e '@.mode')"
+	strategy="$(jsonfilter -i "$request" -e '@.strategy' 2>/dev/null || true)"
 	[ "$mode" = zapret ] || [ "$mode" = vpn ] || return 1
+	[ -z "$strategy" ] || printf '%s' "$strategy" | grep -Eq '^Yv(0[1-9]|1[0-9]|2[0-7])$' || return 1
 	save_rollback
 	/etc/init.d/zapret stop >/dev/null 2>&1 || true
 	/etc/init.d/podkop stop >/dev/null 2>&1 || true
@@ -403,7 +405,11 @@ youtube() {
 		wait_for_list_update || { restore_rollback; return 1; }
 		wait_for_zapret_health || { restore_rollback; return 1; }
 		: > /tmp/oum-zapret-check.log
-		check_zapret_route || { restore_rollback; return 1; }
+		if [ -n "$strategy" ]; then
+			/usr/libexec/oum-zapret-strategy apply "$strategy" >>/tmp/oum-zapret-check.log 2>&1 || { restore_rollback; return 1; }
+		else
+			check_zapret_route || { restore_rollback; return 1; }
+		fi
 	fi
 	uci -q set "oum.main.youtube_mode=$mode"
 	uci -q commit oum

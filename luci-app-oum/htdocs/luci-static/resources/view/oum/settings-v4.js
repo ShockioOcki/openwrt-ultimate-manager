@@ -21,7 +21,7 @@ const callSwitchEngine = rpc.declare({ object: 'oum', method: 'switchVpnEngine',
 const callConfigurePodkop = rpc.declare({ object: 'oum', method: 'configurePodkop', params: [ 'interface' ], expect: { '': {} } });
 const callImportPodkopAwg = rpc.declare({ object: 'oum', method: 'importPodkopAwg', params: [ 'payload' ], expect: { '': {} } });
 const callImportPodkopReality = rpc.declare({ object: 'oum', method: 'importPodkopReality', params: [ 'payload' ], expect: { '': {} } });
-const callSetPodkopYoutubeMode = rpc.declare({ object: 'oum', method: 'setPodkopYoutubeMode', params: [ 'mode' ], expect: { '': {} } });
+const callSetPodkopYoutubeMode = rpc.declare({ object: 'oum', method: 'setPodkopYoutubeMode', params: [ 'mode', 'strategy' ], expect: { '': {} } });
 const callZapretStrategyStatus = rpc.declare({ object: 'oum', method: 'zapretStrategyStatus', expect: { '': {} } });
 const callStartZapretStrategy = rpc.declare({ object: 'oum', method: 'startZapretStrategy', params: [ 'action', 'strategy' ], expect: { '': {} } });
 const callCreateBackup = rpc.declare({ object: 'oum', method: 'createBackup', expect: { '': {} } });
@@ -258,23 +258,20 @@ return view.extend({
 						]),
 						E('button', { 'class': 'btn cbi-button-action', id: 'apply-youtube-mode', 'data-system-action': '' }, 'Применить режим YouTube'),
 						E('hr'),
-						E('div', { hidden: youtubeMode === 'zapret' ? null : '' }, [
 						E('h4', {}, 'Стратегия Zapret'),
-						E('p', { 'class': 'oum-help' }, `Закреплённый каталог содержит ${zapret.catalog_total || 27} стратегий. Автоподбор проверяет их через прямой WAN, выбирает наиболее стабильную и возвращает предыдущую конфигурацию при ошибке.`),
+						E('p', { 'class': 'oum-help' }, `Закреплённый каталог содержит ${zapret.catalog_total || 27} стратегий. Можно выбрать стратегию вручную или запустить автоподбор. Рабочим считается результат не хуже 3 из 4 проверок.`),
 						E('div', { 'class': 'oum-engine-current' }, [
 							E('span', {}, [ E('small', {}, 'Текущая стратегия'), E('br'), E('strong', { id: 'zapret-current' }, zapret.current || 'не выбрана OUM') ]),
 							E('span', { 'class': 'oum-help' }, zapret.last_total ? `Последняя проверка: ${zapret.last_ok}/${zapret.last_total} · ${zapret.last_elapsed_ms} мс` : (zapret.running ? 'Zapret работает' : 'Сначала настройте AWG и запустите Podkop'))
 						]),
 						E('div', { 'class': 'oum-setting-actions' }, [
 							E('select', { id: 'zapret-strategy' }, (zapret.strategies || []).map((item) => E('option', { value: item.id, selected: item.id === zapret.current ? '' : null }, item.label))),
-							E('button', { 'class': 'btn', id: 'zapret-apply', 'data-system-action': '', disabled: zapret.running ? null : '' }, 'Применить выбранную'),
-							E('button', { 'class': 'btn cbi-button-action', id: 'zapret-auto', 'data-system-action': '', disabled: zapret.running ? null : '' }, 'Подобрать автоматически'),
-							E('button', { 'class': 'btn', id: 'zapret-check', 'data-system-action': '', disabled: zapret.running ? null : '' }, 'Проверить текущую'),
-							E('button', { 'class': 'btn', id: 'zapret-restore', 'data-system-action': '', disabled: zapret.rollback ? null : '' }, 'Вернуть предыдущую')
+							E('button', { 'class': 'btn', id: 'zapret-apply', 'data-system-action': '' }, youtubeMode === 'vpn' ? 'Включить с выбранной' : 'Применить выбранную'),
+							E('button', { 'class': 'btn cbi-button-action', id: 'zapret-auto', 'data-system-action': '' }, youtubeMode === 'vpn' ? 'Подобрать и включить' : 'Подобрать автоматически'),
+							E('button', { 'class': 'btn', id: 'zapret-check', 'data-system-action': '', disabled: youtubeMode === 'zapret' && zapret.running ? null : '' }, 'Проверить текущую'),
+							E('button', { 'class': 'btn', id: 'zapret-restore', 'data-system-action': '', disabled: youtubeMode === 'zapret' && zapret.rollback ? null : '' }, 'Вернуть предыдущую')
 						]),
-						E('p', { 'class': 'oum-help', id: 'zapret-status' }, initialJob.action?.startsWith('zapret_') ? initialJob.message : 'Во время автоподбора YouTube-соединения будут кратковременно перезапускаться.')
-						]),
-						E('p', { 'class': 'oum-help', hidden: youtubeMode === 'vpn' ? null : '' }, 'Zapret остановлен: YouTube использует защищённое подключение Podkop.')
+						E('p', { 'class': 'oum-help', id: 'zapret-status' }, initialJob.action?.startsWith('zapret_') ? initialJob.message : (youtubeMode === 'vpn' ? 'Zapret сейчас остановлен. Ручной выбор или автоподбор одновременно переключит YouTube на прямое подключение.' : 'Во время автоподбора YouTube-соединения будут кратковременно перезапускаться.'))
 					]),
 					E('div', { hidden: sourceSupported ? null : '' }, [
 						E('p', { 'class': 'oum-help' }, sourceHelp),
@@ -431,6 +428,15 @@ return view.extend({
 		});
 		const runZapret = async (action) => {
 			const strategy = root.querySelector('#zapret-strategy')?.value || '';
+			if (youtubeMode === 'vpn' && (action === 'apply' || action === 'auto')) {
+				const manual = action === 'apply';
+				const text = manual ?
+					`YouTube будет переключён напрямую, затем OUM применит и проверит стратегию ${strategy}. Рабочим считается результат 3/4 или лучше.` :
+					'YouTube будет переключён напрямую, после чего OUM проверит текущую стратегию и при необходимости выполнит полный автоподбор.';
+				if (await confirmation('Включить Zapret?', text, manual ? 'Применить' : 'Начать подбор', false))
+					start(callSetPodkopYoutubeMode('zapret', manual ? strategy : ''));
+				return;
+			}
 			const descriptions = {
 				auto: 'OUM последовательно проверит 27 стратегий. Это займёт несколько минут и временно перезапустит YouTube-соединения.',
 				apply: `Стратегия ${strategy} будет применена и проверена. При ошибке вернётся предыдущая.`,
@@ -449,7 +455,7 @@ return view.extend({
 				'YouTube будет направлен через текущее защищённое подключение. Zapret остановится, автозапуск и nftables-правила будут отключены.' :
 				'YouTube будет исключён из VPN. OUM запустит последнюю стратегию Zapret и проверит прямой доступ.';
 			if (await confirmation('Изменить маршрут YouTube?', text, 'Переключить', false))
-				start(callSetPodkopYoutubeMode(mode));
+				start(callSetPodkopYoutubeMode(mode, ''));
 		});
 		for (const action of [ 'auto', 'apply', 'check', 'restore' ]) {
 			const button = root.querySelector(`#zapret-${action}`);

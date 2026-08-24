@@ -460,7 +460,7 @@ function podkopList(uci, section, option) {
 function podkopRoutingData() {
 	const catalog = [
 		[ 'russia_inside', 'Россия: заблокировано внутри' ], [ 'russia_outside', 'Россия: доступно только из РФ' ],
-		[ 'ukraine_inside', 'Украина' ], [ 'geoblock', 'Geo Block' ], [ 'block', 'Block' ], [ 'porn', '18+' ],
+		[ 'geoblock', 'Geo Block' ], [ 'block', 'Block' ], [ 'porn', '18+' ],
 		[ 'news', 'Новости' ], [ 'anime', 'Anime' ], [ 'youtube', 'YouTube' ], [ 'discord', 'Discord' ],
 		[ 'meta', 'Meta' ], [ 'twitter', 'Twitter (X)' ], [ 'hdrezka', 'HDRezka' ], [ 'tiktok', 'TikTok' ],
 		[ 'telegram', 'Telegram' ], [ 'cloudflare', 'Cloudflare' ], [ 'google_ai', 'Google AI' ],
@@ -1182,14 +1182,17 @@ const methods = {
 	},
 
 	setPodkopYoutubeMode: {
-		args: { mode: '' },
+		args: { mode: '', strategy: '' },
 		call: function(request) {
 			if (!podkopInstalled())
 				return failure('podkop_missing', 'Podkop не установлен.');
 			let mode = request.args.mode ?? '';
 			if (!(mode in [ 'zapret', 'vpn' ]))
 				return failure('invalid_mode', 'Выберите Zapret или защищённое подключение.');
-			return startSystemJob('podkop_youtube', { mode });
+			let strategy = request.args.strategy ?? '';
+			if (length(strategy) && !match(strategy, /^Yv(0[1-9]|1[0-9]|2[0-7])$/))
+				return failure('invalid_strategy', 'Неизвестная стратегия Zapret.');
+			return startSystemJob('podkop_youtube', { mode, strategy });
 		}
 	},
 
