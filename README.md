@@ -20,6 +20,36 @@ chmod 700 /root/oum-test.sh
 /root/oum-test.sh
 ```
 
+## One-file OUM installation
+
+Build the self-contained installer:
+
+```sh
+./tools/build-installer.sh
+```
+
+Copy the resulting `dist/oum-install.sh` to the router from Linux, macOS or
+Windows OpenSSH and run it as `root`:
+
+```sh
+scp -O dist/oum-install.sh root@192.168.1.1:/tmp/oum-install.sh
+ssh root@192.168.1.1 "chmod 700 /tmp/oum-install.sh && /tmp/oum-install.sh"
+```
+
+The installer verifies its embedded payload, backs up an existing OUM under
+`/etc/oum/install-backups/`, installs or updates the LuCI application and
+restarts only `rpcd` and `uhttpd`. It never starts FirstRun automatically. On a
+clean router, start the temporary setup network explicitly after confirming
+that changing Wi-Fi is safe:
+
+```sh
+/usr/libexec/oum-firstboot
+```
+
+The repository is private, so direct unauthenticated `wget` installation is
+intentionally unavailable. Download the generated installer while signed in to
+GitHub, then transfer this single file to the router.
+
 The test build currently supports:
 
 - subscription import from base64 URI lists;

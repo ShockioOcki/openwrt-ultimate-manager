@@ -111,7 +111,12 @@ grep -Fq "/sbin/ip -4 neigh show" "$RPC"
 grep -Fq 'routing_excluded_ips' "$ROOT/luci-app-oum/root/usr/libexec/oum-device-policy"
 grep -Fq 'fully_routed_ips' "$ROOT/luci-app-oum/root/usr/libexec/oum-device-policy"
 grep -Fq 'unmanaged_tunnels' "$RPC"
+grep -Fq "ubus list 'hostapd.*'" "$RPC"
+grep -Fq "if (!client.seen)" "$RPC"
 grep -Fq "length(args.admin_password) < 6" "$RPC"
+grep -Fq "OUM_PAYLOAD_SHA256" "$ROOT/tools/oum-install-header.sh"
+grep -Fq "oum_backup_current" "$ROOT/tools/oum-install-header.sh"
+grep -Fq "FirstRun explicitly" "$ROOT/tools/oum-install-header.sh"
 
 if grep -Rq 'test_speedtest_yaml' "$ROOT/.github"; then
 	echo 'Removed speed-test test is still referenced' >&2

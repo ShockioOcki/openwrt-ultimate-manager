@@ -150,18 +150,21 @@ function startSystemJob(action, payload, inputPath, inputData) {
 
 function wirelessStations() {
 	let stations = {};
-	for (let path in glob('/sys/class/net/*/wireless')) {
-		let device = basename(dirname(path));
-		let process = popen(`/usr/bin/iwinfo ${device} assoclist 2>/dev/null`);
-		if (!process)
+	let bus = connect();
+	let process = popen("/bin/ubus list 'hostapd.*' 2>/dev/null");
+	if (!process)
+		return stations;
+	for (let line = process.read('line'); length(line); line = process.read('line')) {
+		let object = trim(line);
+		if (!match(object, /^hostapd\.[A-Za-z0-9_.-]+$/))
 			continue;
-		for (let line = process.read('line'); length(line); line = process.read('line')) {
-			let mac = match(line, /^([0-9A-Fa-f:]{17})\s/);
-			if (mac)
-				stations[uc(mac[1])] = true;
+		let status = bus?.call(object, 'get_clients') ?? {};
+		for (let mac in (status.clients ?? {})) {
+			if (match(mac, /^[0-9A-Fa-f:]{17}$/))
+				stations[uc(mac)] = true;
 		}
-		process.close();
 	}
+	process.close();
 	return stations;
 }
 
@@ -191,7 +194,7 @@ function connectedClients(uci) {
 			name: fields[4] == '*' ? (savedNames[mac] ?? '') : fields[4],
 			mac,
 			ip: fields[3],
-			medium: stations[mac] ? 'wifi' : 'ethernet',
+			medium: stations[mac] ? 'wifi' : 'unknown',
 			expires: +fields[1],
 			policy: policies[mac] ?? 'default',
 			seen: stations[mac] ? true : false
@@ -220,6 +223,8 @@ function connectedClients(uci) {
 	}
 	let result = [];
 	for (let mac, client in clients) {
+		if (!client.seen)
+			continue;
 		if (!length(client.name ?? '')) client.name = `Устройство ${substr(mac, 9)}`;
 		push(result, {
 			name: client.name,
