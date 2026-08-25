@@ -131,6 +131,13 @@ grep -Fq 'wget --timeout=20' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-man
 grep -Fq 'while [ "$attempt" -le 3 ]' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
 grep -Fq 'openwrt-ultimate-manager/releases/download/passwall-26.5.11' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
 ! grep -Fq 'openwrt-ultimate-manager-assets' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
+grep -Fq 'geosite.dat|c9a47d1a83134e3dcb57d5a3457408c3ed426ab0430718c85a44d3223aaad075' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
+grep -Fq 'geoip.dat|8ebcb11333f7deed4bf2740f2ce3249aa8997ef03d437150c7ae373c011cd72a' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
+grep -Fq '(umask 022; /etc/init.d/$engine restart)' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
+grep -Fq "PASSWALL_SYSTEM='kmod-nft-tproxy kmod-nft-socket'" "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
+grep -Fq "directDns = 'Системный DNS'" "$RPC"
+grep -Fq 'ipv6_filtered: ipv6Filtered' "$RPC"
+grep -Fq "Фильтрация включена" "$DASHBOARD"
 
 if grep -Rq 'test_speedtest_yaml' "$ROOT/.github"; then
 	echo 'Removed speed-test test is still referenced' >&2

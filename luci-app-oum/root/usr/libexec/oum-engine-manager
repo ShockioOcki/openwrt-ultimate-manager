@@ -22,8 +22,11 @@ ipt2socks-1.1.4-r3.apk|c18b1b20c6803eb405684fe0c2310f27478e3272dec45ef106a8ab9b1
 luci-app-passwall-26.5.11-r1.apk|9b2c7808b4709a0bcdf945537a2c347ff0b04cc83f54047e3b709e3483a7b18f
 microsocks-1.0.5-r2.apk|e1681f48ab5a5cafdf942a35d2b1f5cfaa95c7b5dbf65cec27ab5ab46001149f
 tcping-0.3-r1.apk|04429d4e95e7f64805fe087ead5ca1240516a5cc8ebd99203f274d0bda9e7779
-xray-core-26.5.9-r1.apk|db938702aeb73468853f0517fa63b8a67a2b88e9ba2aa7322f1cc1e936a1570c'
+xray-core-26.5.9-r1.apk|db938702aeb73468853f0517fa63b8a67a2b88e9ba2aa7322f1cc1e936a1570c
+geosite.dat|c9a47d1a83134e3dcb57d5a3457408c3ed426ab0430718c85a44d3223aaad075
+geoip.dat|8ebcb11333f7deed4bf2740f2ce3249aa8997ef03d437150c7ae373c011cd72a'
 PASSWALL_REMOVE='luci-app-passwall xray-core chinadns-ng dns2socks geoview haproxy ipt2socks microsocks tcping'
+PASSWALL_SYSTEM='kmod-nft-tproxy kmod-nft-socket'
 
 OPENCLASH_VERSION=0.47.156
 OPENCLASH_APK=luci-app-openclash-0.47.156.apk
@@ -201,7 +204,7 @@ download_engine() {
 
 simulate_engine() {
 	case "$1" in
-		passwall) apk add --simulate --allow-untrusted "$WORK"/passwall/*.apk >> "$LOG" 2>&1 ;;
+		passwall) apk add --simulate --allow-untrusted $PASSWALL_SYSTEM "$WORK"/passwall/*.apk >> "$LOG" 2>&1 ;;
 		openclash) apk add --simulate --allow-untrusted "$WORK/openclash/$OPENCLASH_APK" >> "$LOG" 2>&1 ;;
 		podkop) apk add --simulate --allow-untrusted "$WORK"/podkop/*.apk >> "$LOG" 2>&1 ;;
 		*) return 1 ;;
@@ -334,6 +337,7 @@ patch_passwall_compat() {
 }
 
 install_passwall() {
+	apk add $PASSWALL_SYSTEM >> "$LOG" 2>&1 || return 1
 	apk add --allow-untrusted "$WORK"/passwall/*.apk >> "$LOG" 2>&1 || return 1
 	[ -x /etc/init.d/passwall ] && command -v xray >/dev/null 2>&1 || {
 		log 'PassWall package installed without its init script or Xray binary.'
@@ -362,6 +366,10 @@ install_passwall() {
 		log 'PassWall configuration was not created.'
 		return 1
 	}
+	mkdir -p /usr/share/v2ray
+	cp "$WORK/passwall/geosite.dat" /usr/share/v2ray/geosite.dat || return 1
+	cp "$WORK/passwall/geoip.dat" /usr/share/v2ray/geoip.dat || return 1
+	chmod 644 /usr/share/v2ray/geosite.dat /usr/share/v2ray/geoip.dat
 	[ ! -f "$STATE/passwall/passwall" ] || cp "$STATE/passwall/passwall" /etc/config/passwall
 	chmod 600 /etc/config/passwall
 	patch_passwall_compat
@@ -426,7 +434,7 @@ activate_engine() {
 	[ ! -f "$STATE/$engine/enabled" ] || enabled="$(cat "$STATE/$engine/enabled")"
 	if [ "$enabled" = 1 ]; then
 		/etc/init.d/$engine enable >/dev/null 2>&1 || true
-		/etc/init.d/$engine restart >> "$LOG" 2>&1 || return 1
+		(umask 022; /etc/init.d/$engine restart) >> "$LOG" 2>&1 || return 1
 		wait_ready "$engine" || return 1
 		if [ "$engine" = podkop ] && [ "$(cat "$STATE/podkop/zapret-enabled" 2>/dev/null || echo 0)" = 1 ]; then
 			/etc/init.d/zapret enable >/dev/null 2>&1 || true

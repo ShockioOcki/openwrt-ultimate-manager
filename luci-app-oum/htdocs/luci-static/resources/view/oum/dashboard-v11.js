@@ -615,8 +615,12 @@ return view.extend({
 			setDiagnostic('redirect', redirectReady ? 'Включён' : 'Требует внимания', redirectReady);
 			setDiagnostic('process', diagnostics.dns_process === true ? `Работает (${diagnostics.dns_mode || '—'})` : 'Не работает', diagnostics.dns_process === true);
 			setDiagnostic('direct', diagnostics.direct_dns || 'Не задан', diagnostics.direct_dns && diagnostics.direct_dns !== 'Не задан');
-			setDiagnostic('remote', diagnostics.remote_dns_mode ? diagnostics.remote_dns_mode.toUpperCase() : 'Не задан', diagnostics.remote_dns_mode && diagnostics.remote_dns_mode !== 'Не задан');
-			setDiagnostic('ipv6', diagnostics.ipv6_tproxy === true ? 'TProxy включён' : 'Требует внимания', diagnostics.ipv6_tproxy === true);
+			const remoteDnsReady = diagnostics.remote_dns && diagnostics.remote_dns !== 'Не задан';
+			const remoteDnsLabel = remoteDnsReady ? `${(diagnostics.remote_dns_mode || 'DNS').toUpperCase()} · ${diagnostics.remote_dns}` : 'Не задан';
+			setDiagnostic('remote', remoteDnsLabel, remoteDnsReady);
+			const ipv6Protected = diagnostics.ipv6_tproxy === true || diagnostics.ipv6_filtered === true;
+			const ipv6Label = diagnostics.ipv6_tproxy === true ? 'TProxy включён' : (diagnostics.ipv6_filtered === true ? 'Фильтрация включена' : 'Не защищён');
+			setDiagnostic('ipv6', ipv6Label, ipv6Protected);
 			const geoReady = diagnostics.geosite === true && diagnostics.geoip === true;
 			setDiagnostic('geo', geoReady ? 'Оба набора готовы' : 'Неполный набор', geoReady);
 		};

@@ -702,6 +702,11 @@ function passwallStatusData() {
 	let dnsRedirect = global?.dns_redirect == '1';
 	let dnsFirewall = system("nft list chain inet passwall PSW_DNS 2>/dev/null | grep -q 'redirect to'") == 0;
 	let ipv6Tproxy = forwarding?.ipv6_tproxy == '1';
+	let ipv6Filtered = global?.filter_proxy_ipv6 == '1';
+	let directDns = global?.direct_dns;
+	if (!directDns && global?.use_default_dns == 'direct')
+		directDns = 'Системный DNS';
+	let remoteDnsMode = global?.v2ray_dns_mode ?? global?.dns_mode;
 
 	return {
 		installed: true,
@@ -719,9 +724,11 @@ function passwallStatusData() {
 			dns_redirect: dnsRedirect,
 			dns_firewall: dnsFirewall,
 			dns_mode: global?.dns_mode ?? 'Не задан',
-			direct_dns: global?.direct_dns ?? 'Не задан',
-			remote_dns_mode: global?.v2ray_dns_mode ?? 'Не задан',
+			direct_dns: directDns ?? 'Не задан',
+			remote_dns: global?.remote_dns ?? 'Не задан',
+			remote_dns_mode: remoteDnsMode ?? 'Не задан',
 			ipv6_tproxy: ipv6Tproxy,
+			ipv6_filtered: ipv6Filtered,
 			geosite: geoSite,
 			geoip: geoIp
 		},
