@@ -25,6 +25,7 @@ cp "$ROOT/helpers/source_converter.rb" "$PACKAGE/helpers/source_converter.rb"
 find "$PACKAGE" -type f -exec touch -h -t 202001010000.00 {} +
 tar -czf "$PAYLOAD" -C "$PACKAGE" .
 PAYLOAD_SHA256="$(sha256sum "$PAYLOAD" | awk '{ print $1 }')"
+PAYLOAD_SIZE="$(wc -c <"$PAYLOAD" | tr -d ' ')"
 INSTALLER_VERSION="$(
 	find "$PACKAGE" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12
 )"
@@ -32,8 +33,9 @@ INSTALLER_VERSION="$(
 sed \
 	-e "s/@OUM_INSTALLER_VERSION@/$INSTALLER_VERSION/g" \
 	-e "s/@OUM_PAYLOAD_SHA256@/$PAYLOAD_SHA256/g" \
+	-e "s/@OUM_PAYLOAD_SIZE@/$PAYLOAD_SIZE/g" \
 	"$HEADER" >"$OUTPUT.tmp"
-base64 "$PAYLOAD" >>"$OUTPUT.tmp"
+cat "$PAYLOAD" >>"$OUTPUT.tmp"
 chmod 700 "$OUTPUT.tmp"
 mv "$OUTPUT.tmp" "$OUTPUT"
 

@@ -115,6 +115,11 @@ grep -Fq "ubus list 'hostapd.*'" "$RPC"
 grep -Fq "if (!client.seen)" "$RPC"
 grep -Fq "length(args.admin_password) < 6" "$RPC"
 grep -Fq "OUM_PAYLOAD_SHA256" "$ROOT/tools/oum-install-header.sh"
+grep -Fq "OUM_PAYLOAD_SIZE" "$ROOT/tools/oum-install-header.sh"
+grep -Fq 'tail -c "$OUM_PAYLOAD_SIZE"' "$ROOT/tools/oum-install-header.sh"
+if grep -Fq 'oum_need base64' "$ROOT/tools/oum-install-header.sh"; then
+	fail "standalone installer must not require base64 on OpenWrt"
+fi
 grep -Fq "oum_backup_current" "$ROOT/tools/oum-install-header.sh"
 grep -Fq "FirstRun explicitly" "$ROOT/tools/oum-install-header.sh"
 

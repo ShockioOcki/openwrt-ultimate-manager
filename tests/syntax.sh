@@ -5,7 +5,6 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 sh -n "$ROOT/dist/oum-test.sh"
 sh -n "$ROOT/tools/build-installer.sh"
 "$ROOT/tools/build-installer.sh"
-sh -n "$ROOT/dist/oum-install.sh"
 "$ROOT/dist/oum-install.sh" --check
 ruby -c "$ROOT/helpers/source_converter.rb"
 ruby -c "$ROOT/luci-app-oum/root/usr/libexec/oum-policy-yaml.rb"

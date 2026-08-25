@@ -3,7 +3,7 @@ set -eu
 
 OUM_INSTALLER_VERSION='@OUM_INSTALLER_VERSION@'
 OUM_PAYLOAD_SHA256='@OUM_PAYLOAD_SHA256@'
-OUM_PAYLOAD_MARKER='__OUM_PAYLOAD_BELOW__'
+OUM_PAYLOAD_SIZE='@OUM_PAYLOAD_SIZE@'
 
 oum_die() {
 	printf 'OUM installer: %s\n' "$*" >&2
@@ -21,10 +21,7 @@ oum_cleanup() {
 oum_extract_payload() {
 	self="$1"
 	destination="$2"
-	awk -v marker="$OUM_PAYLOAD_MARKER" '
-		found { print }
-		$0 == marker { found = 1 }
-	' "$self" | base64 -d >"$destination" || oum_die 'cannot decode embedded payload'
+	tail -c "$OUM_PAYLOAD_SIZE" "$self" >"$destination" || oum_die 'cannot extract embedded payload'
 	actual="$(sha256sum "$destination" | awk '{ print $1 }')"
 	[ "$actual" = "$OUM_PAYLOAD_SHA256" ] || oum_die 'payload checksum mismatch'
 }
@@ -63,9 +60,9 @@ oum_backup_current() {
 }
 
 oum_need awk
-oum_need base64
 oum_need mktemp
 oum_need sha256sum
+oum_need tail
 oum_need tar
 
 self="$0"
