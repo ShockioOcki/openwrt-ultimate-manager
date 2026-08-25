@@ -1,195 +1,257 @@
 # OpenWrt Ultimate Manager
 
-OUM is an experimental OpenWrt setup and management project. The current test
-architecture makes OpenClash/Mihomo the primary routing backend and keeps the
-stable `oum.sh` unchanged until the new flow has been tested on a router.
+> Понятная панель управления OpenWrt: первоначальная настройка, Wi‑Fi, клиенты,
+> VPN-движки, выборочная маршрутизация, диагностика и безопасное восстановление.
 
-## Test build
+[![Проверки](https://github.com/ShockioOcki/openwrt-ultimate-manager/actions/workflows/test.yml/badge.svg?branch=agent%2Fpodkop-zapret-engine)](https://github.com/ShockioOcki/openwrt-ultimate-manager/actions/workflows/test.yml)
+[![OpenWrt 25.12](https://img.shields.io/badge/OpenWrt-25.12-00B5E2?logo=openwrt&logoColor=white)](https://openwrt.org/)
+[![Лицензия MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Статус: тестирование](https://img.shields.io/badge/status-тестирование-orange.svg)](#статус-проекта)
 
-Build the single-file router script:
+OUM превращает сложную конфигурацию OpenWrt в единый пользовательский
+интерфейс. Обычный пользователь работает под ограниченной учётной записью
+`admin`, а полный LuCI и SSH остаются доступны системному пользователю `root`.
 
-```sh
-./tools/build.sh
-```
+> [!IMPORTANT]
+> Проект находится на стадии активного тестирования. Текущая версия проверяется
+> на Xiaomi Redmi Router AX6S с OpenWrt 25.12.3 (`mediatek/mt7622`,
+> `aarch64_cortex-a53`). Перед использованием на другом устройстве необходима
+> отдельная проверка архитектуры, свободного места и способа восстановления.
 
-The result is `dist/oum-test.sh`. Copy it to an OpenWrt router and run it as
-`root`:
+## Быстрая установка
 
-```sh
-chmod 700 /root/oum-test.sh
-/root/oum-test.sh
-```
-
-## One-file OUM installation
-
-Build the self-contained installer:
-
-```sh
-./tools/build-installer.sh
-```
-
-Copy the resulting `dist/oum-install.sh` to the router from Linux, macOS or
-Windows OpenSSH and run it as `root`:
+Подключитесь к чистому или уже настроенному роутеру по SSH под `root` и
+выполните:
 
 ```sh
-scp -O dist/oum-install.sh root@192.168.1.1:/tmp/oum-install.sh
-ssh root@192.168.1.1 "chmod 700 /tmp/oum-install.sh && /tmp/oum-install.sh"
+wget -O /tmp/oum-install.sh "https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/agent/podkop-zapret-engine/dist/oum-install.sh" &&
+sh /tmp/oum-install.sh
 ```
 
-The installer verifies its embedded payload, backs up an existing OUM under
-`/etc/oum/install-backups/`, installs or updates the LuCI application and
-restarts only `rpcd` and `uhttpd`. It never starts FirstRun automatically. On a
-clean router, start the temporary setup network explicitly after confirming
-that changing Wi-Fi is safe:
+Установщик:
+
+- проверяет SHA-256 встроенного пакета;
+- сохраняет существующие файлы OUM в `/etc/oum/install-backups/`;
+- устанавливает или обновляет LuCI-приложение;
+- перезапускает только `rpcd` и `uhttpd`;
+- не меняет LAN, WAN, Wi‑Fi и работающий VPN;
+- не запускает первоначальную настройку без явной команды.
+
+После установки откройте:
+
+```text
+http://<IP-адрес-роутера>/cgi-bin/luci/oum
+```
+
+Для обновления OUM используется та же команда. Перед каждым обновлением
+создаётся новая резервная копия установленной версии.
+
+### Первоначальная настройка чистого роутера
+
+Когда вы готовы временно изменить Wi‑Fi, запустите мастер отдельно:
 
 ```sh
 /usr/libexec/oum-firstboot
 ```
 
-The current public test branch can be installed directly from a root shell on
-the router:
+Роутер поднимет временную сеть `FirstRun`. Мастер последовательно предложит:
+
+1. выбрать DHCP или PPPoE для подключения к интернету;
+2. настроить одну общую либо две раздельные Wi‑Fi-сети;
+3. заменить временный пароль панели;
+4. выбрать защищённое подключение или пропустить его настройку.
+
+> [!WARNING]
+> `oum-firstboot` перезапускает Wi‑Fi. При беспроводном подключении текущая
+> сессия оборвётся — продолжите настройку через сеть `FirstRun`.
+
+## Что уже умеет OUM
+
+### Главная панель
+
+- состояние интернета и адрес WAN;
+- активные SSID и температура роутера;
+- список действительно подключённых клиентов;
+- корректное различение Wi‑Fi и проводного подключения через `hostapd`;
+- индивидуальный режим маршрутизации для каждого устройства;
+- состояние активного VPN-движка и его защищённого маршрута;
+- диагностика без внешнего Speedtest и лишнего фонового трафика.
+
+### Настройки сети
+
+- DHCP и PPPoE с проверкой введённых данных;
+- единая Smart Wi‑Fi-сеть либо отдельные сети 2,4 и 5 ГГц;
+- регион `US` и смешанное шифрование WPA2/WPA3;
+- изменение имени и пароля Wi‑Fi с локальным откатом;
+- отдельные учётные записи `admin` и `root`;
+- сброс только VPN либо возврат к мастеру первого запуска.
+
+### Защищённые подключения
+
+OUM принимает несколько типов источников:
+
+- ссылку подписки;
+- VLESS Reality и Hysteria2;
+- конфигурацию AmneziaWG/WireGuard;
+- вставку конфигурации прямо в браузере или терминале.
+
+DNS из импортированного AWG-профиля намеренно не применяется: DNS-политикой
+управляет сам роутер.
+
+## VPN-движки
+
+| Движок | Для чего подходит | Возможности OUM |
+|---|---|---|
+| **OpenClash + Mihomo** | Подписки и большой набор прокси-узлов | Импорт, фильтрация служебных узлов, шесть быстрых нод, полный список, переключение без перезаписи исходной подписки |
+| **PassWall 26.5.11-r1** | Xray, Reality и тонкая shunt-маршрутизация | Импорт в отдельную группу OUM, выбор ноды, правила для устройств, диагностика DNS/Xray/GeoIP/GeoSite |
+| **Podkop + Zapret** | Выборочная маршрутизация через AWG или Reality | Каталог сервисов, собственные домены и подсети, режим YouTube через Zapret либо VPN, диагностика Podkop/AWG/FakeIP/nftables |
+
+Одновременно используется только один движок. Менеджер сначала загружает и
+проверяет новый комплект, сохраняет конфигурацию текущего движка и только затем
+начинает замену. При ошибке выполняется автоматический возврат.
+
+> [!NOTE]
+> Переключение движков сейчас рассчитано на OpenWrt 25.12 с `apk` и архитектуру
+> `aarch64_cortex-a53`. Для PassWall нужен закреплённый комплект APK 26.5.11-r1
+> в доступном репозитории либо локальном кэше `/etc/oum/packages/passwall/`.
+
+## Маршрутизация Podkop + Zapret
+
+Для каждого сервиса доступно два понятных направления:
+
+- **Через VPN** — трафик передаётся Podkop в активный AWG/Reality-туннель;
+- **Напрямую** — трафик идёт через провайдера без туннеля.
+
+YouTube имеет отдельный режим **Напрямую + Zapret**. OUM использует закреплённый
+каталог из 27 стратегий, проверяет их через физический WAN и выбирает рабочую.
+Если выбран YouTube через VPN, Zapret останавливается и не оставляет лишних
+правил nftables.
+
+Доступны:
+
+- списки сообществ Podkop;
+- собственные домены и подсети;
+- прямые исключения;
+- раздельная маршрутизация устройств;
+- диагностика DNS, sing-box, nftables, FakeIP, outbound и AWG handshake;
+- опциональная блокировка QUIC для принудительного перехода клиентов на
+  TCP/TLS;
+- экспертный запуск полной версии Zapret Manager только из root-SSH.
+
+## Резервные копии и безопасность
+
+OUM разделяет системную учётную запись и пользовательскую панель:
+
+- `admin` получает только ограниченный RPC ACL приложения;
+- `root` сохраняет полный LuCI и SSH-доступ;
+- введённые подписки, URI и приватные ключи не возвращаются в браузер;
+- временные файлы с секретами создаются с правами `0600` и удаляются после
+  обработки;
+- диагностические ответы не содержат конфигурации провайдера;
+- смена VPN-движка и сетевых настроек выполняется с резервной копией и
+  проверкой результата.
+
+Резервная копия OUM может содержать Wi‑Fi-пароли, адрес подписки и ключи
+туннелей. Храните её как секретный нешифрованный файл и не прикладывайте к
+публичным Issues.
+
+Подробные правила раскрытия уязвимостей: [SECURITY.md](SECURITY.md).
+
+## Установка из локального файла
+
+Если роутер пока не имеет доступа к GitHub, скачайте `dist/oum-install.sh` на
+компьютер и передайте один файл:
 
 ```sh
-wget -O /tmp/oum-install.sh "https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/agent/podkop-zapret-engine/dist/oum-install.sh"
-sh /tmp/oum-install.sh
+scp -O dist/oum-install.sh root@192.168.1.1:/tmp/oum-install.sh
+ssh root@192.168.1.1 "sh /tmp/oum-install.sh"
 ```
 
-The test build currently supports:
+Ключ `-O` включает старый SCP-протокол, который поддерживается стандартным
+Dropbear в OpenWrt без SFTP-сервера.
 
-- subscription import from base64 URI lists;
-- direct VLESS Reality and Hysteria2 links;
-- AmneziaWG v1/v2/v3 `.conf` import;
-- AWG upload by path or direct terminal paste;
-- single-dot (`.`) terminator for pasted AWG and URI input;
-- deliberate omission of DNS supplied by an AWG profile;
-- local Mihomo providers without an external conversion service;
-- separate `SUBSCRIPTION`, `AMNEZIA`, and `REALITY` source groups;
-- optional standalone Config Files selectable from the OpenClash dashboard;
-- local filtering of service/LTE/mobile/auto subscription entries;
-- Mihomo validation, backup and automatic rollback;
-- basic Wi-Fi SSID/password configuration;
-- redacted diagnostics.
+## Сборка из исходников
 
-## Safety
+Собрать терминальный сценарий:
 
-Do not commit real subscription URLs, UUIDs, private keys or AWG profiles.
-The files under `tests/fixtures/` contain synthetic data only. This is a test
-build and should be exercised with disposable credentials before production.
+```sh
+./tools/build.sh
+```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module map and roadmap.
-See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for OpenClash/Mihomo log notes.
+Результат: `dist/oum-test.sh`.
 
-## LuCI first-run prototype
+Собрать самодостаточный установщик LuCI:
 
-The `luci-app-oum/` directory contains the first installable prototype of the
-simplified OUM interface for OpenWrt 25.12. It provides a restricted `admin`
-login and a four-step first-run wizard for WAN, Wi-Fi, VPN mode selection and
-replacement of the temporary panel password.
-The OUM login form pre-fills `admin`, while full LuCI and SSH continue to use
-the normal `root` default.
+```sh
+./tools/build-installer.sh
+./dist/oum-install.sh --check
+```
 
-After the network reconnect, the Settings page can import Subscription URLs,
-AmneziaWG configurations and VLESS/Hysteria2 links through a background job.
-It reuses the terminal build's validated single-profile pipeline and reports
-progress without retaining submitted credentials in LuCI.
+Разработческая установка распакованного дерева на тестовом роутере:
 
-The first dashboard widgets show live WAN addressing, enabled SSIDs, named
-DHCP clients with Wi-Fi/Ethernet classification, router temperature and the
-active OUM VPN source. They refresh without running external connectivity or
-speed tests.
+```sh
+sh tools/install-luci-dev.sh luci-app-oum
+```
 
-The VPN widget reads the active Mihomo group, shows the current node, measures
-group latency and switches nodes without rewriting YAML or restarting
-OpenClash. It presents six quick alternatives in a three-column desktop grid,
-preferring different country flags when the provider includes them in names.
-When PassWall is installed, the same widget reads the active shunt, filters
-service/mobile entries, measures node endpoints in parallel and switches the
-shunt default node through a rollback-protected background job. Finland and
-the Netherlands are retained in the quick list when available; the complete
-filtered list remains expandable.
+Она также не запускает `oum-firstboot` автоматически.
 
-For Subscription profiles, the dashboard also displays provider traffic and
-expiry metadata from `Subscription-Userinfo`. The URL remains on the router;
-the browser receives only numeric counters from a private 30-minute cache.
-Per-device selectors can keep a DHCP client on the normal rule set, force it
-through the VPN or bypass the VPN. Runtime rules are hot-reloaded into Mihomo
-without rewriting the downloaded source profile. In PassWall mode the same
-selectors preserve the imported shunt and manage only client addresses in its
-`full_exception` and `full_redirection` rules, with a rollback-protected
-PassWall restart. The expandable PassWall diagnostics report DNS interception,
-the DNS worker and modes, IPv6 TProxy and both Geo datasets without exposing
-proxy credentials.
+## Структура репозитория
 
-The Settings page owns protected-source replacement as well as Smart/separate
-Wi-Fi credentials and switching WAN between DHCP and PPPoE. Each network
-change keeps a one-step local rollback. A model-bound, engine-tagged OUM backup
-contains network, Wi-Fi, firewall, routing state and the current OpenClash,
-PassWall or Podkop configuration; it is validated before a
-restore and deliberately downloaded as an unencrypted secret-bearing file.
-Maintenance actions can clear only the VPN layer or return to the FirstRun
-wizard without changing the LAN address.
+```text
+luci-app-oum/         LuCI-интерфейс, RPC и системные адаптеры OUM
+src/                  модули терминального менеджера
+helpers/              безопасные конвертеры YAML и резервных копий
+tools/                сборка, установка и подготовка пакетов
+dist/                 готовые однофайловые сценарии
+tests/                синтетические тесты без реальных ключей
+docs/                 архитектура, диагностика и планы расширения
+```
 
-The VPN engine manager can replace OpenClash with PassWall or Podkop + Zapret,
-or restore a previously used engine. It downloads and verifies the target package set and a
-rollback set before changing packages, stores only the small secret-bearing
-configuration archive locally, removes the old runtime only after rollback
-assets are ready, and restores the previous engine automatically if installation
-or readiness checks fail. PassWall 26.5.11-r1 packages are kept without
-configuration or credentials in the private `openwrt-ultimate-manager-assets`
-repository. Development routers use a checksum-verified local cache under
-`/etc/oum/packages`; no GitHub token is stored on the router. The native
-PassWall adapter accepts Subscription URLs and direct Reality/proxy links through
-PassWall's own parser, keeps them in an isolated OUM group and rolls the full
-UCI configuration back when parsing or startup fails. AWG remains an
-independent tunnel configured with Podkop + Zapret rather than an Xray node.
+Полезные документы:
 
-Podkop can use either a dedicated WireGuard/AmneziaWG interface or a VLESS
-Reality URL as its single outbound. Switching transport is transactional: the
-new outbound must start and pass Podkop validation before the previous one is
-released, and secrets are never returned by RPC. A complete AmneziaWG profile
-can be imported directly in Settings. On the tested
-OpenWrt 25.12.3 MT7622 target, OUM installs a pinned, SHA-256-verified AWG
-runtime, preserves every v1/v2 obfuscation field, deliberately ignores profile
-DNS, and creates an OUM-owned `oum_awg` interface transactionally. A failed
-package check, handshake or Podkop startup restores the previous network and
-Podkop configuration.
-The routing catalog presents exactly two destinations for every service:
-protected connection or direct. YouTube additionally offers two transactional
-modes: direct with Zapret, or protected connection with Zapret disabled and its
-runtime nftables rules removed. When direct mode is requested, OUM checks the
-current DPI strategy, automatically tests the pinned catalog if necessary, and
-restores the VPN mode if no direct strategy works. OUM never copies AWG tunnel
-secrets into Podkop and does not enable `route_allowed_ips`.
+- [Архитектура](docs/ARCHITECTURE.md)
+- [Диагностика](docs/TROUBLESHOOTING.md)
+- [Mesh, USB, NAS и мобильный WAN](docs/EXPANSION.md)
+- [Политика безопасности](SECURITY.md)
 
-The restricted Settings page keeps Podkop connection setup in one place: AWG
-import and Zapret strategy management are shown under Protected connection only
-while Podkop + Zapret is the active engine. OUM carries a checksum-pinned copy
-of the 27 `Yv01`–`Yv27` YouTube strategies from StressOzz/Zapret-Manager commit
-`189abafd50aed17f8c7414695d0d47d129a6b0dd`. The normal OUM workflow does not
-execute the upstream manager. A dedicated adapter changes only the leading YouTube block of
-`NFQWS_OPT`, preserves all remaining Zapret rules, tests candidates through the
-direct WAN interface and restores the complete previous Zapret UCI file on any
-failure. Automatic selection ranks successful candidates by availability and
-aggregate connection time; at least three of four direct probes must pass.
+## Проверки
 
-The Podkop diagnostics page combines the installed Podkop project's own DNS,
-sing-box, nftables and system checks with OUM's AWG handshake, FakeIP route and
-Zapret/YouTube probes. Its optional QUIC compatibility switch blocks LAN-to-WAN
-UDP ports 80 and 443 so clients fall back to TCP/TLS. It is off by default and
-restores the exact previous firewall configuration if applying the rules fails.
+GitHub Actions проверяет:
 
-Expert tools can optionally download the full Zapret Manager at the same pinned
-revision and verify its SHA-256. It is available only as `oum-zapret-manager`
-in an interactive root SSH session and creates a configuration backup before
-execution. The restricted `admin` web account is never given a root terminal.
+- синтаксис shell, JavaScript, Ruby и JSON;
+- сборку обоих однофайловых сценариев;
+- контрольную сумму встроенного установочного пакета;
+- импорт подписок и синтетических конфигураций;
+- политики устройств и резервные копии;
+- контракты OpenClash, PassWall, Podkop и Zapret;
+- отсутствие реальных конфигураций в тестовых fixtures.
 
-Subscriptions may be base64/plain URI lists or Clash YAML documents containing
-an embedded `proxies` array. Provider YAML is loaded in safe mode before nodes
-are filtered and embedded into the single OUM profile.
+Локальный запуск:
 
-Development installation on a test router is handled by
-`tools/install-luci-dev.sh`. The installer deliberately does not activate the
-temporary `FirstRun` access point; run `/usr/libexec/oum-firstboot` separately
-after taking a backup and confirming that changing Wi-Fi is safe.
-For private PassWall development, stage the verified release APKs with
-`tools/stage-engine-assets.sh` before testing engine replacement.
+```sh
+./tests/syntax.sh
+./tests/test_sources.sh
+./tests/test_contracts.sh
+```
+
+## Статус проекта
+
+Рабочая версия находится в ветке
+[`agent/podkop-zapret-engine`](https://github.com/ShockioOcki/openwrt-ultimate-manager/tree/agent/podkop-zapret-engine).
+
+Уже проверено на реальном AX6S:
+
+- установка и повторное обновление одним файлом;
+- резервное копирование предыдущей версии;
+- OpenClash, PassWall и Podkop + Zapret;
+- AWG и Reality для Podkop;
+- определение Wi‑Fi/проводных клиентов;
+- маршрутизация сервисов и отдельных устройств.
+
+В следующих этапах: тестирование на других моделях, Mesh, USB-модем,
+резервный WAN, NAS/AriaNG/MiniDLNA и подготовка стабильного релиза.
+
+## Лицензия
+
+Проект распространяется по лицензии [MIT](LICENSE). Сторонние компоненты и
+загружаемые VPN-движки сохраняют собственные лицензии.
