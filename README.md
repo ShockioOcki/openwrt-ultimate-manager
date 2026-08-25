@@ -24,7 +24,7 @@ OUM превращает сложную конфигурацию OpenWrt в ед
 выполните:
 
 ```sh
-wget -O /tmp/oum-install.sh "https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/agent/podkop-zapret-engine/dist/oum-install.sh" &&
+wget -O /tmp/oum-install.sh "https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/refs/heads/agent/podkop-zapret-engine/dist/oum-install.sh" &&
 sh /tmp/oum-install.sh
 ```
 
