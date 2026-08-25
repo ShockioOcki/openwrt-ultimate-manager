@@ -244,6 +244,13 @@ protected through the active outbound; moving it to the protected route stops
 and disables Zapret and removes its runtime table. Moving it back validates the
 current strategy, falls back to the pinned automatic strategy selection, and
 rolls the complete transaction back if no strategy passes.
+Initial transport setup preserves Podkop's existing community, domain, subnet,
+per-device, DNS, QUIC and DHCP policy. On a genuinely empty Podkop configuration
+the upstream `russia_inside` default is retained. OUM owns only its dedicated
+YouTube exclusion and records whether it inserted an explicit YouTube proxy
+entry, so switching YouTube modes never removes the same entry when it was
+created manually. Zapret's package remains responsible for its service user and
+runtime file permissions; OUM does not force `WS_USER=root`.
 The Settings importer pins the OpenWrt 25.12.3 MT7622 builds of
 `amneziawg-tools`, `kmod-amneziawg` and `luci-proto-amneziawg` with individual
 SHA-256 digests. It parses one interface and one peer, retains AWG v1/v2 fields

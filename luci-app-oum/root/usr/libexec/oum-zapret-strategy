@@ -147,7 +147,8 @@ trap cleanup EXIT
 trap 'exit 130' INT TERM
 
 restart_zapret() {
-	sed -i 's/^WS_USER=.*/WS_USER="root"/' /opt/zapret/config
+	# Keep the service identity selected by the Zapret package or administrator.
+	# Strategy changes own NFQWS_OPT only and must not escalate the daemon to root.
 	/opt/zapret/sync_config.sh >/dev/null 2>&1 || return 1
 	/etc/init.d/zapret restart >/dev/null 2>&1 || return 1
 	waited=0

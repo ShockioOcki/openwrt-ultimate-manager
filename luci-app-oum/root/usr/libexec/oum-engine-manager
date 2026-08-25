@@ -430,6 +430,12 @@ activate_engine() {
 		if [ "$engine" = podkop ]; then
 			/etc/init.d/zapret stop >/dev/null 2>&1 || true
 			/etc/init.d/zapret disable >/dev/null 2>&1 || true
+			/etc/init.d/sing-box stop >/dev/null 2>&1 || true
+			for pid in $(pgrep -f '^/opt/zapret/nfq/nfqws ' 2>/dev/null || true); do
+				kill "$pid" 2>/dev/null || true
+			done
+			nft delete table inet zapret >/dev/null 2>&1 || true
+			nft delete table inet PodkopTable >/dev/null 2>&1 || true
 		fi
 	fi
 }

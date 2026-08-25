@@ -566,6 +566,8 @@ function podkopDiagnosticsData() {
 	let nft = podkopJson('check_nft_rules');
 	let outbound = podkopJson('outbound_latency');
 	let systemInfo = podkopJson('get_system_info');
+	let tunnelRtt = validIface ? commandLine(`ping -I ${iface} -c 3 -W 2 1.1.1.1 2>/dev/null | awk -F' = ' '/round-trip/ { split($2,a,"/"); print int(a[2]) }'`) : '';
+	let tunnelRttMs = match(tunnelRtt, /^[0-9]+$/) ? +tunnelRtt : 0;
 	let zapretRunning = system("pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1") == 0;
 	if (zapretRunning)
 		system('/usr/libexec/oum-zapret-strategy check >/dev/null 2>&1');
@@ -576,11 +578,11 @@ function podkopDiagnosticsData() {
 		system("/usr/libexec/oum-zapret-manager status 2>/dev/null | grep -qx 'installed=1'") == 0;
 	let outboundItems = connectionType == 'proxy' ? [
 		{ state: length(uci.get('podkop', 'main', 'proxy_string') ?? '') ? 'success' : 'error', label: 'Reality-конфигурация', value: 'секрет сохранён' },
-		{ state: +(outbound.delay ?? 0) > 0 ? 'success' : 'error', label: 'Reality outbound', value: +(outbound.delay ?? 0) > 0 ? `${outbound.delay} мс` : 'не отвечает' }
+		{ state: +(outbound.delay ?? 0) > 0 ? 'success' : 'error', label: 'HTTP-проверка Reality', value: +(outbound.delay ?? 0) > 0 ? `${outbound.delay} мс` : 'не отвечает' }
 	] : [
 		{ state: tunnelUp ? 'success' : 'error', label: 'AWG-интерфейс', value: tunnelUp ? `${iface} поднят` : 'не поднят' },
 		{ state: handshakeAge >= 0 && handshakeAge < 300 ? 'success' : 'error', label: 'Рукопожатие AWG', value: handshakeAge >= 0 ? `${handshakeAge} сек. назад` : 'нет данных' },
-		{ state: +(outbound.delay ?? 0) > 0 ? 'success' : 'error', label: 'Outbound main-out', value: +(outbound.delay ?? 0) > 0 ? `${outbound.delay} мс` : 'не отвечает' }
+		{ state: tunnelRttMs > 0 ? 'success' : 'error', label: 'RTT через AWG', value: tunnelRttMs > 0 ? `${tunnelRttMs} мс` : 'не отвечает' }
 	];
 	let zapretItems = youtubeMode == 'vpn' ? [
 		{ state: !zapretRunning ? 'success' : 'warning', label: 'Zapret остановлен', value: zapretRunning ? 'ещё работает' : 'да' },
