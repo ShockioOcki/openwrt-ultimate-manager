@@ -46,9 +46,13 @@ that changing Wi-Fi is safe:
 /usr/libexec/oum-firstboot
 ```
 
-The repository is private, so direct unauthenticated `wget` installation is
-intentionally unavailable. Download the generated installer while signed in to
-GitHub, then transfer this single file to the router.
+The current public test branch can be installed directly from a root shell on
+the router:
+
+```sh
+wget -O /tmp/oum-install.sh "https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/agent/podkop-zapret-engine/dist/oum-install.sh"
+sh /tmp/oum-install.sh
+```
 
 The test build currently supports:
 
