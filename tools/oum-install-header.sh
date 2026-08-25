@@ -59,6 +59,85 @@ oum_backup_current() {
 	printf 'OUM installer: backup saved to %s\n' "$backup"
 }
 
+oum_is_installed() {
+	[ -x /usr/libexec/oum-firstboot ] && [ -f /usr/share/luci/menu.d/luci-app-oum.json ]
+}
+
+oum_install_package() {
+	oum_backup_current
+	mkdir -p "$OUM_INSTALL_TMP/package"
+	tar -xzf "$payload" -C "$OUM_INSTALL_TMP/package" || oum_die 'cannot unpack payload'
+	[ -x "$OUM_INSTALL_TMP/package/tools/install-luci-dev.sh" ] || oum_die 'invalid payload: installer missing'
+
+	sh "$OUM_INSTALL_TMP/package/tools/install-luci-dev.sh" \
+		"$OUM_INSTALL_TMP/package/luci-app-oum" || oum_die 'installation failed; backup was preserved'
+
+	printf '\nOUM %s успешно установлен.\n' "$OUM_INSTALLER_VERSION"
+	printf 'Панель: /cgi-bin/luci/oum\n'
+}
+
+oum_confirm() {
+	printf '%s [y/N]: ' "$1"
+	IFS= read -r answer || return 1
+	case "$answer" in
+		y|Y|yes|YES|д|Д|да|ДА) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+oum_first_run() {
+	if ! oum_is_installed; then
+		printf '\nСначала установите OUM, выбрав пункт 1.\n'
+		return 0
+	fi
+
+	if [ "$(uci -q get oum.main.setup_complete || echo 0)" = '1' ]; then
+		printf '\nПервичная настройка уже завершена.\n'
+		printf 'Повторный запуск удалит текущий VPN-профиль, включит сеть FirstRun\n'
+		printf 'и может оборвать текущее подключение к роутеру.\n'
+		oum_confirm 'Запустить мастер заново?' || { printf 'Действие отменено.\n'; return 0; }
+		/usr/libexec/oum-reset-first-run
+	else
+		printf '\nПервый запуск включит Wi-Fi сеть FirstRun и может оборвать текущее подключение.\n'
+		oum_confirm 'Продолжить?' || { printf 'Действие отменено.\n'; return 0; }
+		/usr/libexec/oum-firstboot
+	fi
+
+	printf '\nПервый запуск подготовлен.\n'
+	printf 'Подключитесь к Wi-Fi FirstRun (пароль: admin123) и откройте 192.168.1.1.\n'
+}
+
+oum_print_menu() {
+	if oum_is_installed; then
+		installed='установлен'
+	else
+		installed='не установлен'
+	fi
+
+	printf '\n====================================================\n'
+	printf '       OUM — OpenWrt Ultimate Manager\n'
+	printf '====================================================\n'
+	printf ' Сборка: %s · Состояние: %s\n' "$OUM_INSTALLER_VERSION" "$installed"
+	printf '\n'
+	printf ' 1) Установить / обновить OUM\n'
+	printf ' 2) Первый запуск\n'
+	printf ' 0) Выход\n'
+	printf '\nВыбор: '
+}
+
+oum_menu() {
+	while :; do
+		oum_print_menu
+		IFS= read -r choice || exit 0
+		case "$choice" in
+			1) oum_install_package ;;
+			2) oum_first_run ;;
+			0) printf 'Выход.\n'; exit 0 ;;
+			*) printf '\nВведите 1, 2 или 0.\n' ;;
+		esac
+	done
+}
+
 oum_need awk
 oum_need mktemp
 oum_need sha256sum
@@ -83,17 +162,13 @@ fi
 [ -x /etc/init.d/rpcd ] || oum_die 'rpcd is not installed'
 [ -x /etc/init.d/uhttpd ] || oum_die 'uhttpd is not installed'
 
-oum_backup_current
-mkdir -p "$OUM_INSTALL_TMP/package"
-tar -xzf "$payload" -C "$OUM_INSTALL_TMP/package" || oum_die 'cannot unpack payload'
-[ -x "$OUM_INSTALL_TMP/package/tools/install-luci-dev.sh" ] || oum_die 'invalid payload: installer missing'
+case "${1:-}" in
+	--install) oum_install_package ;;
+	--first-run) oum_first_run ;;
+	'') oum_menu ;;
+	*) oum_die 'unknown option (use --check, --install or --first-run)' ;;
+esac
 
-sh "$OUM_INSTALL_TMP/package/tools/install-luci-dev.sh" \
-	"$OUM_INSTALL_TMP/package/luci-app-oum" || oum_die 'installation failed; backup was preserved'
-
-printf '\nOUM %s installed successfully.\n' "$OUM_INSTALLER_VERSION"
-printf 'Open /cgi-bin/luci/oum and refresh the page with Ctrl+F5.\n'
-printf 'For a clean router, start FirstRun explicitly: /usr/libexec/oum-firstboot\n'
 exit 0
 
 __OUM_PAYLOAD_BELOW__

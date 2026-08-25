@@ -121,7 +121,11 @@ if grep -Fq 'oum_need base64' "$ROOT/tools/oum-install-header.sh"; then
 	fail "standalone installer must not require base64 on OpenWrt"
 fi
 grep -Fq "oum_backup_current" "$ROOT/tools/oum-install-header.sh"
-grep -Fq "FirstRun explicitly" "$ROOT/tools/oum-install-header.sh"
+grep -Fq "oum_menu" "$ROOT/tools/oum-install-header.sh"
+grep -Fq "1) Установить / обновить OUM" "$ROOT/tools/oum-install-header.sh"
+grep -Fq "2) Первый запуск" "$ROOT/tools/oum-install-header.sh"
+grep -Fq -- "--install) oum_install_package" "$ROOT/tools/oum-install-header.sh"
+grep -Fq -- "--first-run) oum_first_run" "$ROOT/tools/oum-install-header.sh"
 
 if grep -Rq 'test_speedtest_yaml' "$ROOT/.github"; then
 	echo 'Removed speed-test test is still referenced' >&2
