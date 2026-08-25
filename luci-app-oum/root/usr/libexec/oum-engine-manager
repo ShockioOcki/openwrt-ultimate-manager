@@ -13,7 +13,7 @@ LOG=/tmp/oum-engine-switch.log
 ERROR_FILE=/tmp/oum-engine-error
 
 PASSWALL_VERSION=26.5.11-r1
-PASSWALL_RELEASE=https://github.com/ShockioOcki/openwrt-ultimate-manager-assets/releases/download/passwall-26.5.11-owrt25.12-aarch64
+PASSWALL_RELEASE=https://github.com/ShockioOcki/openwrt-ultimate-manager/releases/download/passwall-26.5.11-owrt25.12-aarch64
 PASSWALL_ASSETS='chinadns-ng-2025.08.09-r1.apk|2ce83854e76692456a520be41d5fed017aa6a6294f9479f799592f2fb83c3f19
 dns2socks-2.1-r2.apk|49714c6ad39f0b0be862e460620ad33652e835dcf99e0de2e26e415fbf898b6b
 geoview-0.2.6-r1.apk|6beac4ccdcac40cfc377bdc564f0d74be338a63afb4273d522a16f4b1534b60d
@@ -114,7 +114,19 @@ fetch() {
 	if command -v curl >/dev/null 2>&1; then
 		curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$file" "$url"
 	else
-		wget -T 20 -t 3 -O "$file" "$url"
+		attempt=1
+		downloaded=0
+		while [ "$attempt" -le 3 ]; do
+			rm -f "$file"
+			if wget --timeout=20 -O "$file" "$url"; then
+				downloaded=1
+				break
+			fi
+			log "download attempt $attempt failed: $url"
+			attempt=$((attempt + 1))
+			[ "$attempt" -gt 3 ] || sleep 2
+		done
+		[ "$downloaded" = 1 ] || return 1
 	fi
 	[ -s "$file" ] || return 1
 	actual="$(sha256sum "$file" | awk '{print $1}')"
@@ -469,8 +481,10 @@ prepare_assets() {
 	engine="$1"
 	update_status package_index 'Обновляем индекс системных зависимостей…'
 	apk update >> "$LOG" 2>&1 || die 'Не удалось обновить индекс пакетов OpenWrt.'
+	update_status runtime 'Устанавливаем системные компоненты OUM…'
+	ensure_oum_runtime || die 'Не удалось установить системные компоненты OUM.'
 	update_status downloading 'Загружаем и проверяем полный комплект нового движка…'
-	download_engine "$engine" || die 'Не удалось получить проверенный комплект движка. Для приватной сборки загрузите пакеты в /etc/oum/packages или проверьте доступ в интернет.'
+	download_engine "$engine" || die 'Не удалось загрузить или проверить комплект движка. Проверьте доступ к GitHub и повторите попытку.'
 	update_status dependencies 'Проверяем совместимость системных зависимостей…'
 	simulate_engine "$engine" || die 'Системные зависимости нового движка недоступны или несовместимы.'
 }
@@ -497,8 +511,6 @@ switch_engine() {
 	rm -rf "$WORK"
 	mkdir -p "$WORK" "$STATE"
 	prepare_assets "$TARGET"
-	update_status runtime 'Закрепляем системные компоненты OUM…'
-	ensure_oum_runtime || die 'Не удалось закрепить системные компоненты OUM; переключение отменено.'
 	if [ "$CURRENT" != none ]; then
 		update_status rollback_assets 'Готовим проверенный комплект для автоматического возврата…'
 		download_engine "$CURRENT" || die 'Не удалось подготовить комплект автоматического возврата.'

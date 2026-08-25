@@ -126,6 +126,11 @@ grep -Fq "1) Установить / обновить OUM" "$ROOT/tools/oum-insta
 grep -Fq "2) Первый запуск" "$ROOT/tools/oum-install-header.sh"
 grep -Fq -- "--install) oum_install_package" "$ROOT/tools/oum-install-header.sh"
 grep -Fq -- "--first-run) oum_first_run" "$ROOT/tools/oum-install-header.sh"
+! grep -Fq 'wget -T 20 -t 3' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
+grep -Fq 'wget --timeout=20' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
+grep -Fq 'while [ "$attempt" -le 3 ]' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
+grep -Fq 'openwrt-ultimate-manager/releases/download/passwall-26.5.11' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
+! grep -Fq 'openwrt-ultimate-manager-assets' "$ROOT/luci-app-oum/root/usr/libexec/oum-engine-manager"
 
 if grep -Rq 'test_speedtest_yaml' "$ROOT/.github"; then
 	echo 'Removed speed-test test is still referenced' >&2
