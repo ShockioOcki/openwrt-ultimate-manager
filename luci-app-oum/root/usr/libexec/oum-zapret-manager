@@ -1,0 +1,94 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-status}"
+shift || true
+REVISION=189abafd50aed17f8c7414695d0d47d129a6b0dd
+SHA256=bf6a74b6f482690e6f5337217da17db4ebeb4ce16085a0315ba4fd1b5fce1693
+URL="https://raw.githubusercontent.com/StressOzz/Zapret-Manager/$REVISION/Zapret-Manager.sh"
+SCRIPT=/usr/share/oum/vendor/Zapret-Manager.sh
+BACKUP=/etc/oum/rollback/zapret-manager-before-session
+COMMAND=/usr/bin/oum-zapret-manager
+
+verified() {
+	[ -f "$SCRIPT" ] && [ "$(sha256sum "$SCRIPT" | awk '{print $1}')" = "$SHA256" ]
+}
+
+raw_ip() {
+	nslookup raw.githubusercontent.com 77.88.8.8 2>/dev/null |
+		awk '$1 == "Address:" && $2 ~ /^[0-9.]+$/ { print $2; exit }'
+}
+
+download_entry() {
+	target="$1"
+	ip="$(raw_ip)"
+	case "$ip" in
+		''|*[!0-9.]*) return 1 ;;
+	esac
+	if command -v curl >/dev/null 2>&1; then
+		curl -4 -fsSL --connect-timeout 12 --max-time 90 \
+			--resolve "raw.githubusercontent.com:443:$ip" -o "$target" "$URL"
+	else
+		wget -q -O "$target" "$URL"
+	fi
+}
+
+install_manager() {
+	tmp="$(mktemp /tmp/oum-zapret-manager.XXXXXX)"
+	trap 'rm -f "$tmp"' EXIT INT TERM
+	download_entry "$tmp" || { echo 'Не удалось загрузить закреплённый Zapret Manager.' >&2; return 1; }
+	[ "$(sha256sum "$tmp" | awk '{print $1}')" = "$SHA256" ] || { echo 'Контрольная сумма Zapret Manager не совпала.' >&2; return 1; }
+	mkdir -p "$(dirname "$SCRIPT")"
+	cp "$tmp" "$SCRIPT"
+	chmod 600 "$SCRIPT"
+	printf '%s\n' '#!/bin/sh' 'exec /usr/libexec/oum-zapret-manager run "$@"' > "$COMMAND"
+	chmod 755 "$COMMAND"
+	rm -f "$tmp"
+	trap - EXIT INT TERM
+}
+
+save_backup() {
+	rm -rf "$BACKUP"
+	mkdir -p "$BACKUP"
+	for file in firewall dhcp network zapret; do
+		[ ! -f "/etc/config/$file" ] || cp "/etc/config/$file" "$BACKUP/$file"
+	done
+	[ ! -f /opt/zapret/config ] || cp /opt/zapret/config "$BACKUP/zapret-main"
+	chmod 700 "$BACKUP"
+	chmod 600 "$BACKUP"/* 2>/dev/null || true
+}
+
+run_manager() {
+	verified || { echo 'Сначала подготовьте закреплённый Zapret Manager через OUM.' >&2; return 1; }
+	[ -t 0 ] && [ -t 1 ] || { echo 'Zapret Manager запускается только из интерактивной root SSH-сессии.' >&2; return 1; }
+	save_backup
+	tmp="$(mktemp /tmp/oum-zapret-manager-session.XXXXXX)"
+	hosts_copy="$(mktemp /tmp/oum-zapret-manager-hosts.XXXXXX)"
+	cp /etc/hosts "$hosts_copy"
+	cleanup_session() {
+		cp "$hosts_copy" /etc/hosts 2>/dev/null || true
+		rm -f "$tmp" "$hosts_copy"
+	}
+	trap cleanup_session EXIT
+	trap 'cleanup_session; exit 130' INT TERM
+	ip="$(raw_ip)"
+	case "$ip" in
+		''|*[!0-9.]*) echo 'Не удалось определить адрес закреплённого источника.' >&2; return 1 ;;
+	esac
+	printf '\n%s %s\n' "$ip" raw.githubusercontent.com >> /etc/hosts
+	# The verified entry script is pinned; pin its own repository resources too.
+	sed \
+		-e "s#StressOzz/Zapret-Manager/refs/heads/main#StressOzz/Zapret-Manager/$REVISION#g" \
+		-e "s#StressOzz/Zapret-Manager/main#StressOzz/Zapret-Manager/$REVISION#g" \
+		"$SCRIPT" > "$tmp"
+	sh "$tmp" "$@"
+}
+
+case "$ACTION" in
+	status) verified && [ -x "$COMMAND" ] && printf 'installed=1\nrevision=%s\n' "$REVISION" || printf 'installed=0\nrevision=%s\n' "$REVISION" ;;
+	install) install_manager ;;
+	run) run_manager "$@" ;;
+	*) echo "usage: $0 {status|install|run [ARGS]}" >&2; exit 2 ;;
+esac

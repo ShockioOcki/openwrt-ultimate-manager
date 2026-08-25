@@ -14,6 +14,7 @@ const SYSTEM_JOB_LOCK = '/tmp/oum-system-job.lock';
 const BACKUP_ENCODED = '/tmp/oum-backup.b64';
 const RESTORE_INPUT = '/tmp/oum-restore.b64';
 const PASSWALL_NODE_CACHE = '/tmp/oum-passwall-nodes.cache';
+const ZAPRET_STRATEGY_STATE = '/etc/oum/zapret-strategy-state';
 
 function shellquote(value) {
 	return `'${replace(value ?? '', "'", "'\\''")}'`;
@@ -60,12 +61,57 @@ function readKeyValues(path, allowed) {
 }
 
 function systemJobStatus() {
-	let values = readKeyValues(`${SYSTEM_JOB_DIR}/status`, [ 'state', 'action', 'code', 'message' ]);
+	let values = readKeyValues(`${SYSTEM_JOB_DIR}/status`, [ 'state', 'action', 'code', 'message', 'progress', 'total', 'best' ]);
 	return {
 		state: values.state ?? 'idle',
 		action: values.action ?? '',
 		code: values.code ?? '',
-		message: values.message ?? ''
+		message: values.message ?? '',
+		progress: +(values.progress ?? 0),
+		total: +(values.total ?? 0),
+		best: values.best ?? ''
+	};
+}
+
+function zapretOptions() {
+	const uci = cursor();
+	let config = null;
+	uci.foreach('zapret', 'main', (section) => {
+		if (!config && section.NFQWS_OPT != null)
+			config = section;
+	});
+	return config?.NFQWS_OPT ?? '';
+}
+
+function zapretStrategyData() {
+	let strategies = [];
+	for (let index = 1; index <= 27; index++)
+		push(strategies, { id: sprintf('Yv%02d', index), label: sprintf('Yv%02d', index) });
+	let options = zapretOptions();
+	let marker = null;
+	for (let line in split(options, '\n')) {
+		let candidate = match(line, /^#OUM_YOUTUBE (Yv[0-9][0-9])$/);
+		if (candidate) marker = candidate;
+	}
+	let state = readKeyValues(ZAPRET_STRATEGY_STATE, [ 'catalog_revision', 'current', 'last_mode', 'last_ok', 'last_total', 'last_elapsed_ms', 'last_checked' ]);
+	let job = systemJobStatus();
+	return {
+		available: access('/usr/libexec/oum-zapret-strategy') && access('/etc/init.d/zapret') ? true : false,
+		running: system("pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1") == 0,
+		current: marker ? marker[1] : '',
+		catalog_revision: state.catalog_revision ?? '189abafd50aed17f8c7414695d0d47d129a6b0dd',
+		catalog_total: 27,
+		rollback: access('/etc/oum/rollback/zapret-before-strategy') ? true : false,
+		last_mode: state.last_mode ?? '',
+		last_ok: +(state.last_ok ?? 0),
+		last_total: +(state.last_total ?? 0),
+		last_elapsed_ms: +(state.last_elapsed_ms ?? 0),
+		last_checked: +(state.last_checked ?? 0),
+		busy: match(job.action ?? '', /^zapret_/) && job.state == 'running' ? true : false,
+		progress: job.progress ?? 0,
+		total: job.total ?? 0,
+		best: job.best ?? '',
+		strategies
 	};
 }
 
@@ -104,28 +150,39 @@ function startSystemJob(action, payload, inputPath, inputData) {
 
 function wirelessStations() {
 	let stations = {};
-	for (let path in glob('/sys/class/net/*/wireless')) {
-		let device = basename(dirname(path));
-		let process = popen(`/usr/bin/iwinfo ${device} assoclist 2>/dev/null`);
-		if (!process)
+	let bus = connect();
+	let process = popen("/bin/ubus list 'hostapd.*' 2>/dev/null");
+	if (!process)
+		return stations;
+	for (let line = process.read('line'); length(line); line = process.read('line')) {
+		let object = trim(line);
+		if (!match(object, /^hostapd\.[A-Za-z0-9_.-]+$/))
 			continue;
-		for (let line = process.read('line'); length(line); line = process.read('line')) {
-			let mac = match(line, /^([0-9A-Fa-f:]{17})\s/);
-			if (mac)
-				stations[uc(mac[1])] = true;
+		let status = bus?.call(object, 'get_clients') ?? {};
+		for (let mac in (status.clients ?? {})) {
+			if (match(mac, /^[0-9A-Fa-f:]{17}$/))
+				stations[uc(mac)] = true;
 		}
-		process.close();
 	}
+	process.close();
 	return stations;
 }
 
 function connectedClients(uci) {
-	let result = [];
+	let clients = {};
 	let stations = wirelessStations();
 	let policies = {};
+	let savedNames = {};
+	let lanValue = uci.get('network', 'lan', 'ipaddr') ?? '';
+	let lanAddress = replace(type(lanValue) == 'array' ? (lanValue[0] ?? '') : lanValue, /\/.*/, '');
+	let lanPrefix = replace(lanAddress, /\.[0-9]+$/, '.');
+	let lanDevice = uci.get('network', 'lan', 'device') ?? 'br-lan';
 	uci.foreach('oum', 'device', (device) => {
-		if (match(device.mac ?? '', /^[0-9A-Fa-f:]{17}$/))
-			policies[uc(device.mac)] = device.policy ?? 'default';
+		if (match(device.mac ?? '', /^[0-9A-Fa-f:]{17}$/)) {
+			let mac = uc(device.mac);
+			policies[mac] = device.policy ?? 'default';
+			if (length(device.name ?? '')) savedNames[mac] = device.name;
+		}
 	});
 	let leases = readfile('/tmp/dhcp.leases') ?? '';
 	for (let line in split(leases, '\n')) {
@@ -133,16 +190,53 @@ function connectedClients(uci) {
 		if (!fields)
 			continue;
 		let mac = uc(fields[2]);
-		push(result, {
-			name: fields[4] == '*' ? 'Неизвестное устройство' : fields[4],
+		clients[mac] = {
+			name: fields[4] == '*' ? (savedNames[mac] ?? '') : fields[4],
 			mac,
 			ip: fields[3],
-			medium: stations[mac] ? 'wifi' : 'ethernet',
+			medium: stations[mac] ? 'wifi' : 'unknown',
 			expires: +fields[1],
-			policy: policies[mac] ?? 'default'
+			policy: policies[mac] ?? 'default',
+			seen: stations[mac] ? true : false
+		};
+	}
+	let process = popen('/sbin/ip -4 neigh show 2>/dev/null');
+	if (process) {
+		for (let line = process.read('line'); length(line); line = process.read('line')) {
+			let fields = match(line, /^(\d+\.\d+\.\d+\.\d+)\s+dev\s+(\S+).*\slladdr\s+([0-9A-Fa-f:]{17}).*\s(REACHABLE|STALE|DELAY|PROBE|PERMANENT|NOARP)\s*$/);
+			if (!fields) continue;
+			if (fields[2] != lanDevice) continue;
+			if (length(lanPrefix) && substr(fields[1], 0, length(lanPrefix)) != lanPrefix) continue;
+			let mac = uc(fields[3]);
+			let current = clients[mac] ?? {};
+			clients[mac] = {
+				name: current.name ?? savedNames[mac] ?? '',
+				mac,
+				ip: fields[1],
+				medium: stations[mac] ? 'wifi' : 'ethernet',
+				expires: current.expires ?? 0,
+				policy: policies[mac] ?? 'default',
+				seen: true
+			};
+		}
+		process.close();
+	}
+	let result = [];
+	for (let mac, client in clients) {
+		if (!client.seen)
+			continue;
+		if (!length(client.name ?? '')) client.name = `Устройство ${substr(mac, 9)}`;
+		push(result, {
+			name: client.name,
+			mac: client.mac,
+			ip: client.ip,
+			medium: client.medium,
+			expires: client.expires,
+			policy: client.policy,
+			seen: client.seen
 		});
 	}
-	return result;
+	return sort(result, (a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0));
 }
 
 function thermalStatus() {
@@ -171,6 +265,10 @@ function wifiStatus(uci) {
 	return networks;
 }
 
+function podkopInstalled() {
+	return access('/etc/init.d/podkop') && access('/etc/config/podkop') && access('/etc/init.d/zapret');
+}
+
 function unmanagedTunnels(uci) {
 	let result = [];
 	let bus = connect();
@@ -178,6 +276,8 @@ function unmanagedTunnels(uci) {
 		let proto = section.proto ?? '';
 		let name = section['.name'] ?? '';
 		if (!(proto in [ 'amneziawg', 'wireguard' ]) || !match(name, /^[A-Za-z0-9_]+$/))
+			return;
+		if (podkopInstalled() && (uci.get('podkop', 'main', 'interface') ?? '') == name)
 			return;
 		let state = bus?.call(`network.interface.${name}`, 'status') ?? {};
 		push(result, { name, proto, up: state.up == true });
@@ -239,11 +339,12 @@ function passwallCachePresent() {
 function engineStatusData() {
 	let passwall = passwallInstalled();
 	let openclash = access('/etc/init.d/openclash') && access('/etc/config/openclash');
+	let podkop = podkopInstalled();
 	let arch = trim(readfile('/etc/apk/arch') ?? '');
 	let release = readfile('/etc/openwrt_release') ?? '';
 	let supported = access('/usr/bin/apk') && arch == 'aarch64_cortex-a53' && match(release, /DISTRIB_RELEASE='25\.12\./);
 	return {
-		current: passwall ? 'passwall' : (openclash ? 'openclash' : 'none'),
+		current: podkop ? 'podkop' : (passwall ? 'passwall' : (openclash ? 'openclash' : 'none')),
 		supported: supported ? true : false,
 		passwall: {
 			installed: passwall ? true : false,
@@ -257,6 +358,15 @@ function engineStatusData() {
 			version: packageVersion('luci-app-openclash'),
 			target_version: 'controlled-0.47.156',
 			saved: access('/etc/oum/engines/openclash/openclash-config.tar.gz') ? true : false
+		},
+		podkop: {
+			installed: podkop ? true : false,
+			version: packageVersion('podkop'),
+			target_version: '0.7.22 + Zapret 72.20260307',
+			saved: access('/etc/oum/engines/podkop/podkop-config.tar.gz') ? true : false,
+			interface: podkop ? (cursor().get('podkop', 'main', 'interface') ?? '') : '',
+			transport: podkop && cursor().get('podkop', 'main', 'connection_type') == 'proxy' ? 'reality' : 'awg',
+			youtube_mode: cursor().get('oum', 'main', 'youtube_mode') ?? 'zapret'
 		}
 	};
 }
@@ -300,9 +410,254 @@ function settingsStatusData() {
 }
 
 function vpnReady() {
+	if (podkopInstalled())
+		return system("pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1") == 0;
 	if (passwallInstalled())
 		return system("pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1") == 0;
 	return system("pidof clash >/dev/null 2>&1 && nft list chain inet fw4 openclash 2>/dev/null | grep -q 'redirect to :7892'") == 0;
+}
+
+function podkopStatusData() {
+	if (!podkopInstalled())
+		return { installed: false, enabled: false, ready: false, zapret: false, interface: '' };
+	const uci = cursor();
+	let iface = uci.get('podkop', 'main', 'interface') ?? '';
+	let connectionType = uci.get('podkop', 'main', 'connection_type') ?? '';
+	let proxyString = uci.get('podkop', 'main', 'proxy_string') ?? '';
+	let endpointMatch = match(proxyString, /@([^:\/?#]+):([0-9]+)/);
+	let bus = connect();
+	let tunnel = length(iface) ? (bus?.call(`network.interface.${iface}`, 'status') ?? {}) : {};
+	let options = zapretOptions();
+	let zapretMarker = null;
+	for (let line in split(options, '\n')) {
+		let candidate = match(line, /^#OUM_YOUTUBE (Yv[0-9][0-9])$/);
+		if (candidate) zapretMarker = candidate;
+	}
+	return {
+		installed: true,
+		enabled: system('/etc/init.d/podkop enabled >/dev/null 2>&1') == 0,
+		ready: system('pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1') == 0,
+		zapret: system("pgrep -f '/opt/zapret/nfq/nfqws' >/dev/null 2>&1") == 0,
+		interface: iface,
+		transport: connectionType == 'proxy' ? 'reality' : 'awg',
+		proxy_endpoint: endpointMatch ? `${endpointMatch[1]}:${endpointMatch[2]}` : '',
+		tunnel_up: tunnel.up == true,
+		version: packageVersion('podkop'),
+		zapret_version: packageVersion('zapret'),
+		zapret_strategy: zapretMarker ? zapretMarker[1] : '',
+		youtube_mode: uci.get('oum', 'main', 'youtube_mode') ?? 'zapret'
+	};
+}
+
+function podkopList(uci, section, option) {
+	let value = uci.get('podkop', section, option);
+	let source = type(value) == 'array' ? value : (type(value) == 'string' && length(value) ? [ value ] : []);
+	let result = [];
+	let seen = {};
+	for (let item in source) {
+		if (!length(item) || seen[item]) continue;
+		seen[item] = true;
+		push(result, item);
+	}
+	return result;
+}
+
+function podkopRoutingData() {
+	const catalog = [
+		[ 'russia_inside', 'Россия: заблокировано внутри' ], [ 'russia_outside', 'Россия: доступно только из РФ' ],
+		[ 'geoblock', 'Geo Block' ], [ 'block', 'Block' ], [ 'porn', '18+' ],
+		[ 'news', 'Новости' ], [ 'anime', 'Anime' ], [ 'youtube', 'YouTube' ], [ 'discord', 'Discord' ],
+		[ 'meta', 'Meta' ], [ 'twitter', 'Twitter (X)' ], [ 'hdrezka', 'HDRezka' ], [ 'tiktok', 'TikTok' ],
+		[ 'telegram', 'Telegram' ], [ 'cloudflare', 'Cloudflare' ], [ 'google_ai', 'Google AI' ],
+		[ 'google_play', 'Google Play' ], [ 'hodca', 'H.O.D.C.A' ], [ 'roblox', 'Roblox' ],
+		[ 'hetzner', 'Hetzner ASN' ], [ 'ovh', 'OVH ASN' ], [ 'digitalocean', 'DigitalOcean ASN' ],
+		[ 'cloudfront', 'CloudFront ASN' ]
+	];
+	let items = [];
+	for (let item in catalog)
+		push(items, { id: item[0], label: item[1] });
+	if (!podkopInstalled())
+		return { installed: false, catalog: items, proxy: {}, direct: {} };
+	const uci = cursor();
+	let direct = access('/etc/config/podkop') && uci.get('podkop', 'oum_exclusion') ? 'oum_exclusion' : 'youtube_direct';
+	return {
+		installed: true,
+		catalog: items,
+		proxy: {
+			lists: podkopList(uci, 'main', 'community_lists'),
+			domains: podkopList(uci, 'main', 'user_domains'),
+			subnets: podkopList(uci, 'main', 'user_subnets')
+		},
+		direct: {
+			lists: podkopList(uci, direct, 'community_lists'),
+			domains: podkopList(uci, direct, 'user_domains'),
+			subnets: podkopList(uci, direct, 'user_subnets')
+		}
+	};
+}
+
+function commandLine(command) {
+	let process = popen(command);
+	if (!process)
+		return '';
+	let value = trim(process.read('all') ?? '');
+	process.close();
+	return value;
+}
+
+function podkopJson(command) {
+	let allowed = {
+		check_dns_available: true,
+		check_sing_box: true,
+		check_nft_rules: true,
+		get_system_info: true,
+		outbound_latency: true
+	};
+	if (!(command in allowed))
+		return {};
+	let shell = command == 'outbound_latency' ?
+		'/usr/bin/podkop clash_api get_proxy_latency main-out 8000 2>/dev/null' :
+		`/usr/bin/podkop ${command} 2>/dev/null`;
+	let process = popen(shell);
+	if (!process)
+		return {};
+	let value = {};
+	try {
+		value = json(process) ?? {};
+	}
+	catch (err) {
+		value = {};
+	}
+	process.close();
+	return value;
+}
+
+function flag(value) {
+	return value == true || +value == 1;
+}
+
+function diagnosticSection(id, title, items) {
+	let state = 'success';
+	for (let item in items) {
+		if (item.state == 'error') {
+			state = 'error';
+			break;
+		}
+		if (item.state == 'warning')
+			state = 'warning';
+	}
+	return {
+		id,
+		title,
+		state,
+		description: state == 'success' ? 'Проверки пройдены' : (state == 'warning' ? 'Обнаружены предупреждения' : 'Обнаружены проблемы'),
+		items
+	};
+}
+
+function podkopDiagnosticsData() {
+	if (!podkopInstalled())
+		return { installed: false, sections: [] };
+	const uci = cursor();
+	let iface = uci.get('podkop', 'main', 'interface') ?? '';
+	let connectionType = uci.get('podkop', 'main', 'connection_type') ?? '';
+	let youtubeMode = uci.get('oum', 'main', 'youtube_mode') ?? 'zapret';
+	let validIface = match(iface, /^[A-Za-z0-9_]{1,15}$/) ? true : false;
+	let tunnelUp = validIface && system(`ubus call network.interface.${iface} status 2>/dev/null | jsonfilter -e '@.up' | grep -qx true`) == 0;
+	let handshake = validIface ? commandLine(`awg show ${iface} latest-handshakes 2>/dev/null | awk 'NR==1 && $2>0 { d=systime()-$2; print d }'`) : '';
+	let handshakeAge = match(handshake, /^[0-9]+$/) ? +handshake : -1;
+	let dns = podkopJson('check_dns_available');
+	let singbox = podkopJson('check_sing_box');
+	let nft = podkopJson('check_nft_rules');
+	let outbound = podkopJson('outbound_latency');
+	let systemInfo = podkopJson('get_system_info');
+	let tunnelRtt = validIface ? commandLine(`ping -I ${iface} -c 3 -W 2 1.1.1.1 2>/dev/null | awk -F' = ' '/round-trip/ { split($2,a,"/"); print int(a[2]) }'`) : '';
+	let tunnelRttMs = match(tunnelRtt, /^[0-9]+$/) ? +tunnelRtt : 0;
+	let zapretRunning = system("pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1") == 0;
+	if (zapretRunning)
+		system('/usr/libexec/oum-zapret-strategy check >/dev/null 2>&1');
+	let zapret = zapretStrategyData();
+	let dontTouchDhcp = uci.get('podkop', 'settings', 'dont_touch_dhcp') == '1';
+	let quicDisabled = uci.get('firewall', 'oum_quic_80', 'target') == 'REJECT' && uci.get('firewall', 'oum_quic_443', 'target') == 'REJECT';
+	let managerInstalled = access('/usr/libexec/oum-zapret-manager') &&
+		system("/usr/libexec/oum-zapret-manager status 2>/dev/null | grep -qx 'installed=1'") == 0;
+	let outboundItems = connectionType == 'proxy' ? [
+		{ state: length(uci.get('podkop', 'main', 'proxy_string') ?? '') ? 'success' : 'error', label: 'Reality-конфигурация', value: 'секрет сохранён' },
+		{ state: +(outbound.delay ?? 0) > 0 ? 'success' : 'error', label: 'HTTP-проверка Reality', value: +(outbound.delay ?? 0) > 0 ? `${outbound.delay} мс` : 'не отвечает' }
+	] : [
+		{ state: tunnelUp ? 'success' : 'error', label: 'AWG-интерфейс', value: tunnelUp ? `${iface} поднят` : 'не поднят' },
+		{ state: handshakeAge >= 0 && handshakeAge < 300 ? 'success' : 'error', label: 'Рукопожатие AWG', value: handshakeAge >= 0 ? `${handshakeAge} сек. назад` : 'нет данных' },
+		{ state: tunnelRttMs > 0 ? 'success' : 'error', label: 'RTT через AWG', value: tunnelRttMs > 0 ? `${tunnelRttMs} мс` : 'не отвечает' }
+	];
+	let zapretItems = youtubeMode == 'vpn' ? [
+		{ state: !zapretRunning ? 'success' : 'warning', label: 'Zapret остановлен', value: zapretRunning ? 'ещё работает' : 'да' },
+		{ state: system('nft list table inet zapret >/dev/null 2>&1') != 0 ? 'success' : 'warning', label: 'Правила nftables Zapret удалены', value: '' },
+		{ state: 'success', label: 'Маршрут YouTube', value: 'через защищённое подключение' }
+	] : [
+		{ state: zapretRunning ? 'success' : 'error', label: 'Процесс nfqws', value: zapretRunning ? 'запущен' : 'не запущен' },
+		{ state: system('nft list table inet zapret >/dev/null 2>&1') == 0 ? 'success' : 'error', label: 'Таблица nftables Zapret', value: '' },
+		{ state: zapret.current ? 'success' : 'warning', label: 'Стратегия YouTube', value: zapret.current || 'не выбрана OUM' },
+		{ state: zapret.last_total > 0 && zapret.last_ok >= 3 ? 'success' : 'error', label: 'Прямой доступ YouTube', value: zapret.last_total > 0 ? `${zapret.last_ok}/${zapret.last_total} · ${zapret.last_elapsed_ms} мс` : 'не проверен' },
+		{ state: 'info', label: 'QUIC', value: quicDisabled ? 'UDP/80 и UDP/443 заблокированы firewall' : 'разрешён' }
+	];
+	let sections = [
+		diagnosticSection('dns', 'DNS', [
+			{ state: flag(dns.bootstrap_dns_status) ? 'success' : 'error', label: 'Bootstrap DNS', value: dns.bootstrap_dns_server ?? 'не задан' },
+			{ state: flag(dns.dns_status) ? 'success' : 'error', label: 'Основной DNS', value: `${dns.dns_server ?? 'не задан'} [${dns.dns_type ?? '—'}]` },
+			{ state: flag(dns.dns_on_router) ? 'success' : 'error', label: 'DNS на роутере', value: flag(dns.dns_on_router) ? 'отвечает' : 'не отвечает' },
+			{ state: dontTouchDhcp ? 'info' : (flag(dns.dhcp_config_status) ? 'success' : 'warning'), label: 'DHCP содержит DNS Podkop', value: dontTouchDhcp ? 'управляется пользователем' : (flag(dns.dhcp_config_status) ? 'да' : 'отличается от шаблона') }
+		]),
+		diagnosticSection('singbox', 'Sing-box', [
+			{ state: flag(singbox.sing_box_installed) ? 'success' : 'error', label: 'Sing-box установлен', value: systemInfo.sing_box_version ?? '' },
+			{ state: flag(singbox.sing_box_version_ok) ? 'success' : 'error', label: 'Версия совместима', value: 'не ниже 1.12.4' },
+			{ state: flag(singbox.sing_box_service_exist) ? 'success' : 'error', label: 'Служба существует', value: '' },
+			{ state: flag(singbox.sing_box_autostart_disabled) ? 'success' : 'warning', label: 'Автозапуск sing-box отключён', value: 'управляется Podkop' },
+			{ state: flag(singbox.sing_box_process_running) ? 'success' : 'error', label: 'Процесс запущен', value: '' },
+			{ state: flag(singbox.sing_box_ports_listening) ? 'success' : 'error', label: 'Порты прослушиваются', value: '' }
+		]),
+		diagnosticSection('nft', 'Nftables', [
+			{ state: flag(nft.table_exist) ? 'success' : 'error', label: 'Таблица PodkopTable существует', value: '' },
+			{ state: flag(nft.rules_mangle_exist) ? 'success' : 'error', label: 'Правила mangle существуют', value: '' },
+			{ state: flag(nft.rules_mangle_counters) ? 'success' : 'warning', label: 'Счётчики mangle', value: flag(nft.rules_mangle_counters) ? 'есть трафик' : 'пока без трафика' },
+			{ state: flag(nft.rules_mangle_output_exist) ? 'success' : 'error', label: 'Правила mangle output существуют', value: '' },
+			{ state: flag(nft.rules_mangle_output_counters) ? 'success' : 'warning', label: 'Счётчики mangle output', value: flag(nft.rules_mangle_output_counters) ? 'есть трафик' : 'пока без трафика' },
+			{ state: flag(nft.rules_proxy_exist) ? 'success' : 'error', label: 'Правила proxy существуют', value: '' },
+			{ state: flag(nft.rules_proxy_counters) ? 'success' : 'warning', label: 'Счётчики proxy', value: flag(nft.rules_proxy_counters) ? 'есть трафик' : 'пока без трафика' },
+			{ state: flag(nft.rules_other_mark_exist) ? 'warning' : 'success', label: 'Дополнительные правила маркировки', value: flag(nft.rules_other_mark_exist) ? 'обнаружены' : 'не обнаружены' }
+		]),
+		diagnosticSection('outbound', connectionType == 'proxy' ? 'Reality и outbound' : 'Туннель и outbound', outboundItems),
+		diagnosticSection('fakeip', 'FakeIP', [
+			{ state: system("nslookup fakeip.podkop.fyi 127.0.0.1 2>/dev/null | grep -Eq '198\\.18\\.'") == 0 ? 'success' : 'error', label: 'DNS роутера проходит через FakeIP', value: '' },
+			{ state: 'info', label: 'Проверка браузера и маршрута', value: 'выполняется из браузера' }
+		]),
+		diagnosticSection('zapret', 'Zapret / YouTube', zapretItems)
+	];
+	let state = 'success';
+	for (let section in sections) {
+		if (section.state == 'error') { state = 'error'; break; }
+		if (section.state == 'warning') state = 'warning';
+	}
+	return {
+		installed: true,
+		healthy: state == 'success',
+		state,
+		checked_at: time(),
+		sections,
+		quic_disabled: quicDisabled,
+		zapret_manager: {
+			installed: managerInstalled ? true : false,
+			revision: '189abafd50aed17f8c7414695d0d47d129a6b0dd'
+		},
+		fakeip_check_url: 'https://fakeip.podkop.fyi/check',
+		ip_check_url: 'https://ip.podkop.fyi/check',
+		system: {
+			podkop: systemInfo.podkop_version ?? packageVersion('podkop'),
+			luci: systemInfo.luci_app_version ?? packageVersion('luci-app-podkop'),
+			singbox: systemInfo.sing_box_version ?? packageVersion('sing-box'),
+			openwrt: systemInfo.openwrt_version ?? '',
+			device: systemInfo.device_model ?? ''
+		}
+	};
 }
 
 function passwallStatusData() {
@@ -466,6 +821,8 @@ function readJsonFile(path) {
 }
 
 function nodeStatusData() {
+	if (podkopInstalled())
+		return { available: false, engine: 'podkop', group: '', current: '', nodes: [] };
 	if (passwallInstalled())
 		return passwallNodeStatusData();
 	const uci = cursor();
@@ -722,8 +1079,8 @@ const methods = {
 		args: { engine: '' },
 		call: function(request) {
 			let engine = request.args.engine ?? '';
-			if (!(engine in [ 'openclash', 'passwall' ]))
-				return failure('invalid_engine', 'Выберите OpenClash или PassWall.');
+			if (!(engine in [ 'openclash', 'passwall', 'podkop' ]))
+				return failure('invalid_engine', 'Выберите OpenClash, PassWall или Podkop + Zapret.');
 			let status = engineStatusData();
 			if (!status.supported)
 				return failure('unsupported_platform', 'Для этого устройства пока нет проверенного комплекта переключения.');
@@ -732,6 +1089,145 @@ const methods = {
 			if (!access('/usr/libexec/oum-engine-manager'))
 				return failure('runtime_missing', 'Менеджер VPN-движков не установлен.');
 			return startSystemJob('engine', { engine });
+		}
+	},
+
+	configurePodkop: {
+		args: { interface: '' },
+		call: function(request) {
+			let iface = request.args.interface ?? '';
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Сначала установите движок Podkop + Zapret.');
+			if (!match(iface, /^[A-Za-z0-9_]{1,15}$/))
+				return failure('invalid_interface', 'Выберите отдельный AWG/WireGuard-интерфейс.');
+			const uci = cursor();
+			let proto = uci.get('network', iface, 'proto') ?? '';
+			if (!(proto in [ 'amneziawg', 'wireguard' ]))
+				return failure('invalid_interface', 'Выбранный интерфейс не является AWG/WireGuard-туннелем.');
+			return startSystemJob('podkop_configure', { interface: iface });
+		}
+	},
+
+	importPodkopAwg: {
+		args: { payload: '' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Сначала установите движок Podkop + Zapret.');
+			let payload = request.args.payload ?? '';
+			if (type(payload) != 'string' || length(payload) < 32 || length(payload) > 65536)
+				return failure('invalid_payload', 'Вставьте AWG-конфигурацию целиком.');
+			if (!match(payload, /\[Interface\]/i) || !match(payload, /\[Peer\]/i))
+				return failure('invalid_payload', 'AWG-конфигурация должна содержать секции Interface и Peer.');
+			if (!access('/usr/libexec/oum-awg-manager'))
+				return failure('runtime_missing', 'Компонент импорта AWG не установлен.');
+			return startSystemJob('podkop_awg', { payload });
+		}
+	},
+
+	importPodkopReality: {
+		args: { payload: '' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Сначала установите движок Podkop + Zapret.');
+			let payload = trim(request.args.payload ?? '');
+			if (type(payload) != 'string' || length(payload) < 32 || length(payload) > 8192 || !match(payload, /^vless:\/\/\S+$/i))
+				return failure('invalid_payload', 'Вставьте одну полную VLESS Reality-ссылку.');
+			if (!match(payload, /[?&]security=reality(&|$)/i) || !match(payload, /[?&]pbk=[^&]+/i) ||
+				!match(payload, /[?&]fp=[^&]+/i) || !match(payload, /[?&]sni=[^&]+/i))
+				return failure('invalid_reality', 'Reality-ссылка не содержит security, pbk, fp или sni.');
+			return startSystemJob('podkop_proxy', { payload });
+		}
+	},
+
+	zapretStrategyStatus: {
+		call: function() {
+			return zapretStrategyData();
+		}
+	},
+
+	startZapretStrategy: {
+		args: { action: '', strategy: '' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Сначала установите Podkop + Zapret.');
+			let action = request.args.action ?? '';
+			let strategy = request.args.strategy ?? '';
+			if (!(action in [ 'auto', 'apply', 'check', 'restore' ]))
+				return failure('invalid_action', 'Неизвестная операция Zapret.');
+			if (action == 'apply' && !match(strategy, /^Yv(0[1-9]|1[0-9]|2[0-7])$/))
+				return failure('invalid_strategy', 'Выберите стратегию Yv01–Yv27.');
+			if (!access('/usr/libexec/oum-zapret-strategy'))
+				return failure('runtime_missing', 'Адаптер стратегий Zapret не установлен.');
+			return startSystemJob(`zapret_${action}`, action == 'apply' ? { strategy } : {});
+		}
+	},
+
+	podkopRoutingStatus: {
+		call: function() {
+			return podkopRoutingData();
+		}
+	},
+
+	applyPodkopRouting: {
+		args: { proxy_lists: '', proxy_domains: '', proxy_subnets: '', direct_lists: '', direct_domains: '', direct_subnets: '', youtube_mode: 'zapret' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Podkop не установлен.');
+			let payload = {};
+			for (let name in [ 'proxy_lists', 'proxy_domains', 'proxy_subnets', 'direct_lists', 'direct_domains', 'direct_subnets' ]) {
+				let value = request.args[name] ?? '';
+				if (type(value) != 'string' || length(value) > 32768)
+					return failure('invalid_routing', 'Список слишком велик или имеет неверный формат.');
+				payload[name] = value;
+			}
+			let youtubeMode = request.args.youtube_mode ?? 'zapret';
+			if (!(youtubeMode in [ 'zapret', 'vpn' ]))
+				return failure('invalid_mode', 'Выберите маршрут YouTube.');
+			payload.youtube_mode = youtubeMode;
+			return startSystemJob('podkop_routing', payload);
+		}
+	},
+
+	setPodkopYoutubeMode: {
+		args: { mode: '', strategy: '' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Podkop не установлен.');
+			let mode = request.args.mode ?? '';
+			if (!(mode in [ 'zapret', 'vpn' ]))
+				return failure('invalid_mode', 'Выберите Zapret или защищённое подключение.');
+			let strategy = request.args.strategy ?? '';
+			if (length(strategy) && !match(strategy, /^Yv(0[1-9]|1[0-9]|2[0-7])$/))
+				return failure('invalid_strategy', 'Неизвестная стратегия Zapret.');
+			return startSystemJob('podkop_youtube', { mode, strategy });
+		}
+	},
+
+	podkopDiagnostics: {
+		call: function() {
+			return podkopDiagnosticsData();
+		}
+	},
+
+	setZapretQuic: {
+		args: { enabled: false },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Podkop не установлен.');
+			let enabled = request.args.enabled;
+			if (type(enabled) != 'bool')
+				return failure('invalid_value', 'Некорректный режим QUIC.');
+			return startSystemJob('zapret_quic', { enabled: enabled ? '1' : '0' });
+		}
+	},
+
+	prepareZapretManager: {
+		call: function() {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Podkop не установлен.');
+			if (!access('/usr/libexec/oum-zapret-manager'))
+				return failure('runtime_missing', 'Адаптер Zapret Manager не установлен.');
+			return startSystemJob('zapret_manager_install', {});
 		}
 	},
 
@@ -789,7 +1285,8 @@ const methods = {
 		call: function() {
 			const uci = cursor();
 			const passwall = passwallStatusData();
-			const engine = passwall.installed ? 'passwall' : 'openclash';
+			const podkop = podkopStatusData();
+			const engine = podkop.installed ? 'podkop' : (passwall.installed ? 'passwall' : 'openclash');
 			return {
 				wan: networkStatus(),
 				wifi: wifiStatus(uci),
@@ -797,10 +1294,11 @@ const methods = {
 				thermal: thermalStatus(),
 				active_source: uci.get('oum', 'main', 'active_source') ?? 'none',
 				vpn_engine: engine,
-				vpn_enabled: engine == 'passwall' ? passwall.enabled : uci.get('openclash', 'config', 'enable') == '1',
+				vpn_enabled: engine == 'podkop' ? podkop.enabled : (engine == 'passwall' ? passwall.enabled : uci.get('openclash', 'config', 'enable') == '1'),
 				vpn_ready: vpnReady(),
 				policy_applying: access('/tmp/oum-device-policy.lock') ? true : false,
 				passwall,
+				podkop,
 				unmanaged_tunnels: unmanagedTunnels(uci),
 				subscription: engine == 'openclash' ? subscriptionStatusData(false) : { available: false, refreshing: false }
 			};
@@ -829,6 +1327,32 @@ const methods = {
 			if (type(enabled) != 'bool')
 				return failure('invalid_state', 'Некорректное состояние VPN.');
 			const uci = cursor();
+			if (podkopInstalled()) {
+				let iface = uci.get('podkop', 'main', 'interface') ?? '';
+				let connectionType = uci.get('podkop', 'main', 'connection_type') ?? '';
+				let youtubeMode = uci.get('oum', 'main', 'youtube_mode') ?? 'zapret';
+				if (enabled && connectionType == 'vpn' && !length(iface))
+					return failure('podkop_interface_missing', 'Сначала выберите отдельный AWG/WireGuard-интерфейс для Podkop.');
+				if (enabled && connectionType == 'proxy' && !length(uci.get('podkop', 'main', 'proxy_string') ?? ''))
+					return failure('podkop_proxy_missing', 'Сначала добавьте Reality-ссылку для Podkop.');
+				if (enabled) {
+					system('/etc/init.d/podkop enable >/dev/null 2>&1');
+					if (youtubeMode == 'zapret') {
+						system('/etc/init.d/zapret enable >/dev/null 2>&1');
+						system('(/etc/init.d/podkop restart; sleep 20; /etc/init.d/zapret restart; sleep 15; pgrep -f "^/opt/zapret/nfq/nfqws " >/dev/null 2>&1 || /etc/init.d/zapret restart) >/tmp/oum-vpn-control.log 2>&1 &');
+					}
+					else {
+						system('/etc/init.d/zapret disable >/dev/null 2>&1');
+						system('(/etc/init.d/zapret stop; /etc/init.d/podkop restart) >/tmp/oum-vpn-control.log 2>&1 &');
+					}
+				}
+				else {
+					system('/etc/init.d/podkop disable >/dev/null 2>&1');
+					system('/etc/init.d/zapret disable >/dev/null 2>&1');
+					system('(/etc/init.d/podkop stop; /etc/init.d/zapret stop; for pid in $(pgrep -f "^/opt/zapret/nfq/nfqws " 2>/dev/null); do kill "$pid" 2>/dev/null; done; nft delete table inet zapret >/dev/null 2>&1 || true; /etc/init.d/dnsmasq restart) >/tmp/oum-vpn-control.log 2>&1 &');
+				}
+				return { ok: true, enabled, engine: 'podkop', message: enabled ? (youtubeMode == 'zapret' ? 'Podkop и Zapret запускаются…' : 'Podkop запускается…') : 'Podkop отключается…' };
+			}
 			if (passwallInstalled()) {
 				let globalSection = null;
 				uci.foreach('passwall', 'global', (section) => {
@@ -978,9 +1502,11 @@ const methods = {
 				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
 			let kind = request.args.vpn_type;
 			let payload = request.args.payload;
-			if (passwallInstalled())
-				return failure('engine_not_supported', 'Импорт источников PassWall будет добавлен отдельным этапом. Сейчас доступно только управление существующей конфигурацией.');
-			if (!access('/usr/libexec/oum-source-job'))
+			let passwall = passwallInstalled();
+			let runner = passwall ? '/usr/libexec/oum-passwall-source-job' : '/usr/libexec/oum-source-job';
+			if (passwall && kind == 'awg')
+				return failure('engine_not_supported', 'AWG является отдельным сетевым туннелем. Для него выберите Podkop + Zapret.');
+			if (!access(runner))
 				return failure('runtime_missing', 'Компонент импорта OUM не установлен.');
 			if (!(kind in [ 'subscription', 'awg', 'proxy' ]))
 				return failure('invalid_vpn', 'Неизвестный тип подключения.');
@@ -1005,7 +1531,7 @@ const methods = {
 				system(`rmdir ${VPN_JOB_LOCK}`);
 				return failure('status_write', 'Не удалось создать состояние задания.');
 			}
-			if (system(`(/usr/libexec/oum-source-job ${kind} ${VPN_JOB_DIR}/input) >/dev/null 2>&1 &`) != 0) {
+			if (system(`(${runner} ${kind} ${VPN_JOB_DIR}/input) >/dev/null 2>&1 &`) != 0) {
 				system(`rmdir ${VPN_JOB_LOCK}`);
 				return failure('job_start', 'Не удалось запустить импорт.');
 			}

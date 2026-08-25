@@ -1,0 +1,264 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-}"
+REQUEST="${2:-}"
+WORK=/tmp/oum-awg-import
+CACHE=/etc/oum/packages/amneziawg
+ROLLBACK=/etc/oum/rollback/awg-before-import
+LOG=/tmp/oum-awg-import.log
+INTERFACE=oum_awg
+PEER=oum_awg_peer
+RELEASE=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v25.12.3
+ASSETS='amneziawg-tools_v25.12.3_aarch64_cortex-a53_mediatek_mt7622.apk|a534cca1c7a6d286daaaf71347cb604a9c283b3cc18284c180d1efd67162f98b
+kmod-amneziawg_v25.12.3_aarch64_cortex-a53_mediatek_mt7622.apk|950f54f3cf54dfeb29d5d4c0682846dfde053d4d4493e3923b0037c867bc8e5f
+luci-proto-amneziawg_v25.12.3_aarch64_cortex-a53_mediatek_mt7622.apk|67a4d841de2fdbbb6630c4f4e64338384eba65bed9b2e7b30d13e58b553a3839'
+MUTATED=0
+SUCCESS=0
+
+trim() {
+	printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+fail() {
+	printf '%s\n' "$*" >&2
+	printf '%s\n' "$*" >> "$LOG"
+	exit 1
+}
+
+restore() {
+	[ "$MUTATED" = 1 ] || return 0
+	ifdown "$INTERFACE" >/dev/null 2>&1 || true
+	[ ! -f "$ROLLBACK/network" ] || cp "$ROLLBACK/network" /etc/config/network
+	[ ! -f "$ROLLBACK/podkop" ] || cp "$ROLLBACK/podkop" /etc/config/podkop
+	[ ! -f "$ROLLBACK/oum" ] || cp "$ROLLBACK/oum" /etc/config/oum
+	/etc/init.d/network reload >/dev/null 2>&1 || true
+	if [ "$(cat "$ROLLBACK/podkop-enabled" 2>/dev/null || echo 0)" = 1 ]; then
+		/etc/init.d/podkop enable >/dev/null 2>&1 || true
+		/etc/init.d/podkop restart >/dev/null 2>&1 || true
+	else
+		/etc/init.d/podkop stop >/dev/null 2>&1 || true
+		/etc/init.d/podkop disable >/dev/null 2>&1 || true
+	fi
+}
+
+cleanup() {
+	set +e
+	[ "$SUCCESS" = 1 ] || restore
+	rm -rf "$WORK"
+}
+trap cleanup EXIT INT TERM
+
+fetch_assets() {
+	mkdir -p "$WORK/packages" "$CACHE"
+	chmod 700 "$CACHE"
+	old_ifs="$IFS"
+	IFS='
+'
+	for entry in $ASSETS; do
+		file="${entry%%|*}"
+		expected="${entry#*|}"
+		source="$CACHE/$file"
+		if [ ! -s "$source" ] || [ "$(sha256sum "$source" | awk '{print $1}')" != "$expected" ]; then
+			rm -f "$source"
+			curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$WORK/packages/$file" "$RELEASE/$file" >> "$LOG" 2>&1 || { IFS="$old_ifs"; return 1; }
+			[ "$(sha256sum "$WORK/packages/$file" | awk '{print $1}')" = "$expected" ] || { IFS="$old_ifs"; return 1; }
+			cp "$WORK/packages/$file" "$source"
+		fi
+		cp "$source" "$WORK/packages/$file"
+	done
+	IFS="$old_ifs"
+	chmod 600 "$CACHE"/*.apk
+}
+
+install_runtime() {
+	if command -v awg >/dev/null 2>&1 && [ -f /lib/netifd/proto/amneziawg.sh ]; then
+		return 0
+	fi
+	fetch_assets || return 1
+	apk add --simulate --allow-untrusted "$WORK"/packages/*.apk >> "$LOG" 2>&1 || return 1
+	apk add --allow-untrusted "$WORK"/packages/*.apk >> "$LOG" 2>&1 || return 1
+	command -v awg >/dev/null 2>&1 && [ -f /lib/netifd/proto/amneziawg.sh ] || return 1
+	modprobe amneziawg >> "$LOG" 2>&1 || return 1
+	[ -d /sys/module/amneziawg ]
+}
+
+valid_key() {
+	printf '%s\n' "$1" | grep -Eq '^[A-Za-z0-9+/]{43}=$'
+}
+
+valid_number() {
+	printf '%s\n' "$1" | grep -Eq '^[0-9]+$' && [ "$1" -le 4294967295 ]
+}
+
+valid_cidr_list() {
+	printf '%s\n' "$1" | grep -Eq '^[0-9A-Fa-f:.,/[:space:]]+$'
+}
+
+valid_awg_string() {
+	[ "${#1}" -le 512 ] && printf '%s\n' "$1" | LC_ALL=C grep -Eq '^[[:print:]]+$'
+}
+
+parse_config() {
+	config="$1"
+	section=''
+	peer_count=0
+	private_key=''
+	addresses=''
+	mtu=''
+	public_key=''
+	preshared_key=''
+	allowed_ips=''
+	endpoint=''
+	keepalive=''
+	awg_jc=''; awg_jmin=''; awg_jmax=''; awg_s1=''; awg_s2=''; awg_s3=''; awg_s4=''
+	awg_h1=''; awg_h2=''; awg_h3=''; awg_h4=''
+	awg_i1=''; awg_i2=''; awg_i3=''; awg_i4=''; awg_i5=''
+
+	while IFS= read -r raw || [ -n "$raw" ]; do
+		line="$(trim "$(printf '%s' "$raw" | tr -d '\r')")"
+		case "$line" in ''|'#'*|';'*) continue ;; '[Interface]') section=interface; continue ;; '[Peer]') section=peer; peer_count=$((peer_count + 1)); [ "$peer_count" -le 1 ] || return 1; continue ;; esac
+		case "$line" in *=*) ;; *) return 1 ;; esac
+		key="$(trim "${line%%=*}")"
+		value="$(trim "${line#*=}")"
+		key="$(printf '%s' "$key" | tr 'A-Z' 'a-z')"
+		case "$section:$key" in
+			interface:privatekey) private_key="$value" ;;
+			interface:address) addresses="$value" ;;
+			interface:dns) : ;; # Router DNS policy is intentionally independent.
+			interface:mtu) mtu="$value" ;;
+			interface:jc) awg_jc="$value" ;; interface:jmin) awg_jmin="$value" ;; interface:jmax) awg_jmax="$value" ;;
+			interface:s1) awg_s1="$value" ;; interface:s2) awg_s2="$value" ;;
+			interface:s3) awg_s3="$value" ;; interface:s4) awg_s4="$value" ;;
+			interface:h1) awg_h1="$value" ;; interface:h2) awg_h2="$value" ;; interface:h3) awg_h3="$value" ;; interface:h4) awg_h4="$value" ;;
+			interface:i1) awg_i1="$value" ;; interface:i2) awg_i2="$value" ;; interface:i3) awg_i3="$value" ;; interface:i4) awg_i4="$value" ;; interface:i5) awg_i5="$value" ;;
+			interface:awgversion|interface:version) : ;;
+			peer:publickey) public_key="$value" ;;
+			peer:presharedkey) preshared_key="$value" ;;
+			peer:allowedips) allowed_ips="$value" ;;
+			peer:endpoint) endpoint="$value" ;;
+			peer:persistentkeepalive) keepalive="$value" ;;
+			*) : ;;
+		esac
+	done < "$config"
+
+	[ "$peer_count" = 1 ] && valid_key "$private_key" && valid_key "$public_key" || return 1
+	[ -z "$preshared_key" ] || valid_key "$preshared_key" || return 1
+	[ -n "$addresses" ] && valid_cidr_list "$addresses" || return 1
+	[ -n "$allowed_ips" ] && valid_cidr_list "$allowed_ips" || return 1
+	for value in "$awg_jc" "$awg_jmin" "$awg_jmax" "$awg_s1" "$awg_s2" "$awg_s3" "$awg_s4"; do
+		[ -z "$value" ] || valid_number "$value" || return 1
+	done
+	for value in "$awg_h1" "$awg_h2" "$awg_h3" "$awg_h4" "$awg_i1" "$awg_i2" "$awg_i3" "$awg_i4" "$awg_i5"; do
+		[ -z "$value" ] || valid_awg_string "$value" || return 1
+	done
+	[ -z "$mtu" ] || { valid_number "$mtu" && [ "$mtu" -ge 576 ] && [ "$mtu" -le 9000 ]; } || return 1
+	[ -z "$keepalive" ] || { valid_number "$keepalive" && [ "$keepalive" -le 65535 ]; } || return 1
+
+	case "$endpoint" in
+		\[*\]:*) endpoint_host="${endpoint#\[}"; endpoint_host="${endpoint_host%%\]*}"; endpoint_port="${endpoint##*:}" ;;
+		*:*) endpoint_host="${endpoint%:*}"; endpoint_port="${endpoint##*:}" ;;
+		*) return 1 ;;
+	esac
+	[ -n "$endpoint_host" ] && printf '%s\n' "$endpoint_host" | grep -Eq '^[A-Za-z0-9._:-]+$' || return 1
+	valid_number "$endpoint_port" && [ "$endpoint_port" -ge 1 ] && [ "$endpoint_port" -le 65535 ] || return 1
+}
+
+set_list() {
+	section="$1"
+	option="$2"
+	values="$3"
+	old_ifs="$IFS"
+	IFS=','
+	for value in $values; do
+		value="$(trim "$value")"
+		[ -n "$value" ] && uci -q add_list "network.$section.$option=$value"
+	done
+	IFS="$old_ifs"
+}
+
+write_network() {
+	existing="$(uci -q get "network.$INTERFACE.oum_managed" || true)"
+	[ -z "$(uci -q get "network.$INTERFACE" || true)" ] || [ "$existing" = 1 ] || fail 'Интерфейс oum_awg уже существует вне OUM.'
+	uci -q delete "network.$PEER" || true
+	uci -q delete "network.$INTERFACE" || true
+	uci -q set "network.$INTERFACE=interface"
+	uci -q set "network.$INTERFACE.proto=amneziawg"
+	uci -q set "network.$INTERFACE.oum_managed=1"
+	uci -q set "network.$INTERFACE.private_key=$private_key"
+	set_list "$INTERFACE" addresses "$addresses"
+	[ -z "$mtu" ] || uci -q set "network.$INTERFACE.mtu=$mtu"
+	[ -z "$awg_jc" ] || uci -q set "network.$INTERFACE.awg_jc=$awg_jc"
+	[ -z "$awg_jmin" ] || uci -q set "network.$INTERFACE.awg_jmin=$awg_jmin"
+	[ -z "$awg_jmax" ] || uci -q set "network.$INTERFACE.awg_jmax=$awg_jmax"
+	[ -z "$awg_s1" ] || uci -q set "network.$INTERFACE.awg_s1=$awg_s1"
+	[ -z "$awg_s2" ] || uci -q set "network.$INTERFACE.awg_s2=$awg_s2"
+	[ -z "$awg_s3" ] || uci -q set "network.$INTERFACE.awg_s3=$awg_s3"
+	[ -z "$awg_s4" ] || uci -q set "network.$INTERFACE.awg_s4=$awg_s4"
+	[ -z "$awg_h1" ] || uci -q set "network.$INTERFACE.awg_h1=$awg_h1"
+	[ -z "$awg_h2" ] || uci -q set "network.$INTERFACE.awg_h2=$awg_h2"
+	[ -z "$awg_h3" ] || uci -q set "network.$INTERFACE.awg_h3=$awg_h3"
+	[ -z "$awg_h4" ] || uci -q set "network.$INTERFACE.awg_h4=$awg_h4"
+	[ -z "$awg_i1" ] || uci -q set "network.$INTERFACE.awg_i1=$awg_i1"
+	[ -z "$awg_i2" ] || uci -q set "network.$INTERFACE.awg_i2=$awg_i2"
+	[ -z "$awg_i3" ] || uci -q set "network.$INTERFACE.awg_i3=$awg_i3"
+	[ -z "$awg_i4" ] || uci -q set "network.$INTERFACE.awg_i4=$awg_i4"
+	[ -z "$awg_i5" ] || uci -q set "network.$INTERFACE.awg_i5=$awg_i5"
+	uci -q set "network.$PEER=amneziawg_$INTERFACE"
+	uci -q set "network.$PEER.oum_managed=1"
+	uci -q set "network.$PEER.public_key=$public_key"
+	[ -z "$preshared_key" ] || uci -q set "network.$PEER.preshared_key=$preshared_key"
+	set_list "$PEER" allowed_ips "$allowed_ips"
+	uci -q set "network.$PEER.route_allowed_ips=0"
+	uci -q set "network.$PEER.endpoint_host=$endpoint_host"
+	uci -q set "network.$PEER.endpoint_port=$endpoint_port"
+	[ -z "$keepalive" ] || uci -q set "network.$PEER.persistent_keepalive=$keepalive"
+	uci -q commit network
+}
+
+wait_tunnel() {
+	waited=0
+	while [ "$waited" -lt 30 ]; do
+		status="$(ubus call "network.interface.$INTERFACE" status 2>/dev/null || true)"
+		device="$(printf '%s' "$status" | jsonfilter -e '@.l3_device' 2>/dev/null || true)"
+		if [ -n "$device" ] && ip link show dev "$device" 2>/dev/null | grep -q 'UP'; then
+			ping -I "$device" -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 || true
+			sleep 2
+			latest="$(awg show "$device" latest-handshakes 2>/dev/null | awk 'NR == 1 { print $2 }')"
+			[ "${latest:-0}" -gt 0 ] && return 0
+		fi
+		sleep 1
+		waited=$((waited + 1))
+	done
+	return 1
+}
+
+import_awg() {
+	[ -f "$REQUEST" ] || fail 'Запрос AWG не найден.'
+	mkdir -p "$WORK" "$ROLLBACK"
+	chmod 700 "$WORK" "$ROLLBACK"
+	jsonfilter -i "$REQUEST" -e '@.payload' > "$WORK/tunnel.conf" || fail 'Не удалось прочитать AWG-конфигурацию.'
+	[ -s "$WORK/tunnel.conf" ] || fail 'AWG-конфигурация пуста.'
+	parse_config "$WORK/tunnel.conf" || fail 'AWG-конфигурация неполная или имеет неверный формат.'
+	install_runtime || fail 'Совместимый комплект AmneziaWG не установился.'
+
+	cp /etc/config/network "$ROLLBACK/network"
+	cp /etc/config/podkop "$ROLLBACK/podkop"
+	cp /etc/config/oum "$ROLLBACK/oum"
+	/etc/init.d/podkop enabled >/dev/null 2>&1 && printf '1\n' > "$ROLLBACK/podkop-enabled" || printf '0\n' > "$ROLLBACK/podkop-enabled"
+	MUTATED=1
+	write_network
+	/etc/init.d/network reload >> "$LOG" 2>&1 || fail 'Не удалось применить AWG-интерфейс.'
+	ifup "$INTERFACE" >> "$LOG" 2>&1 || fail 'Не удалось поднять AWG-интерфейс.'
+	wait_tunnel || fail 'AWG не подтвердил handshake; прежняя конфигурация восстановлена.'
+	/usr/libexec/oum-podkop-config configure "$INTERFACE" >> "$LOG" 2>&1 || fail 'Podkop не запустился через AWG; прежняя конфигурация восстановлена.'
+	SUCCESS=1
+}
+
+case "$ACTION" in
+	import) : > "$LOG"; import_awg ;;
+	validate) parse_config "$REQUEST" && printf 'AWG configuration is valid\n' ;;
+	*) printf 'usage: %s {import REQUEST_JSON|validate CONFIG}\n' "$0" >&2; exit 2 ;;
+esac

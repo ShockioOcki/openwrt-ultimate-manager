@@ -9,3 +9,7 @@ private/
 !tests/fixtures/*.conf
 .env
 .env.*
+
+# Local router snapshots, package bundles and diagnostic reports.
+# These may contain credentials and are deliberately kept outside Git.
+artifacts/

@@ -1,0 +1,340 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-status}"
+ARG="${2:-}"
+CATALOG="${OUM_ZAPRET_CATALOG:-/usr/share/oum/zapret-youtube-strategies}"
+CATALOG_REVISION=189abafd50aed17f8c7414695d0d47d129a6b0dd
+CATALOG_SHA256=6965340ed61797a7760bae74fd18d5c8a90a8a9f339f20c1cf9d57f5f6afdef2
+ROLLBACK=/etc/oum/rollback/zapret-before-strategy
+STATE=/etc/oum/zapret-strategy-state
+RESULTS=/etc/oum/zapret-strategy-results
+WORK=/tmp/oum-zapret-strategy
+LOCK=/tmp/oum-zapret-strategy.lock
+JOB_STATUS="${OUM_JOB_STATUS:-}"
+MUTATED=0
+SUCCESS=0
+LOCKED=0
+TOTAL_STRATEGIES=27
+
+fail() {
+	printf '%s\n' "$*" >&2
+	exit 1
+}
+
+valid_name() {
+	printf '%s\n' "$1" | grep -Eq '^Yv(0[1-9]|1[0-9]|2[0-7])$'
+}
+
+validate_catalog() {
+	[ -f "$CATALOG" ] || return 1
+	[ "$(sha256sum "$CATALOG" | awk '{print $1}')" = "$CATALOG_SHA256" ] || return 1
+	[ "$(grep -c '^#Yv[0-9][0-9]$' "$CATALOG")" = "$TOTAL_STRATEGIES" ] || return 1
+	awk '
+		/^#Yv[0-9][0-9]$/ { if (seen[$0]++) exit 1; section=1; next }
+		/^--[A-Za-z0-9][A-Za-z0-9-]*(=|[[:space:]])[^[:cntrl:]`"'"'"';$\\]*$/ { if (!section) exit 1; next }
+		/^[[:space:]]*$/ { next }
+		{ exit 1 }
+	' "$CATALOG"
+}
+
+extract_strategy() {
+	name="$1"
+	output="$2"
+	valid_name "$name" || return 1
+	awk -v wanted="#$name" '
+		$0 == wanted { found=1; next }
+		/^#Yv[0-9][0-9]$/ && found { exit }
+		found { print }
+		END { if (!found) exit 1 }
+	' "$CATALOG" > "$output"
+	[ -s "$output" ]
+}
+
+zapret_section() {
+	uci -q show zapret 2>/dev/null |
+		sed -n 's/^zapret\.\([^.]*\)\.NFQWS_OPT=.*/\1/p' |
+		head -n 1
+}
+
+current_strategy() {
+	section="$(zapret_section)"
+	[ -n "$section" ] || return 0
+	uci -q get "zapret.$section.NFQWS_OPT" 2>/dev/null |
+		sed -n 's/^#OUM_YOUTUBE \(Yv[0-9][0-9]\)$/\1/p' | head -n 1
+}
+
+require_runtime() {
+	validate_catalog || fail 'Закреплённый каталог стратегий повреждён.'
+	[ -x /etc/init.d/zapret ] && [ -x /opt/zapret/sync_config.sh ] || fail 'Zapret не установлен.'
+	[ -f /etc/config/zapret ] && [ -f /opt/zapret/config ] || fail 'Конфигурация Zapret не найдена.'
+	[ -n "$(zapret_section)" ] || fail 'Секция Zapret с NFQWS_OPT не найдена.'
+	[ "$(/usr/libexec/oum-engine-manager current 2>/dev/null || true)" = podkop ] || fail 'Стратегии доступны только для Podkop + Zapret.'
+}
+
+require_running() {
+	require_runtime
+	pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1 ||
+		fail 'Сначала настройте AWG и запустите Podkop.'
+}
+
+write_progress() {
+	current="$1"
+	total="$2"
+	best="$3"
+	message="$4"
+	[ -n "$JOB_STATUS" ] || return 0
+	tmp="$JOB_STATUS.tmp"
+	printf 'state=running\naction=%s\ncode=testing\nmessage=%s\nprogress=%s\ntotal=%s\nbest=%s\n' \
+		"${OUM_JOB_ACTION:-zapret_strategy}" "$message" "$current" "$total" "$best" > "$tmp"
+	mv "$tmp" "$JOB_STATUS"
+}
+
+save_state() {
+	mode="$1"
+	strategy="$2"
+	ok="$3"
+	total="$4"
+	elapsed="$5"
+	tmp="$STATE.tmp"
+	mkdir -p /etc/oum
+	printf 'catalog_revision=%s\ncatalog_sha256=%s\ncurrent=%s\nlast_mode=%s\nlast_ok=%s\nlast_total=%s\nlast_elapsed_ms=%s\nlast_checked=%s\n' \
+		"$CATALOG_REVISION" "$CATALOG_SHA256" "$strategy" "$mode" "$ok" "$total" "$elapsed" "$(date +%s)" > "$tmp"
+	chmod 600 "$tmp"
+	mv "$tmp" "$STATE"
+}
+
+save_rollback() {
+	mkdir -p "$(dirname "$ROLLBACK")"
+	cp /etc/config/zapret "$ROLLBACK"
+	chmod 600 "$ROLLBACK"
+}
+
+restore_rollback() {
+	[ -f "$ROLLBACK" ] || return 1
+	cp "$ROLLBACK" /etc/config/zapret
+	chmod 600 /etc/config/zapret
+	restart_zapret
+}
+
+acquire_lock() {
+	if ! mkdir "$LOCK" 2>/dev/null; then
+		owner="$(cat "$LOCK/pid" 2>/dev/null || true)"
+		if [ -z "$owner" ] || ! kill -0 "$owner" 2>/dev/null; then
+			rm -rf "$LOCK"
+			mkdir "$LOCK" 2>/dev/null || fail 'Другая операция Zapret уже выполняется.'
+		else
+			fail 'Другая операция Zapret уже выполняется.'
+		fi
+	fi
+	printf '%s\n' "$$" > "$LOCK/pid"
+	LOCKED=1
+}
+
+cleanup() {
+	set +e
+	if [ "$LOCKED" = 1 ] && [ "$MUTATED" = 1 ] && [ "$SUCCESS" != 1 ]; then
+		restore_rollback >/dev/null 2>&1 || true
+	fi
+	if [ "$LOCKED" = 1 ]; then
+		rm -rf "$WORK"
+		rm -rf "$LOCK"
+	fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+restart_zapret() {
+	# Keep the service identity selected by the Zapret package or administrator.
+	# Strategy changes own NFQWS_OPT only and must not escalate the daemon to root.
+	/opt/zapret/sync_config.sh >/dev/null 2>&1 || return 1
+	/etc/init.d/zapret restart >/dev/null 2>&1 || return 1
+	waited=0
+	while ! pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1; do
+		[ "$waited" -lt 8 ] || return 1
+		sleep 1
+		waited=$((waited + 1))
+	done
+}
+
+extract_tail() {
+	section="$(zapret_section)"
+	[ -n "$section" ] || return 1
+	uci -q get "zapret.$section.NFQWS_OPT" 2>/dev/null |
+		awk '{ line=$0; sub(/^[[:space:]]+/, "", line); sub(/[[:space:]]+$/, "", line) }
+			line == "--new" { copy=1 }
+			copy { print $0 }'
+}
+
+apply_strategy() {
+	name="$1"
+	tail_file="$2"
+	section="$(zapret_section)"
+	[ -n "$section" ] || return 1
+	extract_strategy "$name" "$WORK/strategy" || return 1
+	{
+		printf '#OUM_YOUTUBE %s\n' "$name"
+		cat "$WORK/strategy"
+		if [ -s "$tail_file" ]; then
+			printf '\n'
+			cat "$tail_file"
+		fi
+	} > "$WORK/combined"
+	uci -q set "zapret.$section.NFQWS_OPT=$(cat "$WORK/combined")" || return 1
+	uci -q commit zapret || return 1
+	restart_zapret
+}
+
+wan_device() {
+	ubus call network.interface.wan status 2>/dev/null | jsonfilter -e '@.l3_device'
+}
+
+probe_one() {
+	index="$1"
+	url="$2"
+	device="$3"
+	result="$WORK/probe.$index"
+	host="${url#https://}"
+	host="${host%%/*}"
+	resolver="$(uci -q get podkop.settings.bootstrap_dns_server || echo 77.88.8.8)"
+	real_ip="$(nslookup "$host" "$resolver" 2>/dev/null |
+		sed -n 's/^Address:[[:space:]]*\([0-9][0-9.]*\)$/\1/p' | head -n 1)"
+	if ! printf '%s' "$real_ip" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then
+		printf '0 8000\n' > "$result"
+		return 0
+	fi
+	# Podkop DNS deliberately returns FakeIP addresses (198.18.0.0/15). A WAN-bound
+	# probe must pin the real address, otherwise curl bypasses FakeIP handling and
+	# every working Zapret strategy is reported as failed.
+	metrics="$(curl -4 -sS -L --interface "$device" --resolve "$host:443:$real_ip" --connect-timeout 5 --max-time 8 --range 0-65535 \
+		-o /dev/null -w '%{http_code} %{time_total}' "$url" 2>/dev/null || true)"
+	code="${metrics%% *}"
+	time_value="${metrics#* }"
+	case "$code" in [1234][0-9][0-9]) ok=1 ;; *) ok=0 ;; esac
+	ms="$(awk -v value="${time_value:-6}" 'BEGIN { printf "%d", value * 1000 }')"
+	printf '%s %s\n' "$ok" "$ms" > "$result"
+}
+
+run_probes() {
+	device="$(wan_device)"
+	[ -n "$device" ] || return 1
+	rm -f "$WORK"/probe.*
+	index=0
+	for url in \
+		https://www.youtube.com/generate_204 \
+		https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg \
+		https://youtubei.googleapis.com/ \
+		https://manifest.googlevideo.com/; do
+		index=$((index + 1))
+		probe_one "$index" "$url" "$device" &
+	done
+	wait
+	ok=0
+	elapsed=0
+	for result in "$WORK"/probe.*; do
+		[ -f "$result" ] || continue
+		read -r one_ok one_ms < "$result"
+		ok=$((ok + one_ok))
+		elapsed=$((elapsed + one_ms))
+	done
+	printf '%s %s %s\n' "$ok" 4 "$elapsed"
+}
+
+check_current() {
+	require_running
+	mkdir -p "$WORK"
+	result="$(run_probes)" || fail 'Не удалось выполнить проверку через WAN.'
+	set -- $result
+	name="$(current_strategy)"
+	[ -n "$name" ] || name=custom
+	save_state check "$name" "$1" "$2" "$3"
+	[ "$1" -ge 3 ] || fail "Текущая стратегия прошла только $1 из $2 проверок."
+	printf 'Стратегия %s прошла %s/%s проверок за %s мс.\n' "$name" "$1" "$2" "$3"
+}
+
+apply_selected() {
+	name="$ARG"
+	require_running
+	valid_name "$name" || fail 'Неизвестная стратегия.'
+	mkdir -p "$WORK"
+	save_rollback
+	extract_tail > "$WORK/tail"
+	MUTATED=1
+	write_progress 0 1 "$name" "Применяем и проверяем стратегию $name…"
+	apply_strategy "$name" "$WORK/tail" || fail 'Zapret не запустился с выбранной стратегией.'
+	result="$(run_probes)" || fail 'Не удалось проверить выбранную стратегию.'
+	set -- $result
+	[ "$1" -ge 3 ] || fail "Стратегия $name прошла только $1 из $2 проверок; возвращена предыдущая."
+	save_state apply "$name" "$1" "$2" "$3"
+	SUCCESS=1
+	MUTATED=0
+}
+
+auto_select() {
+	require_running
+	mkdir -p "$WORK"
+	save_rollback
+	extract_tail > "$WORK/tail"
+	: > "$WORK/results"
+	MUTATED=1
+	best=''
+	best_ok=-1
+	best_elapsed=999999999
+	index=0
+	for name in $(sed -n 's/^#\(Yv[0-9][0-9]\)$/\1/p' "$CATALOG"); do
+		index=$((index + 1))
+		write_progress "$index" "$TOTAL_STRATEGIES" "$best" "Проверяем $name ($index/$TOTAL_STRATEGIES)…"
+		if ! apply_strategy "$name" "$WORK/tail"; then
+			printf '%s 0 4 24000 restart_failed\n' "$name" >> "$WORK/results"
+			continue
+		fi
+		result="$(run_probes || printf '0 4 24000')"
+		set -- $result
+		printf '%s %s %s %s\n' "$name" "$1" "$2" "$3" >> "$WORK/results"
+		if [ "$1" -gt "$best_ok" ] || { [ "$1" -eq "$best_ok" ] && [ "$3" -lt "$best_elapsed" ]; }; then
+			best="$name"
+			best_ok="$1"
+			best_elapsed="$3"
+		fi
+	done
+	[ -n "$best" ] && [ "$best_ok" -ge 3 ] || fail 'Рабочая стратегия не найдена; возвращена предыдущая.'
+	write_progress "$TOTAL_STRATEGIES" "$TOTAL_STRATEGIES" "$best" "Применяем лучшую стратегию $best…"
+	apply_strategy "$best" "$WORK/tail" || fail 'Лучшая стратегия не запустилась; возвращена предыдущая.'
+	cp "$WORK/results" "$RESULTS"
+	chmod 600 "$RESULTS"
+	save_state auto "$best" "$best_ok" 4 "$best_elapsed"
+	SUCCESS=1
+	MUTATED=0
+}
+
+restore_previous() {
+	require_runtime
+	[ -f "$ROLLBACK" ] || fail 'Предыдущая стратегия не сохранена.'
+	restore_rollback || fail 'Не удалось восстановить предыдущую стратегию.'
+	name="$(current_strategy)"
+	[ -n "$name" ] || name=custom
+	save_state restore "$name" 0 0 0
+}
+
+status() {
+	validate_catalog || fail 'catalog_invalid'
+	printf 'available=%s\n' "$([ -x /etc/init.d/zapret ] && echo 1 || echo 0)"
+	printf 'running=%s\n' "$(pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1 && echo 1 || echo 0)"
+	printf 'catalog_revision=%s\n' "$CATALOG_REVISION"
+	printf 'catalog_total=%s\n' "$TOTAL_STRATEGIES"
+	printf 'current=%s\n' "$(current_strategy)"
+	printf 'rollback=%s\n' "$([ -f "$ROLLBACK" ] && echo 1 || echo 0)"
+	[ ! -f "$STATE" ] || cat "$STATE"
+}
+
+case "$ACTION" in
+	status) status ;;
+	check) acquire_lock; check_current ;;
+	apply) acquire_lock; apply_selected ;;
+	auto) acquire_lock; auto_select ;;
+	restore) acquire_lock; restore_previous ;;
+	validate) validate_catalog ;;
+	*) printf 'usage: %s {status|check|apply NAME|auto|restore|validate}\n' "$0" >&2; exit 2 ;;
+esac

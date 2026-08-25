@@ -147,10 +147,12 @@ termination. A new Subscription, AWG Tunnel or Proxy still replaces the old
 OUM profile only after Mihomo validation and successful OpenClash startup.
 
 `dashboardStatus` is a read-only rpcd method. It combines netifd WAN state,
-enabled wireless SSIDs, DHCP leases, current wireless associations and thermal
-zone readings. The browser refreshes these values every ten seconds. Client
-names come from DHCP leases; unknown names are displayed explicitly rather
-than guessed from MAC vendors.
+enabled wireless SSIDs, DHCP leases, LAN IPv4 neighbours, current wireless
+associations and thermal-zone readings. The browser refreshes these values
+every ten seconds. Neighbour discovery keeps statically addressed clients
+visible even when the DHCP lease file is empty, but filters addresses outside
+the configured LAN. Client names come from DHCP/OUM state; unknown names are
+displayed explicitly rather than guessed from MAC vendors.
 
 `oum-reset-first-run` is a test and recovery helper. It clears OUM-managed
 profiles and device policies, disables the installed VPN engine, locks root
@@ -176,6 +178,18 @@ ordering defect in `util_xray.lua`; the helper applies a one-line guarded
 compatibility fix only when the exact vulnerable statement is present and
 keeps the original under `/etc/oum/compat`.
 
+PassWall source import reuses its bundled `subscribe.lua` parser instead of
+translating nodes through the OpenClash converter. Subscription downloads are
+first written to a private local file so PassWall does not log the
+credential-bearing URL while parsing. OUM-managed subscription and direct URI
+nodes live in an isolated `OUM` group; a private snapshot of the complete
+PassWall UCI file is restored if parsing, Xray startup or nftables readiness
+fails. A minimal dedicated shunt is selected only after at least one valid node
+exists. VLESS Reality is handled by Xray as a native direct proxy source and is
+labelled `Reality / Proxy` in the restricted UI. AWG is rejected in PassWall
+mode because it is an independent network interface used by Podkop rather than
+an Xray-compatible proxy node.
+
 Subscription traffic and expiry are fetched on the router from the provider's
 `Subscription-Userinfo` response header. OUM stores only the parsed numeric
 values in `/tmp` for 30 minutes; the restricted browser session never receives
@@ -190,6 +204,10 @@ managed client addresses to the `full_exception` or `full_redirection` source
 lists. Existing service addresses are never replaced. A policy change backs
 up PassWall, DHCP and OUM state, restarts PassWall, waits for Xray, its DNS
 instance and nftables, and restores the previous files if readiness fails.
+In Podkop mode the same selector resolves the current LAN address by MAC,
+creates an OUM-managed DHCP reservation, and changes only managed entries in
+`settings.routing_excluded_ips` or `main.fully_routed_ips`. Returning a device
+to the default removes both the reservation and OUM-owned route entry.
 
 Native WireGuard and AmneziaWG interfaces configured outside OUM are reported
 on the dashboard and Settings page. OUM does not silently delete or adopt them,
@@ -199,8 +217,8 @@ Only one routing engine remains installed after a transition. The engine
 manager first updates the OpenWrt package index, downloads and SHA-256 verifies
 both the target package set and the set required for rollback, and simulates
 dependency resolution. It then stores the current engine's configuration under
-mode-0700 `/etc/oum/engines`, stages the target while the current service is
-still available, stops both, removes the old engine and restores the target's
+mode-0700 `/etc/oum/engines`, stops and removes the old runtime to avoid an
+unsafe flash-space overlap, installs the verified target and restores its
 saved configuration. An installation or readiness failure reinstalls and
 restarts the previous engine before temporary assets are removed. A fresh
 engine intentionally remains disabled until the user supplies a compatible
@@ -212,9 +230,63 @@ release contains no configuration, nodes, subscription URLs or credentials.
 Development routers receive it in `/etc/oum/packages/passwall`; every asset is
 checked against the compiled SHA-256 manifest before use, so no personal GitHub
 token is stored on the router.
+On a clean direct APK installation the package leaves its initial UCI file in
+`/etc/uci-defaults/luci-passwall`; the engine manager executes that official
+bootstrap only when `/etc/config/passwall` is absent and never overwrites an
+existing configuration.
 Other engines use a checksum-verified controlled release manifest rather than
-sharing PassWall's product version pin. Podkop + Zapret remains unavailable in
-the selector until its separate adapter and rollback tests are complete.
+sharing PassWall's product version pin. Podkop + Zapret uses Podkop 0.7.22 and
+Zapret 72.20260307 on the tested OpenWrt 25.12 aarch64 target. Podkop accepts
+one active outbound: an independent AWG/WireGuard interface or a native VLESS
+Reality URL validated by Podkop and sing-box. Its service catalog has only
+protected and direct destinations. YouTube can be direct through Zapret or
+protected through the active outbound; moving it to the protected route stops
+and disables Zapret and removes its runtime table. Moving it back validates the
+current strategy, falls back to the pinned automatic strategy selection, and
+rolls the complete transaction back if no strategy passes.
+Initial transport setup preserves Podkop's existing community, domain, subnet,
+per-device, DNS, QUIC and DHCP policy. On a genuinely empty Podkop configuration
+the upstream `russia_inside` default is retained. OUM owns only its dedicated
+YouTube exclusion and records whether it inserted an explicit YouTube proxy
+entry, so switching YouTube modes never removes the same entry when it was
+created manually. Zapret's package remains responsible for its service user and
+runtime file permissions; OUM does not force `WS_USER=root`.
+The Settings importer pins the OpenWrt 25.12.3 MT7622 builds of
+`amneziawg-tools`, `kmod-amneziawg` and `luci-proto-amneziawg` with individual
+SHA-256 digests. It parses one interface and one peer, retains AWG v1/v2 fields
+Jc/Jmin/Jmax, S1-S4, H1-H4 and I1-I5, ignores the client DNS directive and sets
+`route_allowed_ips=0`. Network, Podkop and OUM UCI files are restored if the
+interface cannot establish a handshake or Podkop cannot pass readiness checks.
+
+Zapret strategy selection is implemented by `/usr/libexec/oum-zapret-strategy`
+and is available only with the Podkop engine. The bundled strategy catalog is
+an exact SHA-256-pinned snapshot of StressOzz/Zapret-Manager revision
+`189abafd50aed17f8c7414695d0d47d129a6b0dd`; the large upstream interactive
+installer is never executed. Catalog validation runs before every mutation.
+The adapter replaces only the first YouTube-specific nfqws segment and carries
+the existing `--new` segments forward unchanged, so Discord and other local
+rules survive selection. Tests resolve every probe hostname through Podkop's
+external bootstrap DNS, pin that real IPv4 address in curl, and bind curl to the
+current WAN L3 device. This avoids both the paid AWG path and Podkop FakeIP
+addresses, which cannot be sent directly over WAN. System-job locking prevents
+an engine switch or routing edit during a test. The full Zapret UCI configuration is restored when a candidate
+fails to start, fewer than three of four probes succeed, or the job is
+interrupted.
+
+`podkopDiagnostics` uses the commands exported by the installed Podkop release
+for DNS, sing-box, nftables and system information, then adds OUM checks for the
+dedicated AWG interface, FakeIP route and Zapret/YouTube strategy. The optional
+`/usr/libexec/oum-zapret-quic` adapter manages only named firewall rules for
+LAN-to-WAN UDP ports 80 and 443. It takes an exact firewall backup, validates the
+new state and rolls back on failure; the default remains QUIC allowed.
+
+The complete upstream Zapret Manager is not embedded in the admin LuCI session.
+`/usr/libexec/oum-zapret-manager` downloads revision
+`189abafd50aed17f8c7414695d0d47d129a6b0dd`, verifies its SHA-256, pins the
+manager's own resource URLs to the same revision and exposes it through the
+interactive root-only `oum-zapret-manager` command. A configuration backup is
+created immediately before execution. This preserves the OUM admin/root
+security boundary while retaining the full upstream maintenance interface.
 
 ## Settings and recovery
 
@@ -230,7 +302,8 @@ restore that one-step snapshot from the same page. Wi-Fi is always normalized
 to country `US`, WPA2/WPA3 mixed mode and enabled AP interfaces.
 
 OUM backups use an allowlisted, engine-tagged archive containing the required
-UCI configs, the active OpenClash profile or PassWall configuration, custom
+UCI configs, the active OpenClash profile, PassWall configuration or Podkop and
+Zapret configuration, custom
 routing rules and non-secret state markers.
 Restore requires the same VPN engine to be installed and rejects a different
 board, links, unexpected paths, oversized expanded

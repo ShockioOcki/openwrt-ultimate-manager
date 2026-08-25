@@ -30,13 +30,25 @@ copy_if_present() {
 }
 
 current_engine() {
-	if [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ]; then
+	if [ -x /etc/init.d/podkop ] && [ -f /etc/config/podkop ]; then
+		printf '%s\n' podkop
+	elif [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ]; then
 		printf '%s\n' passwall
 	elif [ -x /etc/init.d/openclash ] && [ -f /etc/config/openclash ]; then
 		printf '%s\n' openclash
 	else
 		printf '%s\n' none
 	fi
+}
+
+copy_podkop_files() {
+	source_root="$1"
+	destination_root="$2"
+	copy_if_present "$source_root/etc/config/zapret" "$destination_root/etc/config/zapret"
+	copy_if_present "$source_root/opt/zapret/config" "$destination_root/opt/zapret/config"
+	for file in zapret-hosts-user.txt zapret-hosts-user-exclude.txt zapret-ip-user.txt zapret-ip-user-exclude.txt; do
+		copy_if_present "$source_root/opt/zapret/ipset/$file" "$destination_root/opt/zapret/ipset/$file"
+	done
 }
 
 copy_openclash_files() {
@@ -79,6 +91,10 @@ create_backup() {
 		passwall)
 			copy_if_present /etc/config/passwall "$STAGE/etc/config/passwall"
 			;;
+		podkop)
+			copy_if_present /etc/config/podkop "$STAGE/etc/config/podkop"
+			copy_podkop_files '' "$STAGE"
+			;;
 	esac
 	copy_oum_state '' "$STAGE"
 	(cd "$STAGE" && tar -czf "$ARCHIVE" .)
@@ -100,11 +116,14 @@ valid_archive() {
 	tar -tzf "$RESTORE_ARCHIVE" | sed 's#^\./##' | awk '
 		$0 == "" || $0 == "manifest" ||
 		$0 ~ /^etc\/?$/ || $0 ~ /^etc\/config\/?$/ ||
-		$0 ~ /^etc\/config\/(oum|network|wireless|dhcp|firewall|openclash|passwall)$/ ||
+		$0 ~ /^etc\/config\/(oum|network|wireless|dhcp|firewall|openclash|passwall|podkop|zapret)$/ ||
 		$0 ~ /^etc\/openclash\/?$/ || $0 ~ /^etc\/openclash\/config\/?$/ ||
 		$0 ~ /^etc\/openclash\/config\/(Subscription|AWG_Tunnel|Proxy)\.yaml$/ ||
 		$0 ~ /^etc\/openclash\/custom\/?$/ ||
 		$0 == "etc/openclash/custom/openclash_custom_rules.list" ||
+		$0 ~ /^opt\/?$/ || $0 ~ /^opt\/zapret\/?$/ || $0 ~ /^opt\/zapret\/ipset\/?$/ ||
+		$0 == "opt/zapret/config" ||
+		$0 ~ /^opt\/zapret\/ipset\/zapret-(hosts-user(-exclude)?|ip-user(-exclude)?)\.txt$/ ||
 		$0 ~ /^etc\/oum\/?$/ || $0 ~ /^etc\/oum\/(active_source|active_profile|proxy_backend)$/ { next }
 		{ exit 1 }
 	'
@@ -131,6 +150,15 @@ restore_runtime() {
 				/etc/init.d/passwall stop >/dev/null 2>&1 || true
 			fi
 			;;
+		podkop)
+			if /etc/init.d/podkop enabled >/dev/null 2>&1; then
+				/etc/init.d/podkop restart >/dev/null 2>&1 || return 1
+				/etc/init.d/zapret restart >/dev/null 2>&1 || return 1
+			else
+				/etc/init.d/podkop stop >/dev/null 2>&1 || true
+				/etc/init.d/zapret stop >/dev/null 2>&1 || true
+			fi
+			;;
 	esac
 }
 
@@ -153,6 +181,7 @@ rollback_restore() {
 	done
 	clear_managed_files ''
 	copy_openclash_files "$ROLLBACK" ''
+	copy_podkop_files "$ROLLBACK" ''
 	copy_oum_state "$ROLLBACK" ''
 	restore_runtime "$engine" || true
 }
@@ -172,7 +201,7 @@ restore_backup() {
 	[ "$archive_board" = "$current_board" ] || { echo 'backup belongs to another router model' >&2; return 1; }
 	archive_engine="$(sed -n 's/^ENGINE=//p' "$STAGE/manifest")"
 	[ -n "$archive_engine" ] || archive_engine=openclash
-	case "$archive_engine" in openclash|passwall|none) ;; *) echo 'invalid backup engine' >&2; return 1 ;; esac
+	case "$archive_engine" in openclash|passwall|podkop|none) ;; *) echo 'invalid backup engine' >&2; return 1 ;; esac
 	running_engine="$(current_engine)"
 	[ "$archive_engine" = none ] || [ "$running_engine" = "$archive_engine" ] || {
 		echo "backup requires $archive_engine but $running_engine is installed" >&2
@@ -197,11 +226,13 @@ restore_backup() {
 	done
 	[ "$running_engine" = none ] || copy_if_present "/etc/config/$running_engine" "$ROLLBACK/etc/config/$running_engine"
 	copy_openclash_files '' "$ROLLBACK"
+	copy_podkop_files '' "$ROLLBACK"
 	copy_oum_state '' "$ROLLBACK"
 
 	case "$running_engine" in
 		openclash) /etc/init.d/openclash stop >/dev/null 2>&1 || true ;;
 		passwall) /etc/init.d/passwall stop >/dev/null 2>&1 || true ;;
+		podkop) /etc/init.d/podkop stop >/dev/null 2>&1 || true; /etc/init.d/zapret stop >/dev/null 2>&1 || true ;;
 	esac
 	apply_ok=1
 	for config in $COMMON_CONFIGS; do
@@ -212,6 +243,7 @@ restore_backup() {
 	fi
 	clear_managed_files ''
 	copy_openclash_files "$STAGE" '' || apply_ok=0
+	copy_podkop_files "$STAGE" '' || apply_ok=0
 	copy_oum_state "$STAGE" '' || apply_ok=0
 	[ "$apply_ok" = 1 ] || { rollback_restore "$running_engine"; return 1; }
 	restore_runtime "$running_engine" || { rollback_restore "$running_engine"; return 1; }

@@ -18,6 +18,12 @@ const callApplyWan = rpc.declare({
 });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
 const callSwitchEngine = rpc.declare({ object: 'oum', method: 'switchVpnEngine', params: [ 'engine' ], expect: { '': {} } });
+const callConfigurePodkop = rpc.declare({ object: 'oum', method: 'configurePodkop', params: [ 'interface' ], expect: { '': {} } });
+const callImportPodkopAwg = rpc.declare({ object: 'oum', method: 'importPodkopAwg', params: [ 'payload' ], expect: { '': {} } });
+const callImportPodkopReality = rpc.declare({ object: 'oum', method: 'importPodkopReality', params: [ 'payload' ], expect: { '': {} } });
+const callSetPodkopYoutubeMode = rpc.declare({ object: 'oum', method: 'setPodkopYoutubeMode', params: [ 'mode', 'strategy' ], expect: { '': {} } });
+const callZapretStrategyStatus = rpc.declare({ object: 'oum', method: 'zapretStrategyStatus', expect: { '': {} } });
+const callStartZapretStrategy = rpc.declare({ object: 'oum', method: 'startZapretStrategy', params: [ 'action', 'strategy' ], expect: { '': {} } });
 const callCreateBackup = rpc.declare({ object: 'oum', method: 'createBackup', expect: { '': {} } });
 const callRestoreBackup = rpc.declare({ object: 'oum', method: 'restoreBackup', params: [ 'data' ], expect: { '': {} } });
 const callResetVpn = rpc.declare({ object: 'oum', method: 'resetVpn', expect: { '': {} } });
@@ -30,9 +36,9 @@ function choice(name, value, title, description, checked) {
 	]);
 }
 
-function sourceChoice(value, title, description, checked) {
-	return E('label', { 'class': 'oum-source-choice' }, [
-		E('input', { type: 'radio', name: 'vpn_source', value, checked: checked ? '' : null }),
+function sourceChoice(value, title, description, checked, disabled) {
+	return E('label', { 'class': `oum-source-choice${disabled ? ' is-disabled' : ''}` }, [
+		E('input', { type: 'radio', name: 'vpn_source', value, checked: checked ? '' : null, disabled: disabled ? '' : null }),
 		E('span', {}, [ E('strong', {}, title), E('small', {}, description) ])
 	]);
 }
@@ -86,7 +92,7 @@ function saveBase64(filename, data) {
 
 return view.extend({
 	load() {
-		return Promise.all([ callSettingsStatus(), callSystemJobStatus(), callStatus(), callVpnJobStatus() ]);
+		return Promise.all([ callSettingsStatus(), callSystemJobStatus(), callStatus(), callVpnJobStatus(), callZapretStrategyStatus() ]);
 	},
 
 	render(data) {
@@ -94,6 +100,7 @@ return view.extend({
 		const initialJob = data[1];
 		const status = data[2];
 		const initialVpnJob = data[3];
+		const zapret = data[4] || { available: false, running: false, strategies: [] };
 		if (!status.setup_complete)
 			return E('div', {}, [
 				E('h2', {}, 'OUM'),
@@ -102,10 +109,20 @@ return view.extend({
 			]);
 		const wifi = settings.wifi || {};
 		const wan = settings.wan || {};
-		const engines = settings.engines || { current: 'none', supported: false, passwall: {}, openclash: {} };
+		const engines = settings.engines || { current: 'none', supported: false, passwall: {}, openclash: {}, podkop: {} };
 		const unmanagedTunnels = settings.unmanaged_tunnels || [];
-		const engineTitle = engines.current === 'passwall' ? 'PassWall' : (engines.current === 'openclash' ? 'OpenClash' : 'не установлен');
-		const sourceSupported = engines.current === 'openclash';
+		const engineTitle = engines.current === 'passwall' ? 'PassWall' : (engines.current === 'podkop' ? 'Podkop + Zapret' : (engines.current === 'openclash' ? 'OpenClash' : 'не установлен'));
+		const engineVersion = engines.current === 'passwall' ? engines.passwall.version : (engines.current === 'podkop' ? engines.podkop.version : engines.openclash.version);
+		const podkopInterfaces = Array.from(new Set([ engines.podkop?.interface || '', ...unmanagedTunnels.map((item) => item.name) ].filter(Boolean)));
+		const youtubeMode = engines.podkop?.youtube_mode || 'zapret';
+		const sourceSupported = engines.current === 'openclash' || engines.current === 'passwall';
+		const sourceHelp = engines.current === 'openclash' ?
+			'Новый источник полностью заменяет предыдущий OUM-профиль. При ошибке старый профиль восстанавливается.' :
+			(engines.current === 'podkop' ?
+				'Podkop использует отдельный сетевой туннель; выберите его в разделе VPN-движка выше.' :
+				(engines.current === 'passwall' ?
+					'PassWall принимает Subscription и Proxy через собственный парсер с резервной копией. AWG является отдельным туннелем и используется с Podkop + Zapret.' :
+					'Сначала установите VPN-движок. После успешной установки здесь появятся подходящие способы подключения.'));
 		const capabilities = settings.capabilities || {};
 		const meshState = !capabilities.mesh_driver ? 'Режим 802.11s не поддерживается радиодрайвером.' :
 			(capabilities.mesh_runtime ? 'Mesh поддерживается и программный компонент установлен.' : 'Радиомодуль поддерживает Mesh. Для включения потребуется безопасная установка wpad-mesh.');
@@ -113,17 +130,18 @@ return view.extend({
 			[ capabilities.usb_storage ? 'накопитель' : '', capabilities.usb_network ? 'сетевое устройство' : '', capabilities.usb_modem ? 'модем' : '' ].filter(Boolean).join(', ') || 'USB-порт доступен, подключённых устройств нет.';
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
+		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
 		const root = E('div', { 'class': 'oum-settings' }, [
 			E('style', {}, `
 				.oum-settings{max-width:1000px;margin:0 auto}.oum-page-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-page-head h2{margin:0}.oum-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.oum-settings-panel{border:1px solid #ccd3dc;border-radius:12px;padding:18px;margin-bottom:16px}.oum-settings-panel h3{margin-top:0}
-				.oum-setting-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.oum-setting-choice{display:flex;gap:9px;padding:12px;border:1px solid #ccd3dc;border-radius:9px;cursor:pointer}.oum-setting-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-setting-choice span{display:flex;flex-direction:column;gap:4px}.oum-setting-choice small,.oum-help{opacity:.7;line-height:1.45}
-				.oum-setting-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-setting-field{margin:11px 0}.oum-setting-field label{display:block;font-weight:600;margin-bottom:6px}.oum-setting-field input{width:100%;box-sizing:border-box}.oum-setting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.oum-job-state{padding:11px 13px;border-radius:8px;background:#eef4fa;margin:0 0 16px}.oum-job-state[data-state="failed"]{background:#ffe9e7}.oum-job-state[data-state="success"]{background:#e6f7eb}
+				.oum-setting-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.oum-setting-choice{display:flex;gap:9px;padding:12px;border:1px solid #ccd3dc;border-radius:9px;cursor:pointer}.oum-setting-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-setting-choice span{display:flex;flex-direction:column;gap:4px}.oum-setting-choice small,.oum-help{opacity:.7;line-height:1.45}.oum-source-choice.is-disabled{opacity:.5;cursor:not-allowed}
+				.oum-setting-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-setting-field{margin:11px 0}.oum-setting-field label{display:block;font-weight:600;margin-bottom:6px}.oum-setting-field input{width:100%;box-sizing:border-box}.oum-setting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.oum-job-state{padding:11px 13px;border-radius:8px;background:rgba(127,127,127,.1);margin:0 0 16px}.oum-job-state[data-state="failed"]{background:rgba(201,75,75,.16)}.oum-job-state[data-state="success"]{background:rgba(43,155,104,.16)}
 				.oum-maintenance{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.oum-maintenance-card{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
 				.oum-capability-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-capability{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-capability h4{margin:0 0 8px}.oum-capability-state{line-height:1.45}
-				.oum-engine-current{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px;border-radius:9px;background:#eef4fa;margin-bottom:14px}.oum-engine-current small{opacity:.7}.oum-engine-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-engine-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-engine-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-engine-choice span{display:flex;flex-direction:column;gap:5px}.oum-engine-choice small{opacity:.72;line-height:1.4}.oum-engine-choice.is-disabled{opacity:.55;cursor:not-allowed}.oum-engine-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
-				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:14px}.oum-inline-warning{padding:11px 13px;border:1px solid #e4b04d;background:#fff4df;border-radius:9px;margin:12px 0;line-height:1.45}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:#1677ff;background:#edf5ff}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}
-				.oum-vpn-input{margin:18px 0}.oum-vpn-input label{display:block;font-weight:600;margin-bottom:7px}.oum-vpn-input input,.oum-vpn-input textarea{width:100%;box-sizing:border-box}.oum-vpn-input textarea{min-height:180px;font-family:monospace}.oum-vpn-job{padding:12px;border-radius:8px;background:#eef4fa;margin:14px 0}.oum-vpn-job[data-state="failed"]{background:#ffe9e7}.oum-vpn-job[data-state="success"]{background:#e6f7eb}
-				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid,.oum-engine-choices{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
+				.oum-engine-current{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px;border-radius:9px;background:rgba(127,127,127,.1);margin-bottom:14px}.oum-engine-current small{opacity:.7}.oum-engine-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-engine-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-engine-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-engine-choice span{display:flex;flex-direction:column;gap:5px}.oum-engine-choice small{opacity:.72;line-height:1.4}.oum-engine-choice.is-disabled{opacity:.55;cursor:not-allowed}.oum-engine-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:14px}.oum-inline-warning{padding:11px 13px;border:1px solid #b28a29;background:rgba(178,138,41,.16);border-radius:9px;margin:12px 0;line-height:1.45}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}.oum-podkop-transports{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-transport-card{border:1px solid #ccd3dc;border-radius:11px;padding:14px}.oum-transport-card[data-active="true"]{border-color:#2b9b68}.oum-transport-card h4{margin:0 0 7px}.oum-transport-card textarea{width:100%;min-height:150px;font-family:monospace;box-sizing:border-box;margin:8px 0}
+				.oum-vpn-input{margin:18px 0}.oum-vpn-input label{display:block;font-weight:600;margin-bottom:7px}.oum-vpn-input input,.oum-vpn-input textarea{width:100%;box-sizing:border-box}.oum-vpn-input textarea{min-height:180px;font-family:monospace}.oum-vpn-job{padding:12px;border-radius:8px;background:rgba(127,127,127,.1);margin:14px 0}.oum-vpn-job[data-state="failed"]{background:rgba(201,75,75,.16)}.oum-vpn-job[data-state="success"]{background:rgba(43,155,104,.16)}
+				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid,.oum-engine-choices,.oum-podkop-transports{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
 			`),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('h2', {}, 'Настройки OUM'),
@@ -188,14 +206,14 @@ return view.extend({
 				E('div', { 'class': 'oum-protected-content' }, [
 					E('div', { 'class': 'oum-engine-current' }, [
 						E('span', {}, [ E('small', {}, 'Сейчас установлен'), E('br'), E('strong', {}, engineTitle) ]),
-						E('span', { 'class': 'oum-help' }, engines.current === 'passwall' ? (engines.passwall.version || '') : (engines.openclash.version || ''))
+						E('span', { 'class': 'oum-help' }, engineVersion || '')
 					]),
 					E('div', { 'class': 'oum-inline-warning', hidden: unmanagedTunnels.length ? null : '' }, unmanagedTunnels.length ?
 						`Найдены туннели вне OUM: ${unmanagedTunnels.map((item) => item.name).join(', ')}. Перед включением другого движка проверьте их маршруты.` : ''),
 					E('div', { 'class': 'oum-engine-choices' }, [
-						engineChoice('openclash', 'OpenClash', `Управляемый выпуск ${engines.openclash.target_version || ''}. Удобен для подписок, AWG и Proxy.`, engines.current === 'openclash', false),
+						engineChoice('openclash', 'OpenClash', `Управляемый выпуск ${engines.openclash.target_version || ''}. Удобен для подписок, AWG и прокси.`, engines.current === 'openclash', false),
 						engineChoice('passwall', 'PassWall', `Закреплённая версия ${engines.passwall.target_version || '26.5.11-r1'}. Тонкая маршрутизация через Xray.`, engines.current === 'passwall', false),
-						engineChoice('podkop', 'Podkop + Zapret', 'Появится после отдельного тестирования на основном роутере.', false, true)
+						engineChoice('podkop', 'Podkop + Zapret', `Podkop ${engines.podkop?.target_version || 'с AWG-туннелем'}. YouTube напрямую через Zapret.`, engines.current === 'podkop', false)
 					]),
 					E('p', { 'class': 'oum-help' }, `Перед заменой OUM проверяет полный комплект, сохраняет конфигурацию и только затем удаляет старые пакеты. При ошибке выполняется автоматический возврат.${engines.passwall.cache_ready ? ' Локальный комплект PassWall готов.' : ' Для приватной разработки комплект PassWall должен быть заранее загружен на роутер.'}`),
 					E('div', { 'class': 'oum-engine-actions' }, [
@@ -210,19 +228,66 @@ return view.extend({
 			}, [
 				E('summary', {}, 'Защищённое подключение'),
 				E('div', { 'class': 'oum-protected-content' }, [
-					E('p', { 'class': 'oum-help' }, sourceSupported ? 'Новый источник полностью заменяет предыдущий OUM-профиль. При ошибке старый профиль восстанавливается.' : 'Сейчас работает PassWall. Управление его существующими нодами доступно на главной; безопасный импорт новых источников добавим следующим этапом.'),
-					E('div', { 'class': 'oum-sources', hidden: sourceSupported ? null : '' }, [
-						sourceChoice('subscription', 'Subscription', 'Ссылка на набор серверов', selectedSource === 'subscription'),
-						sourceChoice('awg', 'AWG Tunnel', 'Конфигурация AmneziaWG', selectedSource === 'awg'),
-						sourceChoice('proxy', 'Proxy', 'VLESS Reality или Hysteria2', selectedSource === 'proxy')
+					E('div', { hidden: engines.current === 'podkop' ? null : '' }, [
+						E('h4', {}, 'Подключение Podkop'),
+						E('p', { 'class': 'oum-help' }, 'AWG и Reality взаимоисключающие: успешно проверенное новое подключение заменяет текущее.'),
+						E('div', { 'class': 'oum-podkop-transports' }, [
+							E('section', { 'class': 'oum-transport-card', 'data-active': engines.podkop?.transport !== 'reality' ? 'true' : 'false' }, [
+								E('h4', {}, 'AWG-туннель'),
+								E('p', { 'class': 'oum-help' }, 'DNS из файла игнорируется, маршрут по умолчанию не создаётся.'),
+								E('textarea', { id: 'podkop-awg-config', autocomplete: 'off', spellcheck: 'false', placeholder: '[Interface]\nPrivateKey = …\nAddress = …\n…\n\n[Peer]\nPublicKey = …\nEndpoint = …' }),
+								E('div', { 'class': 'oum-setting-actions' }, [
+									E('button', { 'class': 'btn cbi-button-action', id: 'import-podkop-awg', 'data-system-action': '' }, 'Импортировать AWG'),
+									E('select', { id: 'podkop-interface' }, podkopInterfaces.length ? podkopInterfaces.map((name) => E('option', { value: name, selected: name === engines.podkop?.interface ? '' : null }, name)) : E('option', { value: '' }, 'Туннель не найден')),
+									E('button', { 'class': 'btn', id: 'configure-podkop', 'data-system-action': '', disabled: podkopInterfaces.length ? null : '' }, 'Использовать выбранный')
+								])
+							]),
+							E('section', { 'class': 'oum-transport-card', 'data-active': engines.podkop?.transport === 'reality' ? 'true' : 'false' }, [
+								E('h4', {}, 'Reality-прокси'),
+								E('p', { 'class': 'oum-help' }, 'Одна полная VLESS Reality-ссылка. Секрет после сохранения не отображается.'),
+								E('textarea', { id: 'podkop-reality-config', autocomplete: 'off', spellcheck: 'false', placeholder: 'vless://UUID@server:443?security=reality&pbk=…&fp=…&sni=…' }),
+								E('button', { 'class': 'btn cbi-button-action', id: 'import-podkop-reality', 'data-system-action': '' }, 'Проверить и использовать Reality')
+							])
+						]),
+						E('hr'),
+						E('h4', {}, 'Маршрут YouTube'),
+						E('p', { 'class': 'oum-help' }, 'YouTube может идти напрямую через Zapret без расхода VPN-трафика либо через текущее защищённое подключение.'),
+						E('div', { 'class': 'oum-setting-choices' }, [
+							choice('youtube_mode', 'zapret', 'Напрямую + Zapret', 'Экономит VPN-трафик; используется выбранная DPI-стратегия.', youtubeMode === 'zapret'),
+							choice('youtube_mode', 'vpn', 'Через VPN', 'Zapret и его правила останавливаются; YouTube использует AWG или Reality.', youtubeMode === 'vpn')
+						]),
+						E('button', { 'class': 'btn cbi-button-action', id: 'apply-youtube-mode', 'data-system-action': '' }, 'Применить режим YouTube'),
+						E('hr'),
+						E('h4', {}, 'Стратегия Zapret'),
+						E('p', { 'class': 'oum-help' }, `Закреплённый каталог содержит ${zapret.catalog_total || 27} стратегий. Можно выбрать стратегию вручную или запустить автоподбор. Рабочим считается результат не хуже 3 из 4 проверок.`),
+						E('div', { 'class': 'oum-engine-current' }, [
+							E('span', {}, [ E('small', {}, 'Текущая стратегия'), E('br'), E('strong', { id: 'zapret-current' }, zapret.current || 'не выбрана OUM') ]),
+							E('span', { 'class': 'oum-help' }, zapret.last_total ? `Последняя проверка: ${zapret.last_ok}/${zapret.last_total} · ${zapret.last_elapsed_ms} мс` : (zapret.running ? 'Zapret работает' : 'Сначала настройте AWG и запустите Podkop'))
+						]),
+						E('div', { 'class': 'oum-setting-actions' }, [
+							E('select', { id: 'zapret-strategy' }, (zapret.strategies || []).map((item) => E('option', { value: item.id, selected: item.id === zapret.current ? '' : null }, item.label))),
+							E('button', { 'class': 'btn', id: 'zapret-apply', 'data-system-action': '' }, youtubeMode === 'vpn' ? 'Включить с выбранной' : 'Применить выбранную'),
+							E('button', { 'class': 'btn cbi-button-action', id: 'zapret-auto', 'data-system-action': '' }, youtubeMode === 'vpn' ? 'Подобрать и включить' : 'Подобрать автоматически'),
+							E('button', { 'class': 'btn', id: 'zapret-check', 'data-system-action': '', disabled: youtubeMode === 'zapret' && zapret.running ? null : '' }, 'Проверить текущую'),
+							E('button', { 'class': 'btn', id: 'zapret-restore', 'data-system-action': '', disabled: youtubeMode === 'zapret' && zapret.rollback ? null : '' }, 'Вернуть предыдущую')
+						]),
+						E('p', { 'class': 'oum-help', id: 'zapret-status' }, initialJob.action?.startsWith('zapret_') ? initialJob.message : (youtubeMode === 'vpn' ? 'Zapret сейчас остановлен. Ручной выбор или автоподбор одновременно переключит YouTube на прямое подключение.' : 'Во время автоподбора YouTube-соединения будут кратковременно перезапускаться.'))
 					]),
-					E('div', { 'class': 'oum-vpn-input', hidden: sourceSupported ? null : '' }, [
-						E('label', { id: 'source-label' }, ''),
-						E('input', { id: 'subscription-input', type: 'url', autocomplete: 'off', spellcheck: 'false' }),
-						E('textarea', { id: 'config-input', autocomplete: 'off', spellcheck: 'false', hidden: '' })
-					]),
-					E('div', { 'class': 'oum-vpn-job', id: 'vpn-job-status', 'data-state': initialVpnJob.state || 'idle' }, initialVpnJob.message || 'Готово к добавлению подключения.'),
-					E('button', { 'class': 'btn cbi-button-action', id: 'import-source', hidden: sourceSupported ? null : '', disabled: sourceSupported ? null : '' }, 'Проверить и активировать')
+					E('div', { hidden: sourceSupported ? null : '' }, [
+						E('p', { 'class': 'oum-help' }, sourceHelp),
+						E('div', { 'class': 'oum-sources' }, [
+							sourceChoice('subscription', 'Subscription', 'Ссылка на набор серверов', selectedSource === 'subscription', false),
+							...(engines.current === 'openclash' ? [ sourceChoice('awg', 'AWG Tunnel', 'Конфигурация AmneziaWG', selectedSource === 'awg', false) ] : []),
+							sourceChoice('proxy', 'Reality / Proxy', 'VLESS Reality, Hysteria2 и другие ссылки', selectedSource === 'proxy', false)
+						]),
+						E('div', { 'class': 'oum-vpn-input' }, [
+							E('label', { id: 'source-label' }, ''),
+							E('input', { id: 'subscription-input', type: 'url', autocomplete: 'off', spellcheck: 'false' }),
+							E('textarea', { id: 'config-input', autocomplete: 'off', spellcheck: 'false', hidden: '' })
+						]),
+						E('div', { 'class': 'oum-vpn-job', id: 'vpn-job-status', 'data-state': initialVpnJob.state || 'idle' }, initialVpnJob.message || 'Готово к добавлению подключения.'),
+						E('button', { 'class': 'btn cbi-button-action', id: 'import-source' }, 'Проверить и активировать')
+					])
 				])
 			]),
 			E('section', { 'class': 'oum-settings-panel' }, [
@@ -283,7 +348,10 @@ return view.extend({
 				if (status.state === 'running') return window.setTimeout(tick, 1500);
 				watching = false;
 				setBusy(false);
-				if (status.action === 'engine' && status.state === 'success')
+				const zapretStatus = root.querySelector('#zapret-status');
+				if (zapretStatus && status.action?.startsWith('zapret_'))
+					zapretStatus.textContent = status.message || 'Операция Zapret выполняется…';
+				if ((status.action === 'engine' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
 					window.setTimeout(() => window.location.reload(), 900);
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
@@ -325,13 +393,74 @@ return view.extend({
 			event.preventDefault();
 			const target = selected('vpn_engine');
 			if (!target || target === engines.current) return ui.addNotification(null, E('p', {}, 'Выберите другой VPN-движок.'), 'warning');
-			const title = target === 'passwall' ? 'PassWall' : 'OpenClash';
-			const saved = target === 'passwall' ? engines.passwall.saved : engines.openclash.saved;
+			const title = target === 'passwall' ? 'PassWall' : (target === 'podkop' ? 'Podkop + Zapret' : 'OpenClash');
+			const saved = target === 'passwall' ? engines.passwall.saved : (target === 'podkop' ? engines.podkop.saved : engines.openclash.saved);
 			const text = saved ? `OUM заменит пакеты и восстановит сохранённую конфигурацию ${title}. VPN кратковременно отключится.` :
 				`OUM установит ${title} без личной конфигурации. После замены VPN останется выключенным, пока вы не добавите подключение.`;
 			if (await confirmation(`Перейти на ${title}?`, text, 'Заменить движок', true))
 				start(callSwitchEngine(target));
 		});
+		const podkopButton = root.querySelector('#configure-podkop');
+		if (podkopButton) podkopButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			const iface = root.querySelector('#podkop-interface')?.value || '';
+			if (!iface) return ui.addNotification(null, E('p', {}, 'Не найден отдельный AWG/WireGuard-интерфейс.'), 'warning');
+			if (await confirmation('Запустить Podkop + Zapret?', `Трафик Russia inside пойдёт через ${iface}, а YouTube — напрямую через Zapret.`, 'Настроить', false))
+				start(callConfigurePodkop(iface));
+		});
+		const podkopAwgButton = root.querySelector('#import-podkop-awg');
+		if (podkopAwgButton) podkopAwgButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			const payload = root.querySelector('#podkop-awg-config')?.value.trim() || '';
+			if (!/^\s*\[Interface\]\s*$/mi.test(payload) || !/^\s*\[Peer\]\s*$/mi.test(payload))
+				return ui.addNotification(null, E('p', {}, 'Вставьте полный AWG-конфиг с секциями [Interface] и [Peer].'), 'warning');
+			if (await confirmation('Импортировать AWG?', 'OUM проверит пакеты и конфигурацию, создаст отдельный интерфейс oum_awg и запустит Podkop. При ошибке сеть будет восстановлена.', 'Импортировать', false))
+				start(callImportPodkopAwg(payload));
+		});
+		const podkopRealityButton = root.querySelector('#import-podkop-reality');
+		if (podkopRealityButton) podkopRealityButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			const payload = root.querySelector('#podkop-reality-config')?.value.trim() || '';
+			if (!/^vless:\/\/\S+$/i.test(payload) || !/[?&]security=reality(?:&|$)/i.test(payload))
+				return ui.addNotification(null, E('p', {}, 'Вставьте одну полную VLESS Reality-ссылку.'), 'warning');
+			if (await confirmation('Переключиться на Reality?', 'OUM проверит ссылку и реальный выход через прокси. AWG будет отключён только после успешной проверки.', 'Проверить Reality', false))
+				start(callImportPodkopReality(payload));
+		});
+		const runZapret = async (action) => {
+			const strategy = root.querySelector('#zapret-strategy')?.value || '';
+			if (youtubeMode === 'vpn' && (action === 'apply' || action === 'auto')) {
+				const manual = action === 'apply';
+				const text = manual ?
+					`YouTube будет переключён напрямую, затем OUM применит и проверит стратегию ${strategy}. Рабочим считается результат 3/4 или лучше.` :
+					'YouTube будет переключён напрямую, после чего OUM проверит текущую стратегию и при необходимости выполнит полный автоподбор.';
+				if (await confirmation('Включить Zapret?', text, manual ? 'Применить' : 'Начать подбор', false))
+					start(callSetPodkopYoutubeMode('zapret', manual ? strategy : ''));
+				return;
+			}
+			const descriptions = {
+				auto: 'OUM последовательно проверит 27 стратегий. Это займёт несколько минут и временно перезапустит YouTube-соединения.',
+				apply: `Стратегия ${strategy} будет применена и проверена. При ошибке вернётся предыдущая.`,
+				check: 'Будет проверена текущая стратегия без изменения конфигурации.',
+				restore: 'Будет восстановлена конфигурация Zapret до последнего выбора через OUM.'
+			};
+			if (await confirmation('Настроить Zapret?', descriptions[action], action === 'auto' ? 'Начать подбор' : 'Продолжить', action === 'restore'))
+				start(callStartZapretStrategy(action, strategy));
+		};
+		const youtubeModeButton = root.querySelector('#apply-youtube-mode');
+		if (youtubeModeButton) youtubeModeButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			const mode = selected('youtube_mode') || 'zapret';
+			if (mode === youtubeMode) return ui.addNotification(null, E('p', {}, 'Этот режим YouTube уже используется.'), 'warning');
+			const text = mode === 'vpn' ?
+				'YouTube будет направлен через текущее защищённое подключение. Zapret остановится, автозапуск и nftables-правила будут отключены.' :
+				'YouTube будет исключён из VPN. OUM запустит последнюю стратегию Zapret и проверит прямой доступ.';
+			if (await confirmation('Изменить маршрут YouTube?', text, 'Переключить', false))
+				start(callSetPodkopYoutubeMode(mode, ''));
+		});
+		for (const action of [ 'auto', 'apply', 'check', 'restore' ]) {
+			const button = root.querySelector(`#zapret-${action}`);
+			if (button) button.addEventListener('click', (event) => { event.preventDefault(); runZapret(action); });
+		}
 		importButton.addEventListener('click', (event) => {
 			event.preventDefault();
 			const payload = (selectedSource === 'subscription' ? urlInput.value : configInput.value).trim();
@@ -384,7 +513,9 @@ return view.extend({
 		root.querySelector('#reset-vpn').addEventListener('click', async () => {
 			const text = engines.current === 'passwall' ?
 				'PassWall будет остановлен, правила устройств OUM удалены, а конфигурация нод сохранена в защищённом снимке. Wi-Fi и WAN не изменятся.' :
-				'OpenClash будет остановлен, а активный OUM-профиль и правила устройств удалены. Wi-Fi и WAN не изменятся.';
+				(engines.current === 'podkop' ?
+					'Podkop и Zapret будут остановлены, правила устройств OUM удалены, а их конфигурация сохранена в защищённом снимке. AWG, Wi-Fi и WAN не изменятся.' :
+					'OpenClash будет остановлен, а активный OUM-профиль и правила устройств удалены. Wi-Fi и WAN не изменятся.');
 			if (await confirmation('Сбросить VPN?', text, 'Сбросить VPN', true)) start(callResetVpn());
 		});
 		root.querySelector('#reset-all').addEventListener('click', async () => {

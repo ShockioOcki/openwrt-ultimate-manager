@@ -22,6 +22,7 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-reset-first-run" /usr/libexec/oum-reset-fir
 cp "$SOURCE_DIR/root/usr/libexec/oum-mihomo-api" /usr/libexec/oum-mihomo-api
 cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-nodes" /usr/libexec/oum-passwall-nodes
 cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-policy" /usr/libexec/oum-passwall-policy
+cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-source-job" /usr/libexec/oum-passwall-source-job
 cp "$SOURCE_DIR/root/usr/libexec/oum-device-policy" /usr/libexec/oum-device-policy
 cp "$SOURCE_DIR/root/usr/libexec/oum-policy-yaml.rb" /usr/libexec/oum-policy-yaml.rb
 cp "$SOURCE_DIR/root/usr/libexec/oum-subscription-info" /usr/libexec/oum-subscription-info
@@ -30,29 +31,46 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-backup-codec.rb" /usr/libexec/oum-backup-co
 cp "$SOURCE_DIR/root/usr/libexec/oum-reset-vpn" /usr/libexec/oum-reset-vpn
 cp "$SOURCE_DIR/root/usr/libexec/oum-system-job" /usr/libexec/oum-system-job
 cp "$SOURCE_DIR/root/usr/libexec/oum-engine-manager" /usr/libexec/oum-engine-manager
+cp "$SOURCE_DIR/root/usr/libexec/oum-podkop-config" /usr/libexec/oum-podkop-config
+cp "$SOURCE_DIR/root/usr/libexec/oum-awg-manager" /usr/libexec/oum-awg-manager
+cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-strategy" /usr/libexec/oum-zapret-strategy
+cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-quic" /usr/libexec/oum-zapret-quic
+cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-manager" /usr/libexec/oum-zapret-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-login-default" /usr/libexec/oum-login-default
 cp "$REPO_DIR/dist/oum-test.sh" /usr/libexec/oum-runtime.sh
 cp "$REPO_DIR/helpers/source_converter.rb" /usr/libexec/oum/source_converter.rb
 rm -f /www/luci-static/resources/view/oum/first-run.js \
 	/www/luci-static/resources/view/oum/dashboard-v8.js \
-	/www/luci-static/resources/view/oum/settings-v2.js
+	/www/luci-static/resources/view/oum/dashboard-v9.js \
+	/www/luci-static/resources/view/oum/dashboard-v10.js \
+	/www/luci-static/resources/view/oum/settings-v2.js \
+	/www/luci-static/resources/view/oum/settings-v3.js
 cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/first-run-v2.js" /www/luci-static/resources/view/oum/first-run-v2.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/dashboard-v9.js" /www/luci-static/resources/view/oum/dashboard-v9.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/settings-v3.js" /www/luci-static/resources/view/oum/settings-v3.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/dashboard-v11.js" /www/luci-static/resources/view/oum/dashboard-v11.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/settings-v4.js" /www/luci-static/resources/view/oum/settings-v4.js
 
 chmod 600 /etc/config/oum
 chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/oum-reset-first-run \
 	/usr/libexec/oum-mihomo-api /usr/libexec/oum-passwall-nodes /usr/libexec/oum-passwall-policy /usr/libexec/oum-device-policy /usr/libexec/oum-policy-yaml.rb \
+	/usr/libexec/oum-passwall-source-job \
 	/usr/libexec/oum-subscription-info \
 	/usr/libexec/oum-backup /usr/libexec/oum-backup-codec.rb /usr/libexec/oum-reset-vpn \
 	/usr/libexec/oum-system-job \
 	/usr/libexec/oum-engine-manager \
+	/usr/libexec/oum-podkop-config \
+	/usr/libexec/oum-awg-manager \
+	/usr/libexec/oum-zapret-strategy \
+	/usr/libexec/oum-zapret-quic \
+	/usr/libexec/oum-zapret-manager \
 	/usr/libexec/oum-login-default \
 	/usr/libexec/oum-runtime.sh
 chmod 600 /usr/libexec/oum/source_converter.rb
+mkdir -p /usr/share/oum
+cp "$SOURCE_DIR/root/usr/share/oum/zapret-youtube-strategies" /usr/share/oum/zapret-youtube-strategies
+chmod 644 /usr/share/oum/zapret-youtube-strategies
 chmod 644 /usr/share/luci/menu.d/luci-app-oum.json /usr/share/ucode/luci/controller/oum.uc /usr/share/rpcd/acl.d/luci-app-oum.json \
 	/usr/share/rpcd/ucode/oum /www/luci-static/resources/view/oum/first-run-v2.js \
-	/www/luci-static/resources/view/oum/dashboard-v9.js /www/luci-static/resources/view/oum/settings-v3.js
+	/www/luci-static/resources/view/oum/dashboard-v11.js /www/luci-static/resources/view/oum/settings-v4.js
 
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
 /usr/libexec/oum-login-default

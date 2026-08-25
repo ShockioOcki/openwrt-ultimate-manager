@@ -1,0 +1,206 @@
+#!/bin/sh
+
+set -u
+umask 077
+
+JOB_DIR=/tmp/oum-vpn-job
+LOCK_DIR=/tmp/oum-vpn-job.lock
+STATUS_FILE="$JOB_DIR/status"
+PASSWALL_CONFIG=/etc/config/passwall
+PASSWALL_SUBSCRIBE=/usr/share/passwall/subscribe.lua
+ROLLBACK_DIR=/etc/oum/rollback
+ROLLBACK_CONFIG="$ROLLBACK_DIR/passwall-before-source"
+LOG=/tmp/oum-passwall-source.log
+GROUP=OUM
+SUBSCRIPTION=oum_subscription
+SHUNT=oum_shunt
+MUTATED=0
+SUCCESS=0
+WAS_ENABLED=0
+
+write_status() {
+	state="$1"
+	code="$2"
+	message="$3"
+	tmp="$STATUS_FILE.tmp"
+	printf 'state=%s\ncode=%s\nmessage=%s\n' "$state" "$code" "$message" > "$tmp"
+	mv "$tmp" "$STATUS_FILE"
+	chmod 600 "$STATUS_FILE"
+}
+
+restore_previous() {
+	[ "$MUTATED" = 1 ] || return 0
+	[ -s "$ROLLBACK_CONFIG" ] || return 0
+	/etc/init.d/passwall stop >/dev/null 2>&1 || true
+	cp "$ROLLBACK_CONFIG" "$PASSWALL_CONFIG"
+	chmod 600 "$PASSWALL_CONFIG"
+	if [ "$WAS_ENABLED" = 1 ]; then
+		/etc/init.d/passwall enable >/dev/null 2>&1 || true
+		/etc/init.d/passwall restart >> "$LOG" 2>&1 || true
+	else
+		/etc/init.d/passwall disable >/dev/null 2>&1 || true
+	fi
+}
+
+cleanup() {
+	set +e
+	[ "$SUCCESS" = 1 ] || restore_previous
+	rm -f "$JOB_DIR/input" "$JOB_DIR/subscription.data" /tmp/links.conf
+	rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+
+fail() {
+	write_status failed "$1" "$2"
+	exit 1
+}
+
+remove_managed_source() {
+	# PassWall marks subscription nodes with add_mode=2 and the subscription
+	# remark as their group. Its own truncate action also repairs references to
+	# removed nodes. Directly pasted OUM links use the same isolated group.
+	lua "$PASSWALL_SUBSCRIBE" truncate "$GROUP" >> "$LOG" 2>&1 || return 1
+	uci -q delete "passwall.$SUBSCRIPTION" || true
+	uci -q commit passwall
+}
+
+configure_subscription() {
+	url="$(sed -n '1p' "$input")"
+	case "$url" in http://*|https://*) ;; *) return 2 ;; esac
+	[ "$(wc -l < "$input")" -le 1 ] || return 2
+
+	write_status running downloading 'Загружаем подписку без передачи ссылки в журнал PassWall'
+	curl -fsSL --connect-timeout 15 --retry 2 --retry-delay 2 -o "$JOB_DIR/subscription.data" "$url" >> "$LOG" 2>&1 || return 3
+	[ -s "$JOB_DIR/subscription.data" ] || return 3
+
+	remove_managed_source || return 1
+	uci -q batch <<EOF
+set passwall.$SUBSCRIPTION=subscribe_list
+set passwall.$SUBSCRIPTION.remark='$GROUP'
+set passwall.$SUBSCRIPTION.url='$JOB_DIR/subscription.data'
+set passwall.$SUBSCRIPTION.allowInsecure='0'
+set passwall.$SUBSCRIPTION.filter_keyword_mode='1'
+add_list passwall.$SUBSCRIPTION.filter_discard_list='LTE'
+add_list passwall.$SUBSCRIPTION.filter_discard_list='Мобильный'
+add_list passwall.$SUBSCRIPTION.filter_discard_list='Авто'
+set passwall.$SUBSCRIPTION.ss_type='xray'
+set passwall.$SUBSCRIPTION.trojan_type='xray'
+set passwall.$SUBSCRIPTION.vmess_type='xray'
+set passwall.$SUBSCRIPTION.vless_type='xray'
+set passwall.$SUBSCRIPTION.hysteria2_type='xray'
+set passwall.$SUBSCRIPTION.boot_update='0'
+set passwall.$SUBSCRIPTION.auto_update='0'
+set passwall.$SUBSCRIPTION.user_agent='passwall'
+commit passwall
+EOF
+	lua "$PASSWALL_SUBSCRIBE" start "$SUBSCRIPTION" manual >> "$LOG" 2>&1 || return 1
+	# Keep the real URL only after parsing. During the import PassWall sees and
+	# logs the private local path instead of the credential-bearing URL.
+	uci -q set "passwall.$SUBSCRIPTION.url=$url"
+	uci -q commit passwall
+}
+
+configure_proxy() {
+	remove_managed_source || return 1
+	cp "$input" /tmp/links.conf || return 1
+	chmod 600 /tmp/links.conf
+	lua "$PASSWALL_SUBSCRIBE" add "$GROUP" >> "$LOG" 2>&1 || return 1
+}
+
+prune_managed_nodes() {
+	for section in $(uci -q show passwall | sed -n 's/^passwall\.\([^.=]*\)=nodes$/\1/p'); do
+		[ "$(uci -q get "passwall.$section.group")" = "$GROUP" ] || continue
+		remarks="$(uci -q get "passwall.$section.remarks")"
+		case "$remarks" in *LTE*|*Мобильный*|*Авто*|*⬇*|*🇪🇺*) uci -q delete "passwall.$section"; continue ;; esac
+		if printf '%s\n' "$remarks" | grep -Eq '(^|[[:space:]|_/-])SS([[:space:]|_/-]|$)'; then
+			uci -q delete "passwall.$section"
+		fi
+	done
+	uci -q commit passwall
+}
+
+first_managed_node() {
+	for section in $(uci -q show passwall | sed -n 's/^passwall\.\([^.=]*\)=nodes$/\1/p'); do
+		[ "$(uci -q get "passwall.$section.group")" = "$GROUP" ] || continue
+		case "$(uci -q get "passwall.$section.protocol")" in ''|_*) continue ;; esac
+		printf '%s\n' "$section"
+		return 0
+	done
+	return 1
+}
+
+activate_source() {
+	node="$(first_managed_node)" || return 1
+	[ -n "$node" ] || return 1
+	uci -q batch <<EOF
+set passwall.$SHUNT=nodes
+set passwall.$SHUNT.remarks='OUM Routing'
+set passwall.$SHUNT.type='Xray'
+set passwall.$SHUNT.protocol='_shunt'
+set passwall.$SHUNT.default_node='$node'
+set passwall.$SHUNT.domainStrategy='IPOnDemand'
+set passwall.@global[0].tcp_node='$SHUNT'
+set passwall.@global[0].udp_node='tcp'
+set passwall.@global[0].enabled='1'
+commit passwall
+EOF
+	/etc/init.d/passwall enable >/dev/null 2>&1 || true
+	/etc/init.d/passwall restart >> "$LOG" 2>&1 || return 1
+	waited=0
+	ready=0
+	while [ "$waited" -lt 60 ]; do
+		if pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1; then
+			ready=1
+			break
+		fi
+		sleep 1
+		waited=$((waited + 1))
+	done
+	[ "$ready" = 1 ] || return 1
+	if curl -4 -fsS --max-time 15 -o /dev/null https://www.gstatic.com/generate_204 >> "$LOG" 2>&1 ||
+		curl -4 -fsS --max-time 15 -o /dev/null https://cp.cloudflare.com/generate_204 >> "$LOG" 2>&1; then
+		printf '%s\n' "$node"
+		return 0
+	fi
+	return 1
+}
+
+kind="${1:-}"
+input="${2:-}"
+[ -d "$LOCK_DIR" ] || exit 3
+trap cleanup EXIT INT TERM
+
+case "$kind" in subscription|proxy) ;; awg) fail unsupported_type 'AWG используется как отдельный туннель. Для него выберите Podkop + Zapret.' ;; *) fail invalid_type 'Неизвестный тип подключения.' ;; esac
+[ "$input" = "$JOB_DIR/input" ] && [ -s "$input" ] || fail missing_input 'Данные подключения не найдены.'
+[ -s "$PASSWALL_CONFIG" ] && [ -x /etc/init.d/passwall ] && [ -r "$PASSWALL_SUBSCRIBE" ] || fail runtime_missing 'PassWall установлен не полностью.'
+command -v xray >/dev/null 2>&1 || fail runtime_missing 'Xray для PassWall не установлен.'
+
+: > "$LOG"
+mkdir -p "$ROLLBACK_DIR"
+cp "$PASSWALL_CONFIG" "$ROLLBACK_CONFIG" || fail backup_failed 'Не удалось сохранить текущую конфигурацию PassWall.'
+chmod 600 "$ROLLBACK_CONFIG"
+[ "$(uci -q get passwall.@global[0].enabled || echo 0)" = 1 ] && WAS_ENABLED=1
+MUTATED=1
+
+write_status running importing 'PassWall проверяет и импортирует источник'
+case "$kind" in
+	subscription)
+		configure_subscription
+		result=$?
+		[ "$result" != 2 ] || fail invalid_url 'Введите одну ссылку подписки http(s).'
+		[ "$result" != 3 ] || fail download_failed 'Не удалось загрузить подписку.'
+		[ "$result" = 0 ] || fail import_failed 'PassWall не смог разобрать подписку; прежняя конфигурация восстановлена.'
+		;;
+	proxy)
+		configure_proxy || fail import_failed 'PassWall не смог разобрать proxy-ссылки; прежняя конфигурация восстановлена.'
+		;;
+esac
+
+prune_managed_nodes
+
+write_status running activating 'Запускаем Xray и проверяем правила маршрутизации'
+node="$(activate_source)" || fail activation_failed 'Новый источник не запустился; прежняя конфигурация PassWall восстановлена.'
+uci -q set "oum.main.active_source=$kind"
+uci -q set oum.main.pending_source='none'
+uci -q commit oum
+SUCCESS=1
+write_status success active "PassWall активирован; выбрана нода $node"
