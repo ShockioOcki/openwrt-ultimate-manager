@@ -179,7 +179,7 @@ return view.extend({
 					if (!result.ok) throw new Error(result.message || 'Не удалось применить настройки.');
 					ui.showModal('Настройка завершена', [
 						E('p', {}, `Подключитесь к новой Wi-Fi сети ${networkNames}.`),
-						E('p', {}, 'Затем снова откройте 192.168.1.1 и войдите как admin с новым паролем панели.'),
+						E('p', {}, 'Затем снова откройте 192.168.5.1 и войдите как admin с новым паролем панели.'),
 						E('a', { 'class': 'btn cbi-button-action', 'href': L.url('oum', 'dashboard') }, 'Открыть OUM после подключения')
 					]);
 				}).catch((err) => ui.showModal('Ошибка', [ E('p', {}, err.message), E('button', { 'class': 'btn', 'click': ui.hideModal }, 'Закрыть') ]));
@@ -187,7 +187,7 @@ return view.extend({
 
 			ui.showModal('Wi-Fi будет перезапущен', [
 				E('p', {}, `После применения текущая сеть FirstRun отключится. Подключитесь к новой сети ${networkNames}.`),
-				E('p', { 'class': 'oum-note oum-warn' }, 'Запомните новое имя Wi-Fi и пароль. После переподключения откройте 192.168.1.1.'),
+				E('p', { 'class': 'oum-note oum-warn' }, 'Запомните новое имя Wi-Fi и пароль. После переподключения откройте 192.168.5.1.'),
 				E('div', { 'class': 'right' }, [
 					E('button', { 'class': 'btn', 'click': ui.hideModal }, 'Вернуться'),
 					' ',

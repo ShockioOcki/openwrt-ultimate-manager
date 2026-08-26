@@ -588,6 +588,10 @@ def apply_mass_routing(config)
 end
 
 def base_config
+  server = ENV.fetch('OUM_DNS_SERVER', '1.1.1.1')
+  bootstrap = ENV.fetch('OUM_BOOTSTRAP_DNS', '1.0.0.1')
+  allowed = %w[77.88.8.8 77.88.8.1 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 9.9.9.9 149.112.112.112]
+  abort 'unsupported OUM DNS server' unless allowed.include?(server) && allowed.include?(bootstrap)
   {
     'mixed-port' => 7890,
     'allow-lan' => true,
@@ -603,8 +607,8 @@ def base_config
       'enhanced-mode' => 'fake-ip',
       'fake-ip-range' => '198.18.0.1/16',
       'fake-ip-filter' => ['*.lan', '*.local'],
-      'default-nameserver' => ['1.1.1.1', '8.8.8.8'],
-      'nameserver' => ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query']
+      'default-nameserver' => [bootstrap],
+      'nameserver' => [server]
     }
   }
 end

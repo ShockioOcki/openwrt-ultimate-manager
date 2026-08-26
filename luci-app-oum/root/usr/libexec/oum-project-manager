@@ -1,0 +1,71 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-}"
+UPDATE_URL='https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/refs/heads/agent/podkop-zapret-engine/dist/oum-install.sh'
+BACKUP_DIR=/etc/oum/project-rollback
+INSTALLER=/tmp/oum-project-update.sh
+MANAGED_PATHS='etc/config/oum etc/oum/version etc/oum/base-packages usr/share/luci/menu.d/luci-app-oum.json usr/share/ucode/luci/controller/oum.uc usr/share/rpcd/acl.d/luci-app-oum.json usr/share/rpcd/ucode/oum usr/libexec/oum usr/share/oum www/luci-static/resources/view/oum'
+
+snapshot() {
+	mkdir -p "$BACKUP_DIR"
+	stamp="$(date +%Y%m%d-%H%M%S)"
+	version="$(cat /etc/oum/version 2>/dev/null | tr -cd 'A-Za-z0-9._-' || true)"
+	[ -n "$version" ] || version=development
+	archive="$BACKUP_DIR/oum-$version-$stamp.tar.gz"
+	set --
+	for relative in $MANAGED_PATHS; do
+		[ -e "/$relative" ] && set -- "$@" "$relative"
+	done
+	for absolute in /usr/libexec/oum-*; do
+		[ -e "$absolute" ] && set -- "$@" "${absolute#/}"
+	done
+	[ "$#" -gt 0 ] || return 1
+	tar -czf "$archive" -C / "$@"
+	chmod 600 "$archive"
+	ls -1t "$BACKUP_DIR"/oum-*.tar.gz 2>/dev/null | sed -n '3,$p' | xargs -r rm -f
+}
+
+latest_backup() {
+	ls -1t "$BACKUP_DIR"/oum-*.tar.gz 2>/dev/null | head -n 1
+}
+
+update_project() {
+	curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$INSTALLER" "$UPDATE_URL"
+	chmod 700 "$INSTALLER"
+	sh "$INSTALLER" --check
+	snapshot
+	sh "$INSTALLER" --install
+}
+
+rollback_project() {
+	archive="$(latest_backup)"
+	[ -n "$archive" ] && [ -f "$archive" ] || return 1
+	if tar -tzf "$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+		return 1
+	fi
+	tar -tzf "$archive" | grep -qx 'usr/share/rpcd/ucode/oum' || return 1
+	tar -tzf "$archive" | grep -qx 'usr/share/luci/menu.d/luci-app-oum.json' || return 1
+	rm -rf /usr/libexec/oum /usr/share/oum /www/luci-static/resources/view/oum
+	rm -f /usr/libexec/oum-* \
+		/usr/share/luci/menu.d/luci-app-oum.json \
+		/usr/share/ucode/luci/controller/oum.uc \
+		/usr/share/rpcd/acl.d/luci-app-oum.json \
+		/usr/share/rpcd/ucode/oum
+	tar -xzf "$archive" -C /
+	rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
+	/etc/init.d/rpcd restart
+	/etc/init.d/uhttpd restart
+}
+
+case "$ACTION" in
+	update) update_project ;;
+	rollback) rollback_project ;;
+	status)
+		printf 'version=%s\n' "$(cat /etc/oum/version 2>/dev/null || echo development)"
+		backup="$(latest_backup)"; printf 'rollback=%s\n' "${backup:-}"
+		;;
+	*) printf 'usage: %s {update|rollback|status}\n' "$0" >&2; exit 2 ;;
+esac

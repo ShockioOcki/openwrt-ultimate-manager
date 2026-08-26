@@ -1,0 +1,57 @@
+#!/bin/sh
+set -eu
+umask 077
+
+ACTION="${1:-}"
+MESH_ID="${2:-}"
+PASSWORD="${3:-}"
+BAND="${4:-}"
+BACKUP=/etc/oum/rollback/wireless-mesh
+
+case "$ACTION" in enable|disable) ;; *) exit 2 ;; esac
+
+mkdir -p /etc/oum/rollback
+cp /etc/config/wireless "$BACKUP"
+chmod 600 "$BACKUP"
+
+rollback() {
+	cp "$BACKUP" /etc/config/wireless
+	wifi reload >/dev/null 2>&1 || true
+}
+trap 'rollback' INT TERM
+
+if [ "$ACTION" = disable ]; then
+	uci -q delete wireless.oum_mesh || true
+	uci -q commit wireless
+	wifi reload >/dev/null 2>&1 || { rollback; exit 1; }
+	exit 0
+fi
+
+iw list 2>/dev/null | grep -q 'mesh point' || exit 1
+apk info 2>/dev/null | grep -Eq '^wpad(-(mesh-)?(mbedtls|openssl|wolfssl))?-' || exit 1
+case "$BAND" in 2g|5g) ;; *) exit 2 ;; esac
+[ -n "$MESH_ID" ] && [ "${#MESH_ID}" -le 32 ] || exit 2
+[ "${#PASSWORD}" -ge 8 ] && [ "${#PASSWORD}" -le 63 ] || exit 2
+
+radio=''
+for candidate in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-device$/\1/p'); do
+	[ "$(uci -q get "wireless.$candidate.band" || true)" = "$BAND" ] || continue
+	radio="$candidate"
+	break
+done
+[ -n "$radio" ] || exit 1
+
+uci -q delete wireless.oum_mesh || true
+uci -q set wireless.oum_mesh='wifi-iface'
+uci -q set "wireless.oum_mesh.device=$radio"
+uci -q set wireless.oum_mesh.mode='mesh'
+uci -q set wireless.oum_mesh.network='lan'
+uci -q set "wireless.oum_mesh.mesh_id=$MESH_ID"
+uci -q set wireless.oum_mesh.encryption='sae'
+uci -q set "wireless.oum_mesh.key=$PASSWORD"
+uci -q set wireless.oum_mesh.mesh_fwding='1'
+uci -q set wireless.oum_mesh.disabled='0'
+uci -q commit wireless
+wifi reload >/dev/null 2>&1 || { rollback; exit 1; }
+sleep 2
+iw dev 2>/dev/null | grep -q 'type mesh point' || { rollback; exit 1; }

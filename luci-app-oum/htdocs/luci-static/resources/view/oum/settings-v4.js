@@ -5,6 +5,7 @@
 
 const callSettingsStatus = rpc.declare({ object: 'oum', method: 'settingsStatus', expect: { '': {} } });
 const callSystemJobStatus = rpc.declare({ object: 'oum', method: 'systemJobStatus', expect: { '': {} } });
+const callClearSystemJobStatus = rpc.declare({ object: 'oum', method: 'clearSystemJobStatus', params: [ 'action', 'code' ], expect: { '': {} } });
 const callStatus = rpc.declare({ object: 'oum', method: 'status', expect: { '': {} } });
 const callVpnJobStatus = rpc.declare({ object: 'oum', method: 'vpnJobStatus', expect: { '': {} } });
 const callStartVpnImport = rpc.declare({
@@ -16,8 +17,12 @@ const callApplyWifi = rpc.declare({
 const callApplyWan = rpc.declare({
 	object: 'oum', method: 'applyWanSettings', params: [ 'wan_type', 'pppoe_user', 'pppoe_password' ], expect: { '': {} }
 });
+const callApplyLan = rpc.declare({ object: 'oum', method: 'applyLanSettings', params: [ 'address' ], expect: { '': {} } });
+const callApplyMesh = rpc.declare({ object: 'oum', method: 'applyMeshSettings', params: [ 'enabled', 'mesh_id', 'password', 'band' ], expect: { '': {} } });
+const callInstallMeshRuntime = rpc.declare({ object: 'oum', method: 'installMeshRuntime', expect: { '': {} } });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
 const callSwitchEngine = rpc.declare({ object: 'oum', method: 'switchVpnEngine', params: [ 'engine' ], expect: { '': {} } });
+const callSetEngineDnsPreferences = rpc.declare({ object: 'oum', method: 'setEngineDnsPreferences', params: [ 'openclash', 'bootstrap_openclash', 'passwall', 'bootstrap_passwall', 'podkop', 'bootstrap_podkop' ], expect: { '': {} } });
 const callConfigurePodkop = rpc.declare({ object: 'oum', method: 'configurePodkop', params: [ 'interface' ], expect: { '': {} } });
 const callImportPodkopAwg = rpc.declare({ object: 'oum', method: 'importPodkopAwg', params: [ 'payload' ], expect: { '': {} } });
 const callImportPodkopReality = rpc.declare({ object: 'oum', method: 'importPodkopReality', params: [ 'payload' ], expect: { '': {} } });
@@ -28,6 +33,8 @@ const callCreateBackup = rpc.declare({ object: 'oum', method: 'createBackup', ex
 const callRestoreBackup = rpc.declare({ object: 'oum', method: 'restoreBackup', params: [ 'data' ], expect: { '': {} } });
 const callResetVpn = rpc.declare({ object: 'oum', method: 'resetVpn', expect: { '': {} } });
 const callResetFirstRun = rpc.declare({ object: 'oum', method: 'resetFirstRun', expect: { '': {} } });
+const callUpdateProject = rpc.declare({ object: 'oum', method: 'updateProject', expect: { '': {} } });
+const callRollbackProject = rpc.declare({ object: 'oum', method: 'rollbackProject', expect: { '': {} } });
 
 function choice(name, value, title, description, checked) {
 	return E('label', { 'class': 'oum-setting-choice' }, [
@@ -52,6 +59,20 @@ function engineChoice(value, title, description, checked, disabled) {
 
 function field(label, input) {
 	return E('div', { 'class': 'oum-setting-field' }, [ E('label', {}, label), input ]);
+}
+
+function dnsSelect(id, value) {
+	const options = [
+		[ '77.88.8.8', 'Яндекс — 77.88.8.8' ],
+		[ '77.88.8.1', 'Яндекс — 77.88.8.1' ],
+		[ '1.1.1.1', 'Cloudflare — 1.1.1.1' ],
+		[ '1.0.0.1', 'Cloudflare — 1.0.0.1' ],
+		[ '8.8.8.8', 'Google — 8.8.8.8' ],
+		[ '8.8.4.4', 'Google — 8.8.4.4' ],
+		[ '9.9.9.9', 'Quad9 — 9.9.9.9' ],
+		[ '149.112.112.112', 'Quad9 — 149.112.112.112' ]
+	];
+	return E('select', { id }, options.map(([ server, label ]) => E('option', { value: server, selected: value === server ? '' : null }, label)));
 }
 
 function resultError(result, fallback) {
@@ -109,6 +130,15 @@ return view.extend({
 			]);
 		const wifi = settings.wifi || {};
 		const wan = settings.wan || {};
+		const lan = settings.lan || { address: '192.168.5.1', prefix: 24, rollback: false, rollback_address: '' };
+		const mesh = settings.mesh || { enabled: false, id: '', band: '5g' };
+		const project = settings.project || { version: 'development', rollback: false };
+		const projectUpdatable = project.version && project.version !== 'development';
+		const dns = settings.dns || {
+			openclash: '1.1.1.1', bootstrap_openclash: '1.0.0.1',
+			passwall: '1.1.1.1', bootstrap_passwall: '1.0.0.1',
+			podkop: '77.88.8.8', bootstrap_podkop: '77.88.8.1'
+		};
 		const engines = settings.engines || { current: 'none', supported: false, passwall: {}, openclash: {}, podkop: {} };
 		const unmanagedTunnels = settings.unmanaged_tunnels || [];
 		const engineTitle = engines.current === 'passwall' ? 'PassWall' : (engines.current === 'podkop' ? 'Podkop + Zapret' : (engines.current === 'openclash' ? 'OpenClash' : 'не установлен'));
@@ -125,7 +155,9 @@ return view.extend({
 					'Сначала установите VPN-движок. После успешной установки здесь появятся подходящие способы подключения.'));
 		const capabilities = settings.capabilities || {};
 		const meshState = !capabilities.mesh_driver ? 'Режим 802.11s не поддерживается радиодрайвером.' :
-			(capabilities.mesh_runtime ? 'Mesh поддерживается и программный компонент установлен.' : 'Радиомодуль поддерживает Mesh. Для включения потребуется безопасная установка wpad-mesh.');
+			(capabilities.mesh_runtime ? 'Mesh поддерживается и программный компонент установлен.' :
+				(capabilities.mesh_runtime_bundle ? 'Радиомодуль поддерживает Mesh. Совместимый компонент готов к установке.' : 'Радиомодуль поддерживает Mesh, но для этой прошивки нет проверенного комплекта.'));
+		const meshReady = capabilities.mesh_driver === true && capabilities.mesh_runtime === true;
 		const usbState = !capabilities.usb_host ? 'USB-контроллер не обнаружен.' :
 			[ capabilities.usb_storage ? 'накопитель' : '', capabilities.usb_network ? 'сетевое устройство' : '', capabilities.usb_modem ? 'модем' : '' ].filter(Boolean).join(', ') || 'USB-порт доступен, подключённых устройств нет.';
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
@@ -135,20 +167,21 @@ return view.extend({
 			E('style', {}, `
 				.oum-settings{max-width:1000px;margin:0 auto}.oum-page-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-page-head h2{margin:0}.oum-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.oum-settings-panel{border:1px solid #ccd3dc;border-radius:12px;padding:18px;margin-bottom:16px}.oum-settings-panel h3{margin-top:0}
 				.oum-setting-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.oum-setting-choice{display:flex;gap:9px;padding:12px;border:1px solid #ccd3dc;border-radius:9px;cursor:pointer}.oum-setting-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-setting-choice span{display:flex;flex-direction:column;gap:4px}.oum-setting-choice small,.oum-help{opacity:.7;line-height:1.45}.oum-source-choice.is-disabled{opacity:.5;cursor:not-allowed}
-				.oum-setting-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-setting-field{margin:11px 0}.oum-setting-field label{display:block;font-weight:600;margin-bottom:6px}.oum-setting-field input{width:100%;box-sizing:border-box}.oum-setting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.oum-job-state{padding:11px 13px;border-radius:8px;background:rgba(127,127,127,.1);margin:0 0 16px}.oum-job-state[data-state="failed"]{background:rgba(201,75,75,.16)}.oum-job-state[data-state="success"]{background:rgba(43,155,104,.16)}
-				.oum-maintenance{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.oum-maintenance-card{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
+				.oum-setting-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-setting-field{margin:11px 0}.oum-setting-field label{display:block;font-weight:600;margin-bottom:6px}.oum-setting-field input,.oum-setting-field select{width:100%;min-height:42px;box-sizing:border-box}.oum-setting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.oum-job-state{padding:11px 13px;border-radius:8px;background:rgba(127,127,127,.1);margin:0 0 16px}.oum-job-state[data-state="idle"]{display:none}.oum-job-state[data-state="failed"]{background:rgba(201,75,75,.16)}.oum-job-state[data-state="success"]{background:rgba(43,155,104,.16)}
+				.oum-maintenance{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.oum-maintenance-card{border:1px solid #d8dde5;border-radius:10px;padding:14px;min-width:0}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
 				.oum-capability-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-capability{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-capability h4{margin:0 0 8px}.oum-capability-state{line-height:1.45}
 				.oum-engine-current{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px;border-radius:9px;background:rgba(127,127,127,.1);margin-bottom:14px}.oum-engine-current small{opacity:.7}.oum-engine-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-engine-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-engine-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-engine-choice span{display:flex;flex-direction:column;gap:5px}.oum-engine-choice small{opacity:.72;line-height:1.4}.oum-engine-choice.is-disabled{opacity:.55;cursor:not-allowed}.oum-engine-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+				.oum-dns-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.oum-dns-engine{min-width:0;border-top:1px solid #d8dde5;padding-top:12px}.oum-dns-engine h4{margin:0 0 4px}.oum-dns-engine .oum-setting-field{margin:10px 0}.oum-dns-engine .oum-help{display:block;overflow-wrap:anywhere}
 				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:14px}.oum-inline-warning{padding:11px 13px;border:1px solid #b28a29;background:rgba(178,138,41,.16);border-radius:9px;margin:12px 0;line-height:1.45}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}.oum-podkop-transports{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-transport-card{border:1px solid #ccd3dc;border-radius:11px;padding:14px}.oum-transport-card[data-active="true"]{border-color:#2b9b68}.oum-transport-card h4{margin:0 0 7px}.oum-transport-card textarea{width:100%;min-height:150px;font-family:monospace;box-sizing:border-box;margin:8px 0}
 				.oum-vpn-input{margin:18px 0}.oum-vpn-input label{display:block;font-weight:600;margin-bottom:7px}.oum-vpn-input input,.oum-vpn-input textarea{width:100%;box-sizing:border-box}.oum-vpn-input textarea{min-height:180px;font-family:monospace}.oum-vpn-job{padding:12px;border-radius:8px;background:rgba(127,127,127,.1);margin:14px 0}.oum-vpn-job[data-state="failed"]{background:rgba(201,75,75,.16)}.oum-vpn-job[data-state="success"]{background:rgba(43,155,104,.16)}
-				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid,.oum-engine-choices,.oum-podkop-transports{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
+				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid,.oum-engine-choices,.oum-dns-grid,.oum-podkop-transports{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
 			`),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('h2', {}, 'Настройки OUM'),
 				E('a', { 'class': 'btn cbi-button', href: L.url('oum', 'logout') }, 'Выйти')
 			]),
 			E('p', { 'class': 'oum-help' }, 'Пароли не показываются в браузере. Оставьте поле пароля пустым, чтобы сохранить действующий.'),
-			E('div', { id: 'system-job', 'class': 'oum-job-state', 'data-state': initialJob.state || 'idle' }, initialJob.message || 'Системные операции не выполняются.'),
+			E('div', { id: 'system-job', 'class': 'oum-job-state', role: 'status', 'aria-live': 'polite', 'data-state': initialJob.state || 'idle' }, initialJob.message || ''),
 			E('div', { 'class': 'oum-settings-grid' }, [
 				E('section', { 'class': 'oum-settings-panel' }, [
 					E('h3', {}, 'Wi-Fi'),
@@ -188,6 +221,17 @@ return view.extend({
 			E('details', { 'class': 'oum-settings-panel oum-protected' }, [
 				E('summary', {}, 'Расширение сети'),
 				E('div', { 'class': 'oum-protected-content' }, [
+					E('h4', {}, 'Локальный адрес роутера'),
+					E('p', { 'class': 'oum-help' }, 'Используется частная подсеть /24. Она не должна совпадать с WAN-подсетью вышестоящего роутера.'),
+					E('div', { 'class': 'oum-setting-fields' }, [
+						field('LAN IPv4', E('input', { id: 'lan-address', inputmode: 'decimal', maxlength: 15, value: lan.address || '192.168.5.1', placeholder: '192.168.5.1' })),
+						field('Маска', E('input', { value: '/24 — 255.255.255.0', disabled: '' }))
+					]),
+					E('div', { 'class': 'oum-setting-actions' }, [
+						E('button', { 'class': 'btn cbi-button-action', id: 'apply-lan', 'data-system-action': '' }, 'Изменить LAN-адрес'),
+						E('button', { 'class': 'btn', id: 'rollback-lan', 'data-system-action': '', disabled: lan.rollback ? null : '' }, lan.rollback_address ? `Вернуть ${lan.rollback_address}` : 'Вернуть предыдущий')
+					]),
+					E('hr'),
 					E('div', { 'class': 'oum-capability-grid' }, [
 						E('div', { 'class': 'oum-capability' }, [
 							E('h4', {}, 'Mesh'),
@@ -198,7 +242,24 @@ return view.extend({
 							E('div', { 'class': 'oum-capability-state' }, usbState)
 						])
 					]),
-					E('p', { 'class': 'oum-help' }, 'OUM только определяет возможности. Кнопки настройки появятся после проверки Mesh и USB-оборудования.')
+					E('h4', {}, 'Mesh 802.11s'),
+					E('p', { 'class': 'oum-help' }, meshReady ? 'Создаётся отдельный mesh point в LAN; обычная точка доступа Wi-Fi остаётся включённой.' : 'Опция подготовлена, но заблокирована до установки совместимого wpad-mesh той же ревизии, что и hostapd-common.'),
+					...(!meshReady && capabilities.mesh_runtime_bundle ? [ E('div', { 'class': 'oum-setting-actions' }, [
+						E('button', { 'class': 'btn cbi-button-action', id: 'install-mesh-runtime', 'data-system-action': '' }, 'Установить поддержку Mesh'),
+						E('span', { 'class': 'oum-help' }, 'Wi-Fi перезапустится на несколько секунд. При ошибке OUM вернёт исходный компонент.')
+					]) ] : []),
+					E('div', { 'class': 'oum-setting-fields' }, [
+						field('Имя Mesh', E('input', { id: 'mesh-id', maxlength: 32, value: mesh.id || '', placeholder: 'HomeMesh', disabled: meshReady ? null : '' })),
+						field('Диапазон', E('select', { id: 'mesh-band', disabled: meshReady ? null : '' }, [
+							E('option', { value: '5g', selected: mesh.band !== '2g' ? '' : null }, '5 ГГц — рекомендуется'),
+							E('option', { value: '2g', selected: mesh.band === '2g' ? '' : null }, '2,4 ГГц — больше дальность')
+						])),
+						field('Пароль Mesh', E('input', { id: 'mesh-password', type: 'password', minlength: 8, maxlength: 63, autocomplete: 'new-password', placeholder: mesh.enabled ? 'Задайте заново для изменения' : 'Минимум 8 символов', disabled: meshReady ? null : '' }))
+					]),
+					E('div', { 'class': 'oum-setting-actions' }, [
+						E('button', { 'class': 'btn cbi-button-action', id: 'enable-mesh', 'data-system-action': '', disabled: meshReady ? null : '' }, mesh.enabled ? 'Обновить Mesh' : 'Включить Mesh'),
+						E('button', { 'class': 'btn', id: 'disable-mesh', 'data-system-action': '', disabled: mesh.enabled ? null : '' }, 'Отключить Mesh')
+					])
 				])
 			]),
 			E('details', { 'class': 'oum-settings-panel oum-protected', open: '' }, [
@@ -222,6 +283,36 @@ return view.extend({
 					])
 				])
 			]),
+			E('details', { 'class': 'oum-settings-panel oum-protected' }, [
+					E('summary', {}, 'DNS для VPN'),
+					E('div', { 'class': 'oum-protected-content' }, [
+					E('p', { 'class': 'oum-help' }, 'Основной DNS обрабатывает запросы клиентов. Bootstrap DNS разрешает адрес вышестоящего DNS и помогает запустить его без циклической зависимости. Значения хранятся отдельно для каждого движка.'),
+					E('div', { 'class': 'oum-dns-grid' }, [
+						E('section', { 'class': 'oum-dns-engine' }, [
+							E('h4', {}, 'OpenClash'),
+							field('Основной DNS', dnsSelect('dns-openclash', dns.openclash)),
+							field('Bootstrap DNS', dnsSelect('bootstrap-dns-openclash', dns.bootstrap_openclash)),
+							E('small', { 'class': 'oum-help' }, 'Bootstrap записывается в default-nameserver профиля Mihomo.')
+						]),
+						E('section', { 'class': 'oum-dns-engine' }, [
+							E('h4', {}, 'PassWall'),
+							field('Основной DNS', dnsSelect('dns-passwall', dns.passwall)),
+							field('Bootstrap DNS', dnsSelect('bootstrap-dns-passwall', dns.bootstrap_passwall)),
+							E('small', { 'class': 'oum-help' }, 'Bootstrap используется как прямой DNS для поиска удалённого DNS.')
+						]),
+						E('section', { 'class': 'oum-dns-engine' }, [
+							E('h4', {}, 'Podkop + Zapret'),
+							field('Основной DNS', dnsSelect('dns-podkop', dns.podkop)),
+							field('Bootstrap DNS', dnsSelect('bootstrap-dns-podkop', dns.bootstrap_podkop)),
+							E('small', { 'class': 'oum-help' }, 'Используется штатный параметр bootstrap_dns_server Podkop.')
+						])
+						]),
+						E('div', { 'class': 'oum-setting-actions' }, [
+							E('button', { 'class': 'btn cbi-button-action', id: 'apply-engine-dns', 'data-system-action': '' }, 'Применить DNS'),
+							E('span', { 'class': 'oum-help' }, `Все пары сохранятся отдельно; ${engineTitle} будет перезапущен сейчас.`)
+						])
+					])
+				]),
 			E('details', {
 				'class': 'oum-settings-panel oum-protected',
 				open: status.pending_source !== 'none' && status.active_source === 'none' ? '' : null
@@ -291,8 +382,18 @@ return view.extend({
 				])
 			]),
 			E('section', { 'class': 'oum-settings-panel' }, [
-				E('h3', {}, 'Резервная копия и сброс'),
+				E('h3', {}, 'Обслуживание OUM'),
 				E('div', { 'class': 'oum-maintenance' }, [
+					E('div', { 'class': 'oum-maintenance-card' }, [
+						E('h4', {}, 'Обновление проекта'),
+						E('p', { 'class': 'oum-help' }, projectUpdatable ?
+							`Установлена версия ${project.version}. Перед обновлением OUM автоматически сохраняет предыдущую версию интерфейса и служб.` :
+							'Установлена локальная версия для разработки. Онлайн-обновление станет доступно после установки опубликованной сборки.'),
+						E('div', { 'class': 'oum-setting-actions' }, [
+							E('button', { 'class': 'btn cbi-button-action', id: 'update-project', disabled: projectUpdatable ? null : '', 'data-system-action': '' }, 'Проверить и обновить'),
+							E('button', { 'class': 'btn', id: 'rollback-project', disabled: project.rollback ? null : '', 'data-system-action': '' }, 'Откатить версию')
+						])
+					]),
 					E('div', { 'class': 'oum-maintenance-card' }, [
 						E('h4', {}, 'Резервная копия'),
 					E('p', { 'class': 'oum-help' }, `Сохраняет сеть, Wi-Fi, OUM и конфигурацию текущего движка ${engineTitle}. Файл содержит секреты и не зашифрован.`),
@@ -337,8 +438,11 @@ return view.extend({
 		});
 		const paintStatus = (status) => {
 			statusNode.dataset.state = status.state || 'idle';
-			statusNode.textContent = status.message || 'Системные операции не выполняются.';
+			statusNode.textContent = status.message || '';
 		};
+		const acknowledgeStatus = (status) => callClearSystemJobStatus(status.action || '', status.code || '')
+			.then((result) => result?.ok === true ? true : false)
+			.catch(() => false);
 		const watchJob = () => {
 			if (watching) return;
 			watching = true;
@@ -351,8 +455,8 @@ return view.extend({
 				const zapretStatus = root.querySelector('#zapret-status');
 				if (zapretStatus && status.action?.startsWith('zapret_'))
 					zapretStatus.textContent = status.message || 'Операция Zapret выполняется…';
-				if ((status.action === 'engine' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
-					window.setTimeout(() => window.location.reload(), 900);
+				if ((status.action === 'engine' || status.action === 'dns' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
+					acknowledgeStatus(status).finally(() => window.setTimeout(() => window.location.reload(), 900));
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
 		};
@@ -399,6 +503,69 @@ return view.extend({
 				`OUM установит ${title} без личной конфигурации. После замены VPN останется выключенным, пока вы не добавите подключение.`;
 			if (await confirmation(`Перейти на ${title}?`, text, 'Заменить движок', true))
 				start(callSwitchEngine(target));
+		});
+		root.querySelector('#apply-engine-dns').addEventListener('click', async (event) => {
+			event.preventDefault();
+			if (engines.current === 'none') return ui.addNotification(null, E('p', {}, 'Сначала установите VPN-движок.'), 'warning');
+			const values = [
+				value('#dns-openclash'), value('#bootstrap-dns-openclash'),
+				value('#dns-passwall'), value('#bootstrap-dns-passwall'),
+				value('#dns-podkop'), value('#bootstrap-dns-podkop')
+			];
+			const offset = [ 'openclash', 'passwall', 'podkop' ].indexOf(engines.current) * 2;
+			const activeServer = values[offset];
+			const activeBootstrap = values[offset + 1];
+			if (await confirmation('Изменить DNS?', `Для ${engineTitle} сейчас будут применены основной DNS ${activeServer} и Bootstrap DNS ${activeBootstrap}; VPN кратковременно перезапустится.`, 'Применить', false))
+				start(callSetEngineDnsPreferences(...values));
+		});
+		root.querySelector('#apply-lan').addEventListener('click', async (event) => {
+			event.preventDefault();
+			const address = value('#lan-address');
+			if (!await confirmation('Изменить LAN-адрес?', `Через несколько секунд панель станет доступна по адресу http://${address}/. Текущее соединение с роутером прервётся.`, 'Изменить адрес', true)) return;
+			setBusy(true);
+			callApplyLan(address).then((result) => {
+				resultError(result, 'Не удалось запустить смену LAN-адреса.');
+				ui.showModal('Переподключитесь к роутеру', [
+					E('p', {}, `LAN изменяется на ${address}/24. Подождите около 10 секунд и получите новый адрес по DHCP.`),
+					E('a', { 'class': 'btn cbi-button-action', href: `http://${address}/cgi-bin/luci/oum` }, `Открыть ${address}`)
+				]);
+			}).catch((error) => {
+				setBusy(false);
+				ui.addNotification(null, E('p', {}, error.message), 'error');
+			});
+		});
+		root.querySelector('#rollback-lan').addEventListener('click', async (event) => {
+			event.preventDefault();
+			const previous = lan.rollback_address || 'предыдущему адресу';
+			if (!await confirmation('Вернуть LAN-адрес?', `Текущее соединение прервётся. После перезапуска сети откройте роутер по адресу ${previous}.`, 'Восстановить', true)) return;
+			setBusy(true);
+			callRollback('lan').then((result) => {
+				resultError(result, 'Не удалось запустить восстановление LAN-адреса.');
+				ui.showModal('LAN восстанавливается', [ E('p', {}, `Подождите около 10 секунд и откройте роутер по адресу ${previous}.`) ]);
+			}).catch((error) => {
+				setBusy(false);
+				ui.addNotification(null, E('p', {}, error.message), 'error');
+			});
+		});
+		root.querySelector('#enable-mesh').addEventListener('click', async (event) => {
+			event.preventDefault();
+			const meshId = value('#mesh-id');
+			const password = value('#mesh-password');
+			const band = value('#mesh-band');
+			if (!meshId || password.length < 8) return ui.addNotification(null, E('p', {}, 'Введите имя Mesh и пароль минимум из 8 символов.'), 'warning');
+			if (await confirmation('Включить Mesh?', `Будет создан отдельный Mesh ${meshId} в диапазоне ${band === '5g' ? '5 ГГц' : '2,4 ГГц'}. Точки доступа останутся включены.`, mesh.enabled ? 'Обновить' : 'Включить', false))
+				start(callApplyMesh(1, meshId, password, band));
+		});
+		const meshRuntimeButton = root.querySelector('#install-mesh-runtime');
+		if (meshRuntimeButton) meshRuntimeButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			if (await confirmation('Установить поддержку Mesh?', 'Обычные точки Wi-Fi будут недоступны несколько секунд. OUM проверит версию и контрольные суммы; при ошибке выполнит откат.', 'Установить', false))
+				start(callInstallMeshRuntime());
+		});
+		root.querySelector('#disable-mesh').addEventListener('click', async (event) => {
+			event.preventDefault();
+			if (await confirmation('Отключить Mesh?', 'Будет удалён только управляемый интерфейс OUM Mesh. Обычный Wi-Fi останется включён.', 'Отключить', true))
+				start(callApplyMesh(0, '', '', mesh.band || '5g'));
 		});
 		const podkopButton = root.querySelector('#configure-podkop');
 		if (podkopButton) podkopButton.addEventListener('click', async (event) => {
@@ -510,6 +677,14 @@ return view.extend({
 			if (!await confirmation('Восстановить копию?', 'Сеть, Wi-Fi, OUM и VPN будут заменены данными из файла. При ошибке текущие настройки сохранятся.', 'Восстановить', true)) return;
 			start(file.text().then((content) => callRestoreBackup(content.trim())));
 		});
+		root.querySelector('#update-project').addEventListener('click', async () => {
+			if (await confirmation('Обновить OUM?', 'Будет загружена и проверена текущая закреплённая версия проекта. Перед установкой OUM сохранит локальный снимок для отката. Сеть и VPN не перенастраиваются.', 'Обновить', false))
+				start(callUpdateProject());
+		});
+		root.querySelector('#rollback-project').addEventListener('click', async () => {
+			if (await confirmation('Откатить OUM?', 'Интерфейс и системные службы OUM вернутся к версии, сохранённой перед последним обновлением. Настройки сети и VPN останутся на месте.', 'Откатить версию', true))
+				start(callRollbackProject());
+		});
 		root.querySelector('#reset-vpn').addEventListener('click', async () => {
 			const text = engines.current === 'passwall' ?
 				'PassWall будет остановлен, правила устройств OUM удалены, а конфигурация нод сохранена в защищённом снимке. Wi-Fi и WAN не изменятся.' :
@@ -525,6 +700,8 @@ return view.extend({
 		updateWifiFields();
 		updateVpnInput();
 		if (initialJob.state === 'running') watchJob();
+		else if (initialJob.state === 'success')
+			window.setTimeout(() => acknowledgeStatus(initialJob).then((cleared) => { if (cleared) paintStatus({ state: 'idle', message: '' }); }), 5000);
 		if (initialVpnJob.state === 'running') watchVpnJob(); else showVpnJob(initialVpnJob);
 		return root;
 	},

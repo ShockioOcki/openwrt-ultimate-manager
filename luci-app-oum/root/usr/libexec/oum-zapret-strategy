@@ -198,7 +198,7 @@ probe_one() {
 	result="$WORK/probe.$index"
 	host="${url#https://}"
 	host="${host%%/*}"
-	resolver="$(uci -q get podkop.settings.bootstrap_dns_server || echo 77.88.8.8)"
+	resolver="$(uci -q get podkop.settings.bootstrap_dns_server || echo 77.88.8.1)"
 	real_ip="$(nslookup "$host" "$resolver" 2>/dev/null |
 		sed -n 's/^Address:[[:space:]]*\([0-9][0-9.]*\)$/\1/p' | head -n 1)"
 	if ! printf '%s' "$real_ip" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then

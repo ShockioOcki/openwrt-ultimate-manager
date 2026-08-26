@@ -4,6 +4,7 @@ set -eu
 OUM_INSTALLER_VERSION='@OUM_INSTALLER_VERSION@'
 OUM_PAYLOAD_SHA256='@OUM_PAYLOAD_SHA256@'
 OUM_PAYLOAD_SIZE='@OUM_PAYLOAD_SIZE@'
+OUM_BASE_PACKAGES='luci-base rpcd rpcd-mod-ucode uhttpd uhttpd-mod-ubus curl ca-bundle ruby ruby-yaml unzip jsonfilter nftables-json iw'
 
 oum_die() {
 	printf 'OUM installer: %s\n' "$*" >&2
@@ -63,7 +64,19 @@ oum_is_installed() {
 	[ -x /usr/libexec/oum-firstboot ] && [ -f /usr/share/luci/menu.d/luci-app-oum.json ]
 }
 
+oum_install_base_packages() {
+	missing=''
+	for package in $OUM_BASE_PACKAGES; do
+		apk info -e "$package" >/dev/null 2>&1 || missing="$missing $package"
+	done
+	[ -n "$missing" ] || return 0
+	printf 'OUM installer: installing required packages:%s\n' "$missing"
+	apk update || oum_die 'cannot update OpenWrt package index'
+	apk add $missing || oum_die 'cannot install required OUM packages'
+}
+
 oum_install_package() {
+	oum_install_base_packages
 	oum_backup_current
 	mkdir -p "$OUM_INSTALL_TMP/package"
 	tar -xzf "$payload" -C "$OUM_INSTALL_TMP/package" || oum_die 'cannot unpack payload'
@@ -71,9 +84,15 @@ oum_install_package() {
 
 	sh "$OUM_INSTALL_TMP/package/tools/install-luci-dev.sh" \
 		"$OUM_INSTALL_TMP/package/luci-app-oum" || oum_die 'installation failed; backup was preserved'
+	/usr/libexec/oum-awg-manager install || oum_die 'AmneziaWG package installation failed'
+	mkdir -p /etc/oum
+	printf '%s\n' "$OUM_INSTALLER_VERSION" > /etc/oum/version
+	printf '%s\n' $OUM_BASE_PACKAGES > /etc/oum/base-packages
+	chmod 600 /etc/oum/version /etc/oum/base-packages
 
 	printf '\nOUM %s успешно установлен.\n' "$OUM_INSTALLER_VERSION"
 	printf 'Панель: /cgi-bin/luci/oum\n'
+	[ ! -f /etc/oum/reboot-required-awg ] || printf 'Для первичной активации AmneziaWG один раз перезапустите роутер.\n'
 }
 
 oum_confirm() {
@@ -104,7 +123,7 @@ oum_first_run() {
 	fi
 
 	printf '\nПервый запуск подготовлен.\n'
-	printf 'Подключитесь к Wi-Fi FirstRun (пароль: admin123) и откройте 192.168.1.1.\n'
+	printf 'Подключитесь к Wi-Fi FirstRun (пароль: admin123) и откройте 192.168.5.1.\n'
 }
 
 oum_print_menu() {
@@ -159,8 +178,7 @@ fi
 
 [ "$(id -u)" = 0 ] || oum_die 'run this installer as root'
 [ -f /etc/openwrt_release ] || oum_die 'this installer is intended for OpenWrt'
-[ -x /etc/init.d/rpcd ] || oum_die 'rpcd is not installed'
-[ -x /etc/init.d/uhttpd ] || oum_die 'uhttpd is not installed'
+command -v apk >/dev/null 2>&1 || oum_die 'this build requires OpenWrt 25.12 with apk'
 
 case "${1:-}" in
 	--install) oum_install_package ;;

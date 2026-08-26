@@ -30,11 +30,14 @@ separately tested feature. Dual-band devices can share the 5 GHz radio between
 AP and backhaul at a performance cost, while a future tri-band target may
 dedicate a radio to backhaul.
 
-Installing Mesh may require replacing `wpad-basic-*` with `wpad-mesh-*`. OUM
-must verify available storage and packages before replacement, keep the old
-package list, and never reload wireless until the new runtime is installed and
-the generated configuration passes validation. A reconnect watchdog restores
-the previous wireless configuration unless the user confirms the new link.
+On the validated AX6S/OpenWrt 25.12.3 target OUM replaces
+`wpad-basic-mbedtls` with a locally bundled `wpad-mesh-mbedtls` built from the
+same release revision. Both APK files have pinned SHA-256 checksums. OUM keeps
+the original package locally, backs up `/etc/config/wireless`, installs the new
+runtime before reloading Wi-Fi, verifies that an AP returns, and automatically
+restores `wpad-basic-mbedtls` plus the wireless configuration on failure. Other
+architectures and hostapd revisions remain blocked until they have their own
+verified package pair.
 
 ## USB mobile connection
 
@@ -72,4 +75,3 @@ confirmation.
    time.
 6. Test Mesh with two compatible routers only after ordinary AP recovery has
    been verified.
-

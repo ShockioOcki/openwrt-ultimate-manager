@@ -97,6 +97,43 @@ apply_wan() {
 	write_status success applied 'Настройки WAN применены. Проверяем подключение…'
 }
 
+apply_lan() {
+	address="$(json_value .address)"
+	case "$address" in ''|*[!0-9.]*) fail invalid_input 'Некорректный LAN-адрес.' ;; esac
+	mkdir -p "$ROLLBACK"
+	cp /etc/config/network "$ROLLBACK/network-lan"
+	uci -q get network.lan.ipaddr | sed 's#/.*##' > "$ROLLBACK/lan-address"
+	chmod 600 "$ROLLBACK/network-lan" "$ROLLBACK/lan-address"
+	uci -q set "network.lan.ipaddr=$address"
+	uci -q set network.lan.netmask='255.255.255.0'
+	uci -q commit network || fail commit_failed 'Не удалось сохранить LAN-адрес.'
+	write_status success applied "LAN-адрес изменён на $address/24. Переподключитесь к роутеру."
+	(sleep 3; /etc/init.d/network reload) >/tmp/oum-lan-apply.log 2>&1 &
+}
+
+apply_mesh() {
+	enabled="$(json_value .enabled)"
+	mesh_id="$(json_value .mesh_id)"
+	password="$(json_value .password)"
+	band="$(json_value .band)"
+	if [ "$enabled" = 1 ]; then
+		/usr/libexec/oum-mesh-manager enable "$mesh_id" "$password" "$band" ||
+			fail mesh_failed 'Mesh не запустился; предыдущая Wi-Fi-конфигурация восстановлена.'
+		write_status success applied 'Mesh-интерфейс создан и подключён к LAN.'
+	else
+		/usr/libexec/oum-mesh-manager disable || fail mesh_failed 'Не удалось отключить Mesh.'
+		write_status success applied 'Mesh-интерфейс отключён.'
+	fi
+}
+
+rollback_lan() {
+	[ -f "$ROLLBACK/network-lan" ] || fail rollback_missing 'Предыдущая LAN-конфигурация не найдена.'
+	previous="$(cat "$ROLLBACK/lan-address" 2>/dev/null || true)"
+	cp "$ROLLBACK/network-lan" /etc/config/network
+	write_status success rolled_back "Предыдущий LAN-адрес ${previous:-роутера} восстановлен."
+	(sleep 3; /etc/init.d/network reload) >/tmp/oum-lan-rollback.log 2>&1 &
+}
+
 rollback_config() {
 	kind="$1"
 	[ -f "$ROLLBACK/$kind" ] || fail rollback_missing 'Предыдущая конфигурация не найдена.'
@@ -105,12 +142,46 @@ rollback_config() {
 	write_status success rolled_back 'Предыдущие настройки восстановлены.'
 }
 
+apply_dns() {
+	openclash="$(json_value .openclash)"
+	bootstrap_openclash="$(json_value .bootstrap_openclash)"
+	passwall="$(json_value .passwall)"
+	bootstrap_passwall="$(json_value .bootstrap_passwall)"
+	podkop="$(json_value .podkop)"
+	bootstrap_podkop="$(json_value .bootstrap_podkop)"
+	engine="$(/usr/libexec/oum-engine-manager current)"
+	case "$engine" in
+		openclash) server="$openclash"; bootstrap="$bootstrap_openclash" ;;
+		passwall) server="$passwall"; bootstrap="$bootstrap_passwall" ;;
+		podkop) server="$podkop"; bootstrap="$bootstrap_podkop" ;;
+		*) fail engine_missing 'Сначала установите VPN-движок.' ;;
+	esac
+	write_status running dns 'Применяем основной и Bootstrap DNS выбранного VPN-движка…'
+	/usr/libexec/oum-dns-manager apply "$engine" "$server" "$bootstrap" ||
+		fail dns_failed 'DNS не прошёл проверку; предыдущая конфигурация восстановлена.'
+	uci -q set "oum.main.dns_openclash=$openclash"
+	uci -q set "oum.main.bootstrap_dns_openclash=$bootstrap_openclash"
+	uci -q set "oum.main.dns_passwall=$passwall"
+	uci -q set "oum.main.bootstrap_dns_passwall=$bootstrap_passwall"
+	uci -q set "oum.main.dns_podkop=$podkop"
+	uci -q set "oum.main.bootstrap_dns_podkop=$bootstrap_podkop"
+	uci -q commit oum
+	write_status success applied 'Основной и Bootstrap DNS сохранены; активный VPN-движок перезапущен.'
+}
+
 case "$ACTION" in
 	wifi) write_status running applying 'Применяем настройки Wi-Fi…'; apply_wifi ;;
 	wan) write_status running applying 'Применяем настройки подключения…'; apply_wan ;;
+	lan) write_status running applying 'Сохраняем новый LAN-адрес…'; apply_lan ;;
+	mesh) write_status running applying 'Проверяем и применяем Mesh…'; apply_mesh ;;
+	mesh_runtime) write_status running installing 'Устанавливаем совместимую поддержку Mesh…'; /usr/libexec/oum-mesh-runtime install || fail mesh_runtime_failed 'Mesh-компонент не установился; исходный Wi-Fi восстановлен.'; write_status success installed 'Mesh готов. Wi-Fi перезапущен, обычные точки доступа сохранены.' ;;
+	project_update) write_status running downloading 'Загружаем и проверяем новую версию OUM…'; /usr/libexec/oum-project-manager update || fail update_failed 'Обновление OUM не установилось; текущая версия сохранена.'; write_status success updated 'OUM обновлён. Интерфейс перезагружается.' ;;
+	project_rollback) write_status running rollback 'Восстанавливаем предыдущую версию OUM…'; /usr/libexec/oum-project-manager rollback || fail rollback_failed 'Не удалось восстановить предыдущую версию OUM.'; write_status success rolled_back 'Предыдущая версия OUM восстановлена.' ;;
 	rollback_wifi) write_status running rollback 'Восстанавливаем Wi-Fi…'; rollback_config wireless ;;
 	rollback_wan) write_status running rollback 'Восстанавливаем подключение…'; rollback_config network ;;
-	engine) target="$(json_value .engine)"; write_status running preparing 'Готовим безопасную замену VPN-движка…'; if ! OUM_ENGINE_STATUS="$STATUS" /usr/libexec/oum-engine-manager switch "$target"; then message="$(cat /tmp/oum-engine-error 2>/dev/null || true)"; fail engine_failed "${message:-Не удалось заменить VPN-движок; выполнен автоматический возврат.}"; fi; write_status success switched 'VPN-движок заменён. Если у него ещё нет конфигурации, добавьте подключение ниже.' ;;
+	rollback_lan) write_status running rollback 'Восстанавливаем LAN-адрес…'; rollback_lan ;;
+	dns) apply_dns ;;
+	engine) target="$(json_value .engine)"; [ "$target" != podkop ] || /usr/libexec/oum-awg-manager ready || fail reboot_required 'После первичной установки OUM один раз перезапустите роутер для активации AmneziaWG.'; write_status running preparing 'Готовим безопасную замену VPN-движка…'; if ! OUM_ENGINE_STATUS="$STATUS" /usr/libexec/oum-engine-manager switch "$target"; then message="$(cat /tmp/oum-engine-error 2>/dev/null || true)"; fail engine_failed "${message:-Не удалось заменить VPN-движок; выполнен автоматический возврат.}"; fi; write_status success switched 'VPN-движок заменён. Добавьте подключение, если оно ещё не настроено.' ;;
 	podkop_configure) interface="$(json_value .interface)"; write_status running configuring 'Связываем Podkop с отдельным туннелем и настраиваем Zapret для YouTube…'; /usr/libexec/oum-podkop-config configure "$interface" || fail podkop_failed 'Podkop не прошёл проверку; службы остановлены, прежняя конфигурация сохранена.'; write_status success configured 'Podkop работает через отдельный туннель; Zapret для прямого YouTube завершает запуск.' ;;
 	podkop_awg) write_status running awg_installing 'Проверяем комплект AmneziaWG и создаём отдельный туннель…'; /usr/libexec/oum-awg-manager import "$REQUEST" || fail awg_failed 'AWG-туннель не прошёл проверку; прежняя сеть восстановлена.'; write_status success configured 'AWG-туннель создан и Podkop запущен через него.' ;;
 	podkop_proxy) write_status running proxy_configuring 'Проверяем Reality и создаём защищённое подключение Podkop…'; /usr/libexec/oum-podkop-config proxy "$REQUEST" || fail podkop_proxy_failed 'Reality не прошёл проверку; предыдущее подключение восстановлено.'; write_status success configured 'Reality проверен и используется Podkop.' ;;

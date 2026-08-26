@@ -30,7 +30,7 @@ ensure_podkop_defaults() {
 	uci -q get podkop.settings >/dev/null 2>&1 || uci -q set podkop.settings=settings
 	[ -n "$(uci -q get podkop.settings.dns_type || true)" ] || uci -q set podkop.settings.dns_type='udp'
 	[ -n "$(uci -q get podkop.settings.dns_server || true)" ] || uci -q set podkop.settings.dns_server='77.88.8.8'
-	[ -n "$(uci -q get podkop.settings.bootstrap_dns_server || true)" ] || uci -q set podkop.settings.bootstrap_dns_server='77.88.8.8'
+	[ -n "$(uci -q get podkop.settings.bootstrap_dns_server || true)" ] || uci -q set podkop.settings.bootstrap_dns_server='77.88.8.1'
 	[ -n "$(uci -q get podkop.settings.dont_touch_dhcp || true)" ] || uci -q set podkop.settings.dont_touch_dhcp='0'
 }
 

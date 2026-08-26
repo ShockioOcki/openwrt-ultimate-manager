@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-25T02:05:05Z",
+  "title": "Design System: OUM",
+  "extensions": {
+    "colorMeta": {
+      "canvas": { "role": "neutral", "displayName": "Domestic Canvas", "canonical": "#eef0ea", "tonalRamp": ["#17201a", "#303a31", "#4b564c", "#68736a", "#879289", "#a8b2a9", "#cbd2cb", "#eef0ea"] },
+      "paper": { "role": "neutral", "displayName": "Working Paper", "canonical": "#fbfcf8", "tonalRamp": ["#1b2018", "#353b31", "#52584e", "#70766c", "#90968c", "#b1b7ad", "#d5d9d1", "#fbfcf8"] },
+      "paper-strong": { "role": "neutral", "displayName": "Strong Paper", "canonical": "#ffffff", "tonalRamp": ["#1c1c1c", "#383838", "#555555", "#737373", "#929292", "#b2b2b2", "#d5d5d5", "#ffffff"] },
+      "ink": { "role": "neutral", "displayName": "Green Graphite", "canonical": "#17231f", "tonalRamp": ["#111a17", "#17231f", "#304039", "#4c5e55", "#697d73", "#879d92", "#a7beb3", "#c8e0d5"] },
+      "subtle": { "role": "neutral", "displayName": "Muted Ink", "canonical": "#627068", "tonalRamp": ["#17201b", "#2d3832", "#455149", "#5e6b63", "#78867d", "#94a198", "#b0bdb4", "#cddad1"] },
+      "faint": { "role": "neutral", "displayName": "Faint Ink", "canonical": "#849087", "tonalRamp": ["#1a211c", "#323a34", "#4b544e", "#646f68", "#7f8a82", "#9ba69e", "#b8c2ba", "#d6dfd7"] },
+      "line": { "role": "neutral", "displayName": "Ruled Line", "canonical": "#cfd6ce", "tonalRamp": ["#1d211c", "#373b36", "#525750", "#6f746d", "#8d928b", "#acb1aa", "#cfd6ce", "#eef2ed"] },
+      "line-strong": { "role": "neutral", "displayName": "Strong Ruled Line", "canonical": "#aeb9b0", "tonalRamp": ["#1b211c", "#343c36", "#4f5751", "#69736c", "#859088", "#a1ada4", "#c0cbc2", "#dfe8e1"] },
+      "console": { "role": "secondary", "displayName": "Console Green", "canonical": "#172c28", "tonalRamp": ["#0f1b18", "#172c28", "#304943", "#4b675f", "#67877d", "#85a89c", "#a5cabd", "#c7ede0"] },
+      "console-soft": { "role": "secondary", "displayName": "Soft Console Green", "canonical": "#213b35", "tonalRamp": ["#12201c", "#213b35", "#3b574f", "#55746a", "#719287", "#8fb1a5", "#afd1c4", "#d0f2e3"] },
+      "action": { "role": "primary", "displayName": "Control Blue", "canonical": "#2868d7", "tonalRamp": ["#071b42", "#0d3478", "#174da9", "#2868d7", "#5788e2", "#82a9eb", "#adcbf3", "#d9ecfa"] },
+      "action-dark": { "role": "primary", "displayName": "Deep Control Blue", "canonical": "#174b9f", "tonalRamp": ["#071830", "#0c2f63", "#174b9f", "#396ab6", "#6289ca", "#8baade", "#b5cced", "#e0eefa"] },
+      "action-soft": { "role": "primary", "displayName": "Washed Control Blue", "canonical": "#e8effd", "tonalRamp": ["#101d37", "#273956", "#425675", "#607596", "#8095b7", "#a2b7d8", "#c5daf0", "#e8effd"] },
+      "good": { "role": "tertiary", "displayName": "Ready Green", "canonical": "#1f8a62", "tonalRamp": ["#08291d", "#0c4a34", "#126c4c", "#1f8a62", "#4aa67e", "#75c09c", "#a2d9bc", "#d2f0dd"] },
+      "good-soft": { "role": "tertiary", "displayName": "Soft Ready Field", "canonical": "#e5f4ed", "tonalRamp": ["#10241a", "#294235", "#456151", "#62816d", "#81a28b", "#a1c3aa", "#c2e4cd", "#e5f4ed"] },
+      "warn": { "role": "tertiary", "displayName": "Waiting Amber", "canonical": "#a96617", "tonalRamp": ["#2c1803", "#573306", "#824f0d", "#a96617", "#c78342", "#dda36d", "#edc59c", "#f8e8cf"] },
+      "warn-soft": { "role": "tertiary", "displayName": "Soft Waiting Field", "canonical": "#fff0d9", "tonalRamp": ["#2a1d0d", "#513b21", "#795b38", "#a27c52", "#c7a172", "#e1c79c", "#f1dfbf", "#fff0d9"] },
+      "bad": { "role": "tertiary", "displayName": "Recovery Red", "canonical": "#b83f39", "tonalRamp": ["#340b09", "#651512", "#912622", "#b83f39", "#d3655f", "#e58d87", "#f0b8b3", "#f9e3e0"] },
+      "bad-soft": { "role": "tertiary", "displayName": "Soft Recovery Field", "canonical": "#fbe8e6", "tonalRamp": ["#2b1715", "#54312e", "#7e4d49", "#a66c67", "#ca8f89", "#e3b4af", "#f1d2cf", "#fbe8e6"] },
+      "signal": { "role": "secondary", "displayName": "Signal Lime", "canonical": "#d7f06b", "tonalRamp": ["#263000", "#4d5e04", "#788d10", "#a4bd2d", "#d7f06b", "#e3f58f", "#ecf8b3", "#f5fbd7"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Appliance Display", "purpose": "OUM identity and focused first-run title." },
+      "headline": { "displayName": "Step Headline", "purpose": "First-run steps and major instrument headings." },
+      "title": { "displayName": "Section Title", "purpose": "Introduces one work surface or circuit." },
+      "body": { "displayName": "Operating Text", "purpose": "Default labels, instructions, and state explanations." },
+      "label": { "displayName": "Instrument Label", "purpose": "Uppercase console channels and table headers." }
+    },
+    "shadows": [
+      { "name": "console-ambient", "value": "0 18px 45px rgba(31, 49, 42, .08)", "purpose": "Quiet presence for the unified status console." },
+      { "name": "work-surface", "value": "0 10px 28px rgba(31, 49, 42, .045)", "purpose": "Minimal separation between paper sections and canvas." },
+      { "name": "pinned-action", "value": "0 10px 24px rgba(30, 48, 41, .12)", "purpose": "Supports the translucent route-save strip." },
+      { "name": "setup-desk", "value": "0 24px 70px rgba(31, 49, 42, .1)", "purpose": "Isolates the focused first-run task." }
+    ],
+    "motion": [
+      { "name": "state-standard", "value": "160ms ease", "purpose": "Button and control color, border, and transform transitions." },
+      { "name": "reduced-motion", "value": ".001ms", "purpose": "Effectively disables animation and transition when reduced motion is requested." }
+    ],
+    "breakpoints": [
+      { "name": "tablet", "value": "900px" },
+      { "name": "phone", "value": "700px" },
+      { "name": "setup-phone", "value": "650px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The principal safe action in the current operating context.",
+      "html": "<button class=\"ds-btn-primary\">Применить</button>",
+      "css": ".ds-btn-primary { min-height: 38px; padding: 8px 14px; border: 1px solid var(--oum-action, #2868d7); border-radius: 9px; background: var(--oum-action, #2868d7); color: #fff; font: 620 15px/1.5 system-ui, sans-serif; transition: background-color .16s ease, border-color .16s ease; } .ds-btn-primary:hover { background: var(--oum-action-dark, #174b9f); } .ds-btn-primary:focus-visible { outline: 3px solid rgba(40,104,215,.32); outline-offset: 3px; } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A reversible or lower-priority action on a work surface.",
+      "html": "<button class=\"ds-btn-secondary\">Вернуть предыдущие</button>",
+      "css": ".ds-btn-secondary { min-height: 38px; padding: 8px 14px; border: 1px solid var(--oum-line-strong, #aeb9b0); border-radius: 9px; background: transparent; color: var(--oum-ink, #17231f); font: 620 15px/1.5 system-ui, sans-serif; transition: background-color .16s ease, border-color .16s ease, color .16s ease; } .ds-btn-secondary:hover { border-color: var(--oum-action, #2868d7); background: var(--oum-action-soft, #e8effd); color: var(--oum-action-dark, #174b9f); } .ds-btn-secondary:focus-visible { outline: 3px solid rgba(40,104,215,.32); outline-offset: 3px; } .ds-btn-secondary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A full-width router setting with a persistent human label.",
+      "html": "<label class=\"ds-field\"><span>Имя сети 5 ГГц</span><input value=\"OUM Home\"></label>",
+      "css": ".ds-field { display: grid; gap: 6px; color: var(--oum-ink, #17231f); font: 650 15px/1.5 system-ui, sans-serif; } .ds-field input { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid var(--oum-line-strong, #aeb9b0); border-radius: 9px; background: var(--oum-paper-strong, #fff); color: var(--oum-ink, #17231f); font: 400 15px/1.5 system-ui, sans-serif; } .ds-field input:hover { border-color: var(--oum-action, #2868d7); } .ds-field input:focus-visible { outline: 3px solid rgba(40,104,215,.32); outline-offset: 3px; }"
+    },
+    {
+      "name": "Status Console",
+      "kind": "custom",
+      "refersTo": "status-console",
+      "description": "The single four-channel instrument that answers the first network-health questions.",
+      "html": "<section class=\"ds-console\"><i></i><div><small>Интернет</small><strong>Подключён</strong></div><div><small>Клиенты</small><strong>12 устройств</strong></div><div><small>Температура</small><strong>54 °C</strong></div><div><small>VPN</small><strong>Работает</strong></div></section>",
+      "css": ".ds-console { position: relative; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); overflow: hidden; border-radius: 20px; background: var(--oum-console, #172c28); color: #f4f8f5; box-shadow: 0 18px 45px rgba(31,49,42,.08); font-family: system-ui,sans-serif; } .ds-console > i { position: absolute; top: 18px; right: 20px; width: 8px; height: 8px; border-radius: 50%; background: var(--oum-signal, #d7f06b); box-shadow: 0 0 0 5px rgba(215,240,107,.1); } .ds-console > div { min-height: 112px; padding: 24px 22px 20px; border-right: 1px solid rgba(234,244,238,.14); } .ds-console > div:last-child { border-right: 0; } .ds-console small { display: block; margin-bottom: 20px; color: #aebfb7; font-size: 12px; font-weight: 700; letter-spacing: .075em; text-transform: uppercase; } .ds-console strong { color: #fff; font-size: 20px; line-height: 1.15; } .ds-console:focus-within { outline: 3px solid rgba(40,104,215,.32); outline-offset: 3px; } @media(max-width:700px){.ds-console{grid-template-columns:1fr}.ds-console>div{border-right:0;border-bottom:1px solid rgba(234,244,238,.14)}.ds-console>div:last-child{border-bottom:0}}"
+    },
+    {
+      "name": "Work Surface",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A large paper section containing one coherent operating circuit.",
+      "html": "<section class=\"ds-panel\"><h3>Подключённые устройства</h3><p>Устройства и их текущая маршрутизация.</p></section>",
+      "css": ".ds-panel { padding: 22px 24px; border: 1px solid var(--oum-line, #cfd6ce); border-radius: 16px; background: var(--oum-paper, #fbfcf8); color: var(--oum-ink, #17231f); box-shadow: 0 10px 28px rgba(31,49,42,.045); font: 400 15px/1.5 system-ui,sans-serif; } .ds-panel h3 { margin: 0 0 16px; font-size: 1.22rem; line-height: 1.2; letter-spacing: -.018em; } .ds-panel p { margin: 0; color: var(--oum-subtle, #627068); } .ds-panel:hover { border-color: var(--oum-line-strong, #aeb9b0); } .ds-panel:focus-within { outline: 3px solid rgba(40,104,215,.32); outline-offset: 3px; }"
+    },
+    {
+      "name": "Selected Choice",
+      "kind": "chip",
+      "description": "An accessible setting choice shown as selected without introducing another card.",
+      "html": "<label class=\"ds-choice\"><input type=\"radio\" checked><span><strong>Podkop + Zapret</strong><small>Защищённое подключение и маршрутизация</small></span></label>",
+      "css": ".ds-choice { display: flex; gap: 10px; padding: 14px; border: 1px solid var(--oum-action, #2868d7); border-radius: 11px; background: var(--oum-action-soft, #e8effd); color: var(--oum-ink, #17231f); box-shadow: inset 0 0 0 1px var(--oum-action, #2868d7); font: 400 15px/1.5 system-ui,sans-serif; cursor: pointer; } .ds-choice input { accent-color: var(--oum-action, #2868d7); } .ds-choice span { display: flex; flex-direction: column; gap: 5px; } .ds-choice small { color: var(--oum-subtle, #627068); } .ds-choice:hover { border-color: var(--oum-action-dark, #174b9f); } .ds-choice:focus-within { outline: 3px solid rgba(40,104,215,.32); outline-offset: 3px; }"
+    },
+    {
+      "name": "Route Switch",
+      "kind": "custom",
+      "description": "A binary device-routing control with one shared outline.",
+      "html": "<fieldset class=\"ds-route\"><label><input type=\"radio\" name=\"route\"><span>Напрямую</span></label><label><input type=\"radio\" name=\"route\" checked><span>Через VPN</span></label></fieldset>",
+      "css": ".ds-route { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; margin: 0; padding: 0; border: 1px solid var(--oum-line-strong, #aeb9b0); border-radius: 8px; font: 620 15px/1.5 system-ui,sans-serif; } .ds-route label { position: relative; cursor: pointer; } .ds-route input { position: absolute; opacity: 0; pointer-events: none; } .ds-route span { display: block; min-width: 108px; padding: 8px 11px; text-align: center; color: var(--oum-ink, #17231f); } .ds-route label:has(input:checked) span { background: var(--oum-action, #2868d7); color: #fff; } .ds-route label:hover span { color: var(--oum-action-dark, #174b9f); } .ds-route label:has(input:checked):hover span { color: #fff; background: var(--oum-action-dark, #174b9f); } .ds-route:focus-within { outline: 3px solid rgba(40,104,215,.32); outline-offset: 3px; }"
+    },
+    {
+      "name": "Setup Progress",
+      "kind": "custom",
+      "description": "A thin circuit-like track for the focused first-run flow.",
+      "html": "<div class=\"ds-progress\" aria-label=\"Шаг 2 из 4\"><span class=\"is-active\"></span><span class=\"is-active is-current\"></span><span></span><span></span></div>",
+      "css": ".ds-progress { display: grid; grid-template-columns: repeat(4,1fr); margin: 24px 0; background: #dde3dc; } .ds-progress span { position: relative; height: 5px; } .ds-progress .is-active { background: var(--oum-action, #2868d7); } .ds-progress .is-current::after { content: ''; position: absolute; right: -5px; top: -3px; width: 11px; height: 11px; border-radius: 50%; background: var(--oum-action, #2868d7); box-shadow: 0 0 0 4px var(--oum-action-soft, #e8effd); } .ds-progress:hover .is-current::after { transform: scale(1.08); } .ds-progress:focus-visible { outline: 3px solid rgba(40,104,215,.32); outline-offset: 3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Домашний диспетчерский щит",
+    "overview": "OUM is a calm, precise control surface for domestic infrastructure. It makes the network read as one labeled engineering circuit rather than a collection of unrelated admin cards: a deep green instrument summarizes health, while paper-light work surfaces hold safe controls and progressively disclosed expert detail.\n\nThe mode is Operate. Normal operation stays quiet; action blue and state colors appear only where they carry meaning. The interface remains recognizably OUM across the dashboard, settings, and first-run recovery route without imitating LuCI's default administrative table language.",
+    "keyCharacteristics": [
+      "One dark, unified status instrument above large light work surfaces.",
+      "Warm green-gray neutrals, ruled channels, and sparse signal-lamp accents.",
+      "Human Russian copy first; technical values remain precise and scannable.",
+      "Expert controls are present but visually secondary and progressively disclosed.",
+      "Responsive order, keyboard focus, text-backed states, and reduced motion are system invariants."
+    ],
+    "rules": [
+      { "name": "The Signal Is Sparse Rule", "body": "Signal lime is a lamp, cursor, or selection highlight—not a panel background.", "section": "colors" },
+      { "name": "The State Has Words Rule", "body": "Green, amber, and red may reinforce a state but never carry its meaning alone.", "section": "colors" },
+      { "name": "The Appliance Voice Rule", "body": "Use the local sans stack for the interface; reserve monospace for content that is genuinely code-like or machine-shaped.", "section": "typography" },
+      { "name": "The Circuit Order Rule", "body": "Responsive reflow may change columns, but it never changes the operational story: health, devices, protected connection, then advanced control.", "section": "layout" },
+      { "name": "The One Instrument Rule", "body": "The status console may lift as a whole; its channels never become independently shadowed cards.", "section": "elevation" },
+      { "name": "The Outer Curves, Inner Lines Rule", "body": "Round the containing instrument; structure its contents with straight rules and tonal fields.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do lead with network health and place the next safe action beside the relevant state.",
+      "Do preserve one source of truth for each setting and keep dangerous or expert operations visually secondary.",
+      "Do accompany every operational color with explicit Russian state text.",
+      "Do preserve keyboard focus, 42px touch targets where interaction demands them, reduced-motion behavior, and mobile wrapping.",
+      "Do use local system assets only; the router interface must remain light and independent of remote fonts, images, or libraries."
+    ],
+    "donts": [
+      "Don't turn the dashboard into a grid of unrelated floating metric cards.",
+      "Don't nest cards inside work surfaces when a rule, rhythm, or tonal field can express the hierarchy.",
+      "Don't use Signal Lime as decoration or a large fill.",
+      "Don't require hover, color vision, LuCI knowledge, or technical jargon to understand a primary task.",
+      "Don't visually imply changes to RPC, UCI, routing, rollback, permissions, or any other networking behavior."
+    ]
+  }
+}

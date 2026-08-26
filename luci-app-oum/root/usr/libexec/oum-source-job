@@ -37,7 +37,9 @@ trap 'rm -f "$input"; rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
 write_status running preparing 'Подготавливаем профиль'
 OUM_LIBRARY_MODE=1
 OUM_CONVERTER_PATH="$CONVERTER"
-export OUM_LIBRARY_MODE OUM_CONVERTER_PATH
+OUM_DNS_SERVER="$(uci -q get oum.main.dns_openclash || echo 1.1.1.1)"
+OUM_BOOTSTRAP_DNS="$(uci -q get oum.main.bootstrap_dns_openclash || echo 1.0.0.1)"
+export OUM_LIBRARY_MODE OUM_CONVERTER_PATH OUM_DNS_SERVER OUM_BOOTSTRAP_DNS
 # shellcheck source=/dev/null
 . "$RUNTIME"
 oum_prepare_dirs

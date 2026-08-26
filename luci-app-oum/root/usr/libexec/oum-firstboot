@@ -33,7 +33,13 @@ for iface in $(uci -q show wireless | sed -n "s/^wireless\.\([^.=]*\)=wifi-iface
 	uci -q set "wireless.${iface}.disabled=0"
 done
 
+# A fresh OUM setup uses 192.168.5.0/24 to avoid the common conflict with an
+# upstream factory router on 192.168.1.0/24.
+uci -q set network.lan.ipaddr='192.168.5.1'
+uci -q set network.lan.netmask='255.255.255.0'
+
 uci commit rpcd
 uci commit wireless
+uci commit network
 /etc/init.d/rpcd restart
-wifi reload
+(sleep 2; /etc/init.d/network reload; wifi reload) >/tmp/oum-firstboot-network.log 2>&1 &

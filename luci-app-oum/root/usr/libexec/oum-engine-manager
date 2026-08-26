@@ -53,6 +53,7 @@ SUCCESS=0
 TARGET_INSTALLED=0
 CURRENT_REMOVED=0
 OUM_RUNTIME='curl ruby ruby-yaml unzip'
+OUM_CORE_RUNTIME='luci-base rpcd rpcd-mod-ucode uhttpd uhttpd-mod-ubus ubus ubusd libubus20251202 procd netifd firewall4 dnsmasq'
 
 update_status() {
 	[ -n "$STATUS" ] || return 0
@@ -84,9 +85,57 @@ ensure_oum_runtime() {
 	# Pin them explicitly before removing an engine, otherwise apk may remove
 	# Ruby/YAML as now-unused transitive OpenClash dependencies and break OUM.
 	apk add $OUM_RUNTIME >> "$LOG" 2>&1 || return 1
+	# Keep the router control plane as explicit world constraints. Removing a
+	# third-party LuCI package must never make apk consider LuCI/ubus/network
+	# packages orphaned and purge them as transitive dependencies.
+	apk add $OUM_CORE_RUNTIME >> "$LOG" 2>&1 || return 1
 	command -v curl >/dev/null 2>&1 || return 1
 	command -v ruby >/dev/null 2>&1 || return 1
-	ruby -ryaml -e 'YAML.safe_load("oum: true") or exit 1' >> "$LOG" 2>&1
+	installed ruby-yaml
+}
+
+ubus_healthy() {
+	ubus -S list >/dev/null 2>&1
+}
+
+recover_ubus() {
+	ubus_healthy && return 0
+	log 'ubus health check failed; restarting the broker before continuing'
+	old_pid="$(pidof ubusd 2>/dev/null || true)"
+	[ -z "$old_pid" ] || kill $old_pid >/dev/null 2>&1 || true
+	waited=0
+	while [ -n "$(pidof ubusd 2>/dev/null || true)" ] && [ "$waited" -lt 5 ]; do
+		sleep 1
+		waited=$((waited + 1))
+	done
+	[ -n "$(pidof ubusd 2>/dev/null || true)" ] || {
+		(umask 022; /sbin/ubusd >> /tmp/oum-ubusd-recovery.log 2>&1 &)
+	}
+	waited=0
+	while [ "$waited" -lt 10 ]; do
+		ubus_healthy && break
+		sleep 1
+		waited=$((waited + 1))
+	done
+	ubus_healthy || return 1
+	/etc/init.d/rpcd restart >/dev/null 2>&1 || true
+	/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+	return 0
+}
+
+control_plane_checkpoint() {
+	recover_ubus || die 'После пакетной операции перестал отвечать системный диспетчер OpenWrt. Смена движка остановлена.'
+	# netifd reconnects to a restarted ubusd asynchronously. The Ethernet link
+	# can stay reachable while the LAN object is briefly absent, so a single
+	# immediate ubus call is a false failure. Continue only after LAN reports up.
+	waited=0
+	while [ "$waited" -lt 30 ]; do
+		lan_up="$(ubus call network.interface.lan status 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || true)"
+		[ "$lan_up" != true ] || return 0
+		sleep 1
+		waited=$((waited + 1))
+	done
+	die 'После пакетной операции локальная сеть OpenWrt не восстановилась за 30 секунд. Смена движка остановлена.'
 }
 
 current_engine() {
@@ -264,9 +313,12 @@ save_engine() {
 			fi
 			tar -czf "$tmp/podkop-config.tar.gz" -C "$tmp/files" .
 			rm -rf "$tmp/files"
+			if [ "$(uci -q get network.oum_awg.oum_managed || true)" = 1 ]; then
+				/usr/libexec/oum-awg-manager export "$tmp/awg.conf" || return 1
+			fi
 			;;
 	esac
-	rm -rf "$STATE/$engine"
+	rm -rf "$STATE/${engine:?}"
 	mv "$tmp" "$STATE/$engine"
 	chmod -R go-rwx "$STATE/$engine"
 }
@@ -320,6 +372,7 @@ remove_engine() {
 			rm -rf /etc/sing-box /opt/zapret /tmp/sing-box /tmp/podkop
 			nft delete table inet PodkopTable >/dev/null 2>&1 || true
 			nft delete table inet zapret >/dev/null 2>&1 || true
+			/usr/libexec/oum-awg-manager disable >> "$LOG" 2>&1 || return 1
 			if installed podkop || installed zapret; then return 1; fi
 			;;
 	esac
@@ -396,6 +449,13 @@ install_podkop() {
 	if [ -f "$STATE/podkop/podkop-config.tar.gz" ]; then
 		tar -xzf "$STATE/podkop/podkop-config.tar.gz" -C /
 	fi
+	if [ -f "$STATE/podkop/awg.conf" ]; then
+		if [ "$(uci -q get network.oum_awg.oum_managed || true)" = 1 ]; then
+			/usr/libexec/oum-awg-manager enable >> "$LOG" 2>&1 || return 1
+		else
+			/usr/libexec/oum-awg-manager restore "$STATE/podkop/awg.conf" >> "$LOG" 2>&1 || return 1
+		fi
+	fi
 	[ -f /etc/config/podkop ] && [ -f /opt/zapret/config ] || return 1
 	chmod 600 /etc/config/podkop /opt/zapret/config
 	/etc/init.d/podkop stop >/dev/null 2>&1 || true
@@ -406,11 +466,15 @@ install_podkop() {
 
 install_engine() {
 	case "$1" in
-		passwall) install_passwall ;;
-		openclash) install_openclash ;;
-		podkop) install_podkop ;;
+		passwall) install_passwall || return 1 ;;
+		openclash) install_openclash || return 1 ;;
+		podkop) install_podkop || return 1 ;;
 		*) return 1 ;;
 	esac
+	dns="$(uci -q get "oum.main.dns_$1" || true)"
+	case "$1" in podkop) default_bootstrap=77.88.8.1 ;; *) default_bootstrap=1.0.0.1 ;; esac
+	bootstrap="$(uci -q get "oum.main.bootstrap_dns_$1" || echo "$default_bootstrap")"
+	[ -z "$dns" ] || /usr/libexec/oum-dns-manager configure "$1" "$dns" "$bootstrap" >> "$LOG" 2>&1 || return 1
 }
 
 wait_ready() {
@@ -493,6 +557,10 @@ prepare_assets() {
 	ensure_oum_runtime || die 'Не удалось установить системные компоненты OUM.'
 	update_status downloading 'Загружаем и проверяем полный комплект нового движка…'
 	download_engine "$engine" || die 'Не удалось загрузить или проверить комплект движка. Проверьте доступ к GitHub и повторите попытку.'
+	if [ "$engine" = podkop ]; then
+		update_status awg_downloading 'Загружаем и проверяем комплект AmneziaWG…'
+		/usr/libexec/oum-awg-manager preflight || die 'Не удалось подготовить проверенный комплект AmneziaWG для Podkop.'
+	fi
 	update_status dependencies 'Проверяем совместимость системных зависимостей…'
 	simulate_engine "$engine" || die 'Системные зависимости нового движка недоступны или несовместимы.'
 }
@@ -530,8 +598,10 @@ switch_engine() {
 	update_status replacing 'Останавливаем и удаляем исполняемые пакеты прежнего движка…'
 	CURRENT_REMOVED=1
 	remove_engine "$CURRENT" || die 'Не удалось безопасно удалить прежний движок; запускаем автоматический возврат.'
+	control_plane_checkpoint
 	update_status installing 'Устанавливаем новый движок из проверенного комплекта…'
 	install_engine "$TARGET" || die 'Новый движок не установился; запускаем автоматический возврат.'
+	control_plane_checkpoint
 	TARGET_INSTALLED=1
 	/etc/init.d/$TARGET stop >/dev/null 2>&1 || true
 	/etc/init.d/$TARGET disable >/dev/null 2>&1 || true

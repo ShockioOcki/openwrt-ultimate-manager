@@ -61,6 +61,13 @@ ruby -ryaml -e '
   abort "unexpected torrent block" if config.fetch("rules").any? { |rule| rule.downcase.include?("torrent") }
 ' "$TMP/standalone.yaml"
 
+OUM_DNS_SERVER=9.9.9.9 OUM_BOOTSTRAP_DNS=149.112.112.112 ruby "$ROOT/helpers/source_converter.rb" standalone "$TMP/standalone-quad9.yaml" "$TMP/awg.yaml" awg
+ruby -ryaml -e '
+  dns = YAML.load_file(ARGV[0]).fetch("dns")
+  abort "selected bootstrap DNS was not applied" unless dns.fetch("default-nameserver") == ["149.112.112.112"]
+  abort "selected resolver was not applied" unless dns.fetch("nameserver") == ["9.9.9.9"]
+' "$TMP/standalone-quad9.yaml"
+
 ruby "$ROOT/helpers/source_converter.rb" awg "$ROOT/tests/fixtures/awg-v2.conf" "$TMP/awg-collision.yaml" AWG_Tunnel
 ruby "$ROOT/helpers/source_converter.rb" standalone "$TMP/collision-profile.yaml" "$TMP/awg-collision.yaml" awg
 ruby -ryaml -e '

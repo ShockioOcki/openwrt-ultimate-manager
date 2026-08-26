@@ -1,0 +1,114 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-}"
+ENGINE="${2:-}"
+SERVER="${3:-}"
+BOOTSTRAP="${4:-}"
+WORK=''
+MUTATED=0
+SUCCESS=0
+
+case "$ENGINE" in openclash|passwall|podkop) ;; *) echo 'Unknown engine' >&2; exit 2 ;; esac
+case "$SERVER" in 77.88.8.8|77.88.8.1|1.1.1.1|1.0.0.1|8.8.8.8|8.8.4.4|9.9.9.9|149.112.112.112) ;; *) echo 'Unsupported DNS server' >&2; exit 2 ;; esac
+case "$BOOTSTRAP" in 77.88.8.8|77.88.8.1|1.1.1.1|1.0.0.1|8.8.8.8|8.8.4.4|9.9.9.9|149.112.112.112) ;; *) echo 'Unsupported bootstrap DNS server' >&2; exit 2 ;; esac
+case "$ACTION" in apply|configure) ;; *) echo "usage: $0 {apply|configure} ENGINE DNS BOOTSTRAP_DNS" >&2; exit 2 ;; esac
+
+WORK="$(mktemp -d /tmp/oum-dns-manager.XXXXXX)"
+
+rollback() {
+	[ "$MUTATED" = 1 ] && [ "$SUCCESS" != 1 ] || return 0
+	case "$ENGINE" in
+		openclash)
+			[ ! -f "$WORK/profile" ] || cp "$WORK/profile" "$profile"
+			[ ! -f "$WORK/runtime" ] || cp "$WORK/runtime" "$runtime"
+			[ "$ACTION" != apply ] || /etc/init.d/openclash restart >/dev/null 2>&1 || true
+			;;
+		passwall)
+			[ ! -f "$WORK/config" ] || cp "$WORK/config" /etc/config/passwall
+			[ "$ACTION" != apply ] || /etc/init.d/passwall restart >/dev/null 2>&1 || true
+			;;
+		podkop)
+			[ ! -f "$WORK/config" ] || cp "$WORK/config" /etc/config/podkop
+			[ "$ACTION" != apply ] || /etc/init.d/podkop restart >/dev/null 2>&1 || true
+			;;
+	esac
+}
+cleanup() { set +e; rollback; rm -rf "$WORK"; }
+trap cleanup EXIT INT TERM
+
+configure_openclash() {
+	[ -f /etc/config/openclash ] || return 0
+	profile="$(uci -q get openclash.config.config_path || true)"
+	case "$profile" in /etc/openclash/config/*.yaml|/etc/openclash/config/*.yml) ;; *) return 0 ;; esac
+	runtime="/etc/openclash/$(basename "$profile")"
+	[ -f "$profile" ] || return 0
+	cp "$profile" "$WORK/profile"
+	[ ! -f "$runtime" ] || cp "$runtime" "$WORK/runtime"
+	MUTATED=1
+	OUM_DNS_SERVER="$SERVER" OUM_BOOTSTRAP_DNS="$BOOTSTRAP" ruby -ryaml -e '
+path = ARGV.fetch(0)
+config = YAML.safe_load(File.read(path), permitted_classes: [], permitted_symbols: [], aliases: true)
+abort "invalid OpenClash profile" unless config.is_a?(Hash)
+dns = config["dns"] = {} unless config["dns"].is_a?(Hash)
+dns = config["dns"]
+dns["enable"] = true
+dns["default-nameserver"] = [ENV.fetch("OUM_BOOTSTRAP_DNS")]
+dns["nameserver"] = [ENV.fetch("OUM_DNS_SERVER")]
+File.open("#{path}.tmp", "w", 0600) { |file| file.write(YAML.dump(config)) }
+File.rename("#{path}.tmp", path)
+' "$profile"
+	if [ -x /etc/openclash/core/clash_meta ]; then
+		/etc/openclash/core/clash_meta -t -f "$profile" >/dev/null 2>&1 || return 1
+	fi
+	if [ -f "$runtime" ]; then cp "$profile" "$runtime"; chmod 600 "$runtime"; fi
+	[ "$ACTION" != apply ] || /etc/init.d/openclash restart >/dev/null 2>&1
+}
+
+configure_passwall() {
+	[ -f /etc/config/passwall ] || return 0
+	cp /etc/config/passwall "$WORK/config"
+	global="$(uci -q show passwall | sed -n 's/^passwall\.\([^.=]*\)=global$/\1/p' | head -n 1)"
+	[ -n "$global" ] || return 1
+	MUTATED=1
+	uci -q set "passwall.$global.direct_dns_mode=udp"
+	uci -q set "passwall.$global.direct_dns=$BOOTSTRAP:53"
+	uci -q set "passwall.$global.v2ray_dns_mode=udp"
+	uci -q set "passwall.$global.remote_dns=$SERVER:53"
+	uci -q commit passwall
+	[ "$ACTION" != apply ] || /etc/init.d/passwall restart >/dev/null 2>&1
+}
+
+configure_podkop() {
+	[ -f /etc/config/podkop ] || return 0
+	cp /etc/config/podkop "$WORK/config"
+	MUTATED=1
+	uci -q get podkop.settings >/dev/null 2>&1 || uci -q set podkop.settings=settings
+	uci -q set podkop.settings.dns_type=udp
+	uci -q set "podkop.settings.dns_server=$SERVER"
+	uci -q set "podkop.settings.bootstrap_dns_server=$BOOTSTRAP"
+	uci -q commit podkop
+	[ "$ACTION" != apply ] || /etc/init.d/podkop restart >/dev/null 2>&1
+}
+
+case "$ENGINE" in
+	openclash) configure_openclash ;;
+	passwall) configure_passwall ;;
+	podkop) configure_podkop ;;
+esac
+
+if [ "$ACTION" = apply ] && command -v nslookup >/dev/null 2>&1; then
+	verified=0
+	for _ in 1 2 3 4 5; do
+		if nslookup www.gstatic.com 127.0.0.1 >/dev/null 2>&1; then verified=1; break; fi
+		sleep 2
+	done
+	[ "$verified" = 1 ] || exit 1
+fi
+
+uci -q set "oum.main.dns_$ENGINE=$SERVER"
+uci -q set "oum.main.bootstrap_dns_$ENGINE=$BOOTSTRAP"
+uci -q commit oum
+SUCCESS=1

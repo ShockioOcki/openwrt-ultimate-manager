@@ -20,6 +20,7 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-firstboot" /usr/libexec/oum-firstboot
 cp "$SOURCE_DIR/root/usr/libexec/oum-source-job" /usr/libexec/oum-source-job
 cp "$SOURCE_DIR/root/usr/libexec/oum-reset-first-run" /usr/libexec/oum-reset-first-run
 cp "$SOURCE_DIR/root/usr/libexec/oum-mihomo-api" /usr/libexec/oum-mihomo-api
+cp "$SOURCE_DIR/root/usr/libexec/oum-openclash-nodes" /usr/libexec/oum-openclash-nodes
 cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-nodes" /usr/libexec/oum-passwall-nodes
 cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-policy" /usr/libexec/oum-passwall-policy
 cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-source-job" /usr/libexec/oum-passwall-source-job
@@ -33,6 +34,10 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-system-job" /usr/libexec/oum-system-job
 cp "$SOURCE_DIR/root/usr/libexec/oum-engine-manager" /usr/libexec/oum-engine-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-podkop-config" /usr/libexec/oum-podkop-config
 cp "$SOURCE_DIR/root/usr/libexec/oum-awg-manager" /usr/libexec/oum-awg-manager
+cp "$SOURCE_DIR/root/usr/libexec/oum-dns-manager" /usr/libexec/oum-dns-manager
+cp "$SOURCE_DIR/root/usr/libexec/oum-mesh-manager" /usr/libexec/oum-mesh-manager
+cp "$SOURCE_DIR/root/usr/libexec/oum-mesh-runtime" /usr/libexec/oum-mesh-runtime
+cp "$SOURCE_DIR/root/usr/libexec/oum-project-manager" /usr/libexec/oum-project-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-strategy" /usr/libexec/oum-zapret-strategy
 cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-quic" /usr/libexec/oum-zapret-quic
 cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-manager" /usr/libexec/oum-zapret-manager
@@ -51,14 +56,18 @@ cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/settings-v4.js" /www/luci-
 
 chmod 600 /etc/config/oum
 chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/oum-reset-first-run \
-	/usr/libexec/oum-mihomo-api /usr/libexec/oum-passwall-nodes /usr/libexec/oum-passwall-policy /usr/libexec/oum-device-policy /usr/libexec/oum-policy-yaml.rb \
+		/usr/libexec/oum-mihomo-api /usr/libexec/oum-openclash-nodes /usr/libexec/oum-passwall-nodes /usr/libexec/oum-passwall-policy /usr/libexec/oum-device-policy /usr/libexec/oum-policy-yaml.rb \
 	/usr/libexec/oum-passwall-source-job \
 	/usr/libexec/oum-subscription-info \
 	/usr/libexec/oum-backup /usr/libexec/oum-backup-codec.rb /usr/libexec/oum-reset-vpn \
 	/usr/libexec/oum-system-job \
 	/usr/libexec/oum-engine-manager \
 	/usr/libexec/oum-podkop-config \
-	/usr/libexec/oum-awg-manager \
+		/usr/libexec/oum-awg-manager \
+		/usr/libexec/oum-dns-manager \
+		/usr/libexec/oum-mesh-manager \
+		/usr/libexec/oum-mesh-runtime \
+		/usr/libexec/oum-project-manager \
 	/usr/libexec/oum-zapret-strategy \
 	/usr/libexec/oum-zapret-quic \
 	/usr/libexec/oum-zapret-manager \
@@ -67,7 +76,10 @@ chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/ou
 chmod 600 /usr/libexec/oum/source_converter.rb
 mkdir -p /usr/share/oum
 cp "$SOURCE_DIR/root/usr/share/oum/zapret-youtube-strategies" /usr/share/oum/zapret-youtube-strategies
+rm -rf /usr/share/oum/packages
+cp -R "$SOURCE_DIR/root/usr/share/oum/packages" /usr/share/oum/packages
 chmod 644 /usr/share/oum/zapret-youtube-strategies
+find /usr/share/oum/packages -type f -exec chmod 600 {} \;
 chmod 644 /usr/share/luci/menu.d/luci-app-oum.json /usr/share/ucode/luci/controller/oum.uc /usr/share/rpcd/acl.d/luci-app-oum.json \
 	/usr/share/rpcd/ucode/oum /www/luci-static/resources/view/oum/first-run-v2.js \
 	/www/luci-static/resources/view/oum/dashboard-v11.js /www/luci-static/resources/view/oum/settings-v4.js

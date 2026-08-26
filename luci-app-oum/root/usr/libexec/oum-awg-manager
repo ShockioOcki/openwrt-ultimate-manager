@@ -6,15 +6,14 @@ umask 077
 ACTION="${1:-}"
 REQUEST="${2:-}"
 WORK=/tmp/oum-awg-import
-CACHE=/etc/oum/packages/amneziawg
 ROLLBACK=/etc/oum/rollback/awg-before-import
 LOG=/tmp/oum-awg-import.log
+REBOOT_MARKER=/etc/oum/reboot-required-awg
 INTERFACE=oum_awg
 PEER=oum_awg_peer
-RELEASE=https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/v25.12.3
-ASSETS='amneziawg-tools_v25.12.3_aarch64_cortex-a53_mediatek_mt7622.apk|a534cca1c7a6d286daaaf71347cb604a9c283b3cc18284c180d1efd67162f98b
-kmod-amneziawg_v25.12.3_aarch64_cortex-a53_mediatek_mt7622.apk|950f54f3cf54dfeb29d5d4c0682846dfde053d4d4493e3923b0037c867bc8e5f
-luci-proto-amneziawg_v25.12.3_aarch64_cortex-a53_mediatek_mt7622.apk|67a4d841de2fdbbb6630c4f4e64338384eba65bed9b2e7b30d13e58b553a3839'
+UPSTREAM_COMMIT=9742aa540b72c4059dabe8e91366162a98499219
+UPSTREAM_INSTALLER_URL="https://raw.githubusercontent.com/Slava-Shchipunov/awg-openwrt/$UPSTREAM_COMMIT/amneziawg-install.sh"
+UPSTREAM_INSTALLER_SHA256=8f556021e874053836e73c0be8cbf006706f22890da78bc9be9ff0cb93b7229c
 MUTATED=0
 SUCCESS=0
 
@@ -51,38 +50,63 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-fetch_assets() {
-	mkdir -p "$WORK/packages" "$CACHE"
-	chmod 700 "$CACHE"
-	old_ifs="$IFS"
-	IFS='
-'
-	for entry in $ASSETS; do
-		file="${entry%%|*}"
-		expected="${entry#*|}"
-		source="$CACHE/$file"
-		if [ ! -s "$source" ] || [ "$(sha256sum "$source" | awk '{print $1}')" != "$expected" ]; then
-			rm -f "$source"
-			curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$WORK/packages/$file" "$RELEASE/$file" >> "$LOG" 2>&1 || { IFS="$old_ifs"; return 1; }
-			[ "$(sha256sum "$WORK/packages/$file" | awk '{print $1}')" = "$expected" ] || { IFS="$old_ifs"; return 1; }
-			cp "$WORK/packages/$file" "$source"
-		fi
-		cp "$source" "$WORK/packages/$file"
-	done
-	IFS="$old_ifs"
-	chmod 600 "$CACHE"/*.apk
+fetch_upstream_installer() {
+	mkdir -p "$WORK"
+	installer="$WORK/amneziawg-install.sh"
+	rm -f "$installer"
+	if command -v curl >/dev/null 2>&1; then
+		curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 \
+			-o "$installer" "$UPSTREAM_INSTALLER_URL" >> "$LOG" 2>&1 || return 1
+	else
+		wget --timeout=20 -O "$installer" "$UPSTREAM_INSTALLER_URL" >> "$LOG" 2>&1 || return 1
+	fi
+	[ -s "$installer" ] || return 1
+	[ "$(sha256sum "$installer" | awk '{print $1}')" = "$UPSTREAM_INSTALLER_SHA256" ] || return 1
+	sh -n "$installer" >> "$LOG" 2>&1 || return 1
+	chmod 700 "$installer"
 }
 
 install_runtime() {
 	if command -v awg >/dev/null 2>&1 && [ -f /lib/netifd/proto/amneziawg.sh ]; then
 		return 0
 	fi
-	fetch_assets || return 1
-	apk add --simulate --allow-untrusted "$WORK"/packages/*.apk >> "$LOG" 2>&1 || return 1
-	apk add --allow-untrusted "$WORK"/packages/*.apk >> "$LOG" 2>&1 || return 1
-	command -v awg >/dev/null 2>&1 && [ -f /lib/netifd/proto/amneziawg.sh ] || return 1
-	modprobe amneziawg >> "$LOG" 2>&1 || return 1
-	[ -d /sys/module/amneziawg ]
+	fetch_upstream_installer || return 1
+	# -e disables the localization prompt; -n installs packages only. OUM owns
+	# the oum_awg interface and never lets the upstream script create awg1.
+	sh "$WORK/amneziawg-install.sh" -e -n >> "$LOG" 2>&1 || return 1
+	command -v awg >/dev/null 2>&1 || return 1
+	[ -f /lib/netifd/proto/amneziawg.sh ] || return 1
+	if command -v apk >/dev/null 2>&1; then
+		apk info -e kmod-amneziawg >/dev/null 2>&1 || return 1
+		apk info -e amneziawg-tools >/dev/null 2>&1 || return 1
+	fi
+	mkdir -p /etc/oum
+	cat /proc/sys/kernel/random/boot_id > "$REBOOT_MARKER"
+	chmod 600 "$REBOOT_MARKER"
+	# Loading now helps the current transaction, but the verified state is
+	# reached only after OpenWrt has rebooted once.
+	modprobe amneziawg >> "$LOG" 2>&1 || true
+	return 0
+}
+
+preflight_runtime() {
+	: > "$LOG"
+	if command -v awg >/dev/null 2>&1 && [ -f /lib/netifd/proto/amneziawg.sh ]; then
+		return 0
+	fi
+	fetch_upstream_installer || fail 'Не удалось загрузить или проверить официальный установщик AmneziaWG.'
+	ubus call system board >/dev/null 2>&1 || fail 'Не удалось определить платформу OpenWrt для AmneziaWG.'
+}
+
+runtime_ready() {
+	[ -f "$REBOOT_MARKER" ] || return 0
+	installed_boot="$(cat "$REBOOT_MARKER" 2>/dev/null || true)"
+	current_boot="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || true)"
+	[ -n "$current_boot" ] && [ "$installed_boot" != "$current_boot" ] ||
+		fail 'После установки AmneziaWG требуется один перезапуск роутера.'
+	modprobe amneziawg >> "$LOG" 2>&1 || fail 'Модуль AmneziaWG не загрузился после перезапуска.'
+	grep -q '^amneziawg ' /proc/modules || fail 'Модуль AmneziaWG отсутствует после перезапуска.'
+	rm -f "$REBOOT_MARKER"
 }
 
 valid_key() {
@@ -187,6 +211,7 @@ write_network() {
 	uci -q set "network.$INTERFACE=interface"
 	uci -q set "network.$INTERFACE.proto=amneziawg"
 	uci -q set "network.$INTERFACE.oum_managed=1"
+	uci -q set "network.$INTERFACE.auto=1"
 	uci -q set "network.$INTERFACE.private_key=$private_key"
 	set_list "$INTERFACE" addresses "$addresses"
 	[ -z "$mtu" ] || uci -q set "network.$INTERFACE.mtu=$mtu"
@@ -216,6 +241,76 @@ write_network() {
 	uci -q set "network.$PEER.endpoint_port=$endpoint_port"
 	[ -z "$keepalive" ] || uci -q set "network.$PEER.persistent_keepalive=$keepalive"
 	uci -q commit network
+}
+
+export_network() {
+	destination="$1"
+	[ "$(uci -q get "network.$INTERFACE.oum_managed" || true)" = 1 ] || return 1
+	[ "$(uci -q get "network.$PEER.oum_managed" || true)" = 1 ] || return 1
+	mkdir -p "$(dirname "$destination")"
+	{
+		printf '[Interface]\n'
+		printf 'PrivateKey = %s\n' "$(uci -q get "network.$INTERFACE.private_key")"
+		printf 'Address = %s\n' "$(uci -q get "network.$INTERFACE.addresses" | tr ' ' ',')"
+		for pair in mtu:MTU awg_jc:Jc awg_jmin:Jmin awg_jmax:Jmax awg_s1:S1 awg_s2:S2 awg_s3:S3 awg_s4:S4 awg_h1:H1 awg_h2:H2 awg_h3:H3 awg_h4:H4 awg_i1:I1 awg_i2:I2 awg_i3:I3 awg_i4:I4 awg_i5:I5; do
+			option="${pair%%:*}"; label="${pair#*:}"; value="$(uci -q get "network.$INTERFACE.$option" || true)"
+			[ -z "$value" ] || printf '%s = %s\n' "$label" "$value"
+		done
+		printf '\n[Peer]\n'
+		printf 'PublicKey = %s\n' "$(uci -q get "network.$PEER.public_key")"
+		value="$(uci -q get "network.$PEER.preshared_key" || true)"; [ -z "$value" ] || printf 'PresharedKey = %s\n' "$value"
+		printf 'AllowedIPs = %s\n' "$(uci -q get "network.$PEER.allowed_ips" | tr ' ' ',')"
+		host="$(uci -q get "network.$PEER.endpoint_host")"
+		case "$host" in *:*) host="[$host]" ;; esac
+		printf 'Endpoint = %s:%s\n' "$host" "$(uci -q get "network.$PEER.endpoint_port")"
+		value="$(uci -q get "network.$PEER.persistent_keepalive" || true)"; [ -z "$value" ] || printf 'PersistentKeepalive = %s\n' "$value"
+	} > "$destination"
+	chmod 600 "$destination"
+}
+
+restore_network() {
+	config="$1"
+	[ -s "$config" ] || return 0
+	parse_config "$config" || fail 'Сохранённая AWG-конфигурация повреждена.'
+	install_runtime || fail 'Не удалось восстановить компоненты AmneziaWG.'
+	write_network
+	/etc/init.d/network reload >> "$LOG" 2>&1 || fail 'Не удалось восстановить AWG-интерфейс.'
+	ifup "$INTERFACE" >> "$LOG" 2>&1 || true
+}
+
+remove_managed() {
+	managed="$(uci -q get "network.$INTERFACE.oum_managed" || true)"
+	[ -n "$(uci -q get "network.$INTERFACE" || true)" ] || return 0
+	[ "$managed" = 1 ] || fail 'Интерфейс oum_awg не принадлежит OUM и не был удалён.'
+	ifdown "$INTERFACE" >> "$LOG" 2>&1 || true
+	if [ "$(uci -q get "network.$PEER.oum_managed" || true)" = 1 ]; then
+		uci -q delete "network.$PEER" || true
+	fi
+	uci -q delete "network.$INTERFACE" || true
+	uci -q commit network
+	/etc/init.d/network reload >> "$LOG" 2>&1 || fail 'Не удалось применить удаление AWG-интерфейса.'
+	ip link delete "$INTERFACE" >/dev/null 2>&1 || true
+	[ -z "$(uci -q get "network.$INTERFACE" || true)" ] || fail 'AWG-интерфейс остался в конфигурации сети.'
+}
+
+disable_managed() {
+	managed="$(uci -q get "network.$INTERFACE.oum_managed" || true)"
+	[ -n "$(uci -q get "network.$INTERFACE" || true)" ] || return 0
+	[ "$managed" = 1 ] || fail 'Интерфейс oum_awg не принадлежит OUM и не был остановлен.'
+	ifdown "$INTERFACE" >> "$LOG" 2>&1 || true
+	uci -q set "network.$INTERFACE.auto=0"
+	uci -q commit network
+}
+
+enable_managed() {
+	managed="$(uci -q get "network.$INTERFACE.oum_managed" || true)"
+	[ -n "$(uci -q get "network.$INTERFACE" || true)" ] || return 1
+	[ "$managed" = 1 ] || fail 'Интерфейс oum_awg не принадлежит OUM и не был запущен.'
+	runtime_ready
+	uci -q set "network.$INTERFACE.auto=1"
+	uci -q commit network
+	/etc/init.d/network reload >> "$LOG" 2>&1 || fail 'Не удалось применить запуск AWG-интерфейса.'
+	ifup "$INTERFACE" >> "$LOG" 2>&1 || fail 'Не удалось поднять AWG-интерфейс.'
 }
 
 wait_tunnel() {
@@ -254,11 +349,22 @@ import_awg() {
 	ifup "$INTERFACE" >> "$LOG" 2>&1 || fail 'Не удалось поднять AWG-интерфейс.'
 	wait_tunnel || fail 'AWG не подтвердил handshake; прежняя конфигурация восстановлена.'
 	/usr/libexec/oum-podkop-config configure "$INTERFACE" >> "$LOG" 2>&1 || fail 'Podkop не запустился через AWG; прежняя конфигурация восстановлена.'
+	mkdir -p /etc/oum/engines/podkop
+	cp "$WORK/tunnel.conf" /etc/oum/engines/podkop/awg.conf
+	chmod 600 /etc/oum/engines/podkop/awg.conf
 	SUCCESS=1
 }
 
 case "$ACTION" in
 	import) : > "$LOG"; import_awg ;;
 	validate) parse_config "$REQUEST" && printf 'AWG configuration is valid\n' ;;
-	*) printf 'usage: %s {import REQUEST_JSON|validate CONFIG}\n' "$0" >&2; exit 2 ;;
+	preflight) preflight_runtime; SUCCESS=1 ;;
+	install) : > "$LOG"; install_runtime || fail 'Не удалось установить комплект AmneziaWG.'; SUCCESS=1 ;;
+	ready) : > "$LOG"; runtime_ready; SUCCESS=1 ;;
+	export) export_network "$REQUEST"; SUCCESS=1 ;;
+	restore) : > "$LOG"; restore_network "$REQUEST"; SUCCESS=1 ;;
+	enable) : > "$LOG"; enable_managed; SUCCESS=1 ;;
+	disable) : > "$LOG"; disable_managed; SUCCESS=1 ;;
+	remove) : > "$LOG"; remove_managed; SUCCESS=1 ;;
+	*) printf 'usage: %s {import REQUEST_JSON|validate CONFIG|preflight|install|ready|export FILE|restore FILE|enable|disable|remove}\n' "$0" >&2; exit 2 ;;
 esac
