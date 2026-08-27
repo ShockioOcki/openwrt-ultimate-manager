@@ -84,7 +84,11 @@ oum_install_package() {
 
 	sh "$OUM_INSTALL_TMP/package/tools/install-luci-dev.sh" \
 		"$OUM_INSTALL_TMP/package/luci-app-oum" || oum_die 'installation failed; backup was preserved'
-	/usr/libexec/oum-awg-manager install || oum_die 'AmneziaWG package installation failed'
+	if [ "${OUM_SKIP_AWG:-0}" = "1" ]; then
+		printf 'OUM installer: skip AmneziaWG installation (OUM_SKIP_AWG=1)\n'
+	else
+		/usr/libexec/oum-awg-manager install || oum_die 'AmneziaWG package installation failed'
+	fi
 	mkdir -p /etc/oum
 	printf '%s\n' "$OUM_INSTALLER_VERSION" > /etc/oum/version
 	printf '%s\n' $OUM_BASE_PACKAGES > /etc/oum/base-packages

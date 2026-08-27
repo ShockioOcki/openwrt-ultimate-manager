@@ -32,6 +32,7 @@ OPENCLASH_VERSION=0.47.156
 OPENCLASH_APK=luci-app-openclash-0.47.156.apk
 OPENCLASH_URL=https://github.com/vernesong/OpenClash/releases/download/v0.47.156/luci-app-openclash-0.47.156.apk
 OPENCLASH_SHA=1e4f330fc654e0270ac9cfa762af221335567d9b89388219890e8a7745b914ab
+OPENCLASH_SYSTEM='bash ip-full kmod-tun luci-compat'
 MIHOMO_VERSION=1.19.30
 MIHOMO_ARCHIVE=mihomo-linux-arm64-v1.19.30.gz
 MIHOMO_URL=https://github.com/MetaCubeX/mihomo/releases/download/v1.19.30/mihomo-linux-arm64-v1.19.30.gz
@@ -41,10 +42,12 @@ PODKOP_VERSION=0.7.22-r1
 PODKOP_RELEASE=https://github.com/itdoginfo/podkop/releases/download/0.7.22
 PODKOP_ASSETS='podkop-0.7.22-r1.apk|5abf1422f73819d0834fd3ca81ccd55aaa7631e8665dc03e8c0d629811302e27
 luci-app-podkop-0.7.22-r1.apk|72addad80b71a9f44ea64af011c24b405c98b7a2b94751166a5668deeab7ad53'
+PODKOP_SYSTEM='bind-dig jq kmod-nft-tproxy sing-box kmod-inet-diag kmod-tun'
 ZAPRET_VERSION=72.20260307-r1
 ZAPRET_ARCHIVE=zapret_v72.20260307_aarch64_cortex-a53.zip
 ZAPRET_URL=https://github.com/remittor/zapret-openwrt/releases/download/v72.20260307/$ZAPRET_ARCHIVE
 ZAPRET_SHA=fda00483a87071555e4bf3ae40ee815ee6c7f6a386f2860b646ce7e9347572dd
+ZAPRET_SYSTEM='coreutils coreutils-sleep coreutils-sort gzip kmod-nfnetlink-queue kmod-nft-queue libcap libnetfilter-queue1'
 PODKOP_REMOVE='luci-app-podkop podkop sing-box luci-app-zapret zapret'
 
 CURRENT=none
@@ -77,6 +80,10 @@ die() {
 
 installed() {
 	apk info -e "$1" >/dev/null 2>&1
+}
+
+world_constrained() {
+	grep -Eq "^${1}([<>=~]|$)" /etc/apk/world 2>/dev/null
 }
 
 ensure_oum_runtime() {
@@ -187,17 +194,22 @@ fetch() {
 
 stage_asset() {
 	engine="$1"
-	file="$2"
-	url="$3"
-	expected="$4"
+	asset_file="$2"
+	asset_url="$3"
+	asset_expected="$4"
 	destination="$5"
-	for cached in "$PACKAGE_CACHE/$engine/$file" "/tmp/oum-package-cache/$engine/$file"; do
-		if [ -s "$cached" ] && [ "$(sha256sum "$cached" | awk '{print $1}')" = "$expected" ]; then
+	if [ -s "$destination" ] && [ "$(sha256sum "$destination" | awk '{print $1}')" = "$asset_expected" ]; then
+		return 0
+	fi
+	for cached in "$PACKAGE_CACHE/$engine/$asset_file" "/tmp/oum-package-cache/$engine/$asset_file"; do
+		if [ -s "$cached" ] && [ "$(sha256sum "$cached" | awk '{print $1}')" = "$asset_expected" ]; then
 			cp "$cached" "$destination"
 			return 0
 		fi
 	done
-	fetch "$url" "$destination" "$expected"
+	fetch "$asset_url" "$destination" "$asset_expected" || return 1
+	mkdir -p "/tmp/oum-package-cache/$engine"
+	cp "$destination" "/tmp/oum-package-cache/$engine/$asset_file"
 }
 
 download_passwall() {
@@ -236,6 +248,11 @@ download_podkop() {
 		}
 	done
 	IFS="$old_ifs"
+	# OUM_SKIP_ZAPRET=1 allows podkop without zapret for diagnostics (see handoff 2026-08-27)
+	if [ "${OUM_SKIP_ZAPRET:-0}" = "1" ]; then
+		log "OUM_SKIP_ZAPRET=1 — skip zapret download for podkop"
+		return 0
+	fi
 	stage_asset podkop "$ZAPRET_ARCHIVE" "$ZAPRET_URL" "$ZAPRET_SHA" "$WORK/podkop/$ZAPRET_ARCHIVE" || return 1
 	unzip -jo "$WORK/podkop/$ZAPRET_ARCHIVE" 'apk/*.apk' -d "$WORK/podkop" >> "$LOG" 2>&1 || return 1
 	[ "$(sha256sum "$WORK/podkop/zapret-$ZAPRET_VERSION.apk" | awk '{print $1}')" = 2d1d3aa78b43d5319be3bb831cf81050c33920162f8e39368238a58ccbc16922 ] || return 1
@@ -257,6 +274,27 @@ simulate_engine() {
 		openclash) apk add --simulate --allow-untrusted "$WORK/openclash/$OPENCLASH_APK" >> "$LOG" 2>&1 ;;
 		podkop) apk add --simulate --allow-untrusted "$WORK"/podkop/*.apk >> "$LOG" 2>&1 ;;
 		*) return 1 ;;
+	esac
+}
+
+prepare_engine_runtime() {
+	case "$1" in
+		passwall)
+			apk add $PASSWALL_SYSTEM >> "$LOG" 2>&1 || return 1
+			;;
+		openclash)
+			apk add $OPENCLASH_SYSTEM >> "$LOG" 2>&1 || return 1
+			;;
+		podkop)
+			# Resolve and pin repository dependencies while the old engine and its
+			# network path are still alive. A successful simulation does not cache
+			# packages; postponing this apk add until after removal made rollback
+			# depend on a network path that had just been torn down.
+			apk add $PODKOP_SYSTEM >> "$LOG" 2>&1 || return 1
+			if [ "${OUM_SKIP_ZAPRET:-0}" != 1 ]; then
+				apk add $ZAPRET_SYSTEM >> "$LOG" 2>&1 || return 1
+			fi
+			;;
 	esac
 }
 
@@ -343,7 +381,9 @@ remove_engine() {
 			/etc/init.d/passwall stop >/dev/null 2>&1 || true
 			/etc/init.d/passwall disable >/dev/null 2>&1 || true
 			packages=''
-			for package in $PASSWALL_REMOVE; do installed "$package" && packages="$packages $package"; done
+			for package in $PASSWALL_REMOVE; do
+				if installed "$package" || world_constrained "$package"; then packages="$packages $package"; fi
+			done
 			[ -z "$packages" ] || apk del $packages >> "$LOG" 2>&1
 			rm -f /etc/config/passwall
 			rm -rf /tmp/etc/passwall /tmp/etc/passwall_tmp
@@ -353,7 +393,9 @@ remove_engine() {
 		openclash)
 			/etc/init.d/openclash stop >/dev/null 2>&1 || true
 			/etc/init.d/openclash disable >/dev/null 2>&1 || true
-			installed luci-app-openclash && apk del luci-app-openclash >> "$LOG" 2>&1
+			if installed luci-app-openclash || world_constrained luci-app-openclash; then
+				apk del luci-app-openclash >> "$LOG" 2>&1 || return 1
+			fi
 			rm -rf /etc/openclash
 			rm -f /etc/config/openclash
 			rm -rf /tmp/openclash /tmp/openclash_ui
@@ -366,13 +408,20 @@ remove_engine() {
 			/etc/init.d/zapret stop >/dev/null 2>&1 || true
 			/etc/init.d/zapret disable >/dev/null 2>&1 || true
 			packages=''
-			for package in $PODKOP_REMOVE; do installed "$package" && packages="$packages $package"; done
-			[ -z "$packages" ] || apk del $packages >> "$LOG" 2>&1
+			for package in $PODKOP_REMOVE; do
+				if installed "$package" || world_constrained "$package"; then packages="$packages $package"; fi
+			done
+			# apk-tools 3 has no --no-prune option. ensure_oum_runtime() pins the
+			# OUM control-plane dependencies in world before this removal.
+			[ -z "$packages" ] || apk del $packages >> "$LOG" 2>&1 || return 1
 			rm -f /etc/config/podkop /etc/config/zapret
 			rm -rf /etc/sing-box /opt/zapret /tmp/sing-box /tmp/podkop
 			nft delete table inet PodkopTable >/dev/null 2>&1 || true
 			nft delete table inet zapret >/dev/null 2>&1 || true
-			/usr/libexec/oum-awg-manager disable >> "$LOG" 2>&1 || return 1
+			# oum_awg may be amneziawg (from manual test) or wireguard; don't fail if it doesn't belong to OUM
+			ip link set oum_awg down >/dev/null 2>&1 || true
+			ip link delete oum_awg type wireguard >/dev/null 2>&1 || ip link delete oum_awg >/dev/null 2>&1 || true
+			/usr/libexec/oum-awg-manager disable >> "$LOG" 2>&1 || true
 			if installed podkop || installed zapret; then return 1; fi
 			;;
 	esac
@@ -442,10 +491,26 @@ install_openclash() {
 }
 
 install_podkop() {
-	apk add --allow-untrusted "$WORK"/podkop/*.apk >> "$LOG" 2>&1 || return 1
-	[ -x /etc/init.d/podkop ] && [ -x /etc/init.d/zapret ] && command -v sing-box >/dev/null 2>&1 || return 1
-	[ "$(apk list --installed podkop 2>/dev/null | sed -n 's/^podkop-\([^ ]*\).*/\1/p')" = "$PODKOP_VERSION" ] || return 1
-	[ "$(apk list --installed zapret 2>/dev/null | sed -n 's/^zapret-\([^ ]*\).*/\1/p')" = "$ZAPRET_VERSION" ] || return 1
+	apk add --allow-untrusted \
+		"$WORK/podkop/podkop-$PODKOP_VERSION.apk" \
+		"$WORK/podkop/luci-app-podkop-$PODKOP_VERSION.apk" >> "$LOG" 2>&1 || return 1
+	if [ "${OUM_SKIP_ZAPRET:-0}" != "1" ]; then
+		# remittor's post-install starts nfqws immediately with run_on_boot=1.
+		# On RB03 that Podkop+Zapret boot combination is the repeatable crash
+		# trigger. Install verified payloads without package scripts, then let
+		# OUM apply the explicit disabled policy below.
+		apk add --no-scripts --allow-untrusted \
+			"$WORK/podkop/zapret-$ZAPRET_VERSION.apk" \
+			"$WORK/podkop/luci-app-zapret-$ZAPRET_VERSION.apk" >> "$LOG" 2>&1 || return 1
+	fi
+	if [ "${OUM_SKIP_ZAPRET:-0}" = "1" ]; then
+		[ -x /etc/init.d/podkop ] && command -v sing-box >/dev/null 2>&1 || return 1
+		[ "$(apk list --installed podkop 2>/dev/null | sed -n 's/^podkop-\([^ ]*\).*/\1/p')" = "$PODKOP_VERSION" ] || return 1
+	else
+		[ -x /etc/init.d/podkop ] && [ -x /etc/init.d/zapret ] && command -v sing-box >/dev/null 2>&1 || return 1
+		[ "$(apk list --installed podkop 2>/dev/null | sed -n 's/^podkop-\([^ ]*\).*/\1/p')" = "$PODKOP_VERSION" ] || return 1
+		[ "$(apk list --installed zapret 2>/dev/null | sed -n 's/^zapret-\([^ ]*\).*/\1/p')" = "$ZAPRET_VERSION" ] || return 1
+	fi
 	if [ -f "$STATE/podkop/podkop-config.tar.gz" ]; then
 		tar -xzf "$STATE/podkop/podkop-config.tar.gz" -C /
 	fi
@@ -456,12 +521,24 @@ install_podkop() {
 			/usr/libexec/oum-awg-manager restore "$STATE/podkop/awg.conf" >> "$LOG" 2>&1 || return 1
 		fi
 	fi
-	[ -f /etc/config/podkop ] && [ -f /opt/zapret/config ] || return 1
-	chmod 600 /etc/config/podkop /opt/zapret/config
+	if [ "${OUM_SKIP_ZAPRET:-0}" = "1" ]; then
+		[ -f /etc/config/podkop ] || return 1
+		chmod 600 /etc/config/podkop
+	else
+		[ -f /etc/config/podkop ] && [ -f /opt/zapret/config ] || return 1
+		chmod 600 /etc/config/podkop /opt/zapret/config
+	fi
 	/etc/init.d/podkop stop >/dev/null 2>&1 || true
 	/etc/init.d/podkop disable >/dev/null 2>&1 || true
 	/etc/init.d/zapret stop >/dev/null 2>&1 || true
 	/etc/init.d/zapret disable >/dev/null 2>&1 || true
+	if [ "${OUM_SKIP_ZAPRET:-0}" != 1 ] && [ -f /etc/config/zapret ]; then
+		# Starting remittor Zapret together with Podkop during boot has caused
+		# repeatable RB03 boot failures. Preserve its config, but require an
+		# explicit diagnostic opt-in before restoring autostart.
+		uci -q set zapret.config.run_on_boot=0
+		uci -q commit zapret
+	fi
 }
 
 install_engine() {
@@ -500,7 +577,7 @@ activate_engine() {
 		/etc/init.d/$engine enable >/dev/null 2>&1 || true
 		(umask 022; /etc/init.d/$engine restart) >> "$LOG" 2>&1 || return 1
 		wait_ready "$engine" || return 1
-		if [ "$engine" = podkop ] && [ "$(cat "$STATE/podkop/zapret-enabled" 2>/dev/null || echo 0)" = 1 ]; then
+		if [ "$engine" = podkop ] && [ "${OUM_ENABLE_ZAPRET_ON_SWITCH:-0}" = 1 ] && [ "$(cat "$STATE/podkop/zapret-enabled" 2>/dev/null || echo 0)" = 1 ]; then
 			/etc/init.d/zapret enable >/dev/null 2>&1 || true
 			/etc/init.d/zapret restart >> "$LOG" 2>&1 || return 1
 		fi
@@ -530,7 +607,7 @@ rollback() {
 	/etc/init.d/$TARGET stop >/dev/null 2>&1 || true
 	if [ "$CURRENT" != none ] && [ "$CURRENT_REMOVED" = 1 ]; then
 		remove_engine "$TARGET" || log 'could not fully remove failed target engine'
-		if install_engine "$CURRENT"; then
+		if download_engine "$CURRENT" && install_engine "$CURRENT"; then
 			restore_metadata "$CURRENT"
 			activate_engine "$CURRENT" || log 'could not restart previous engine'
 		else
@@ -552,7 +629,14 @@ trap 'exit 130' INT TERM
 prepare_assets() {
 	engine="$1"
 	update_status package_index 'Обновляем индекс системных зависимостей…'
-	apk update >> "$LOG" 2>&1 || die 'Не удалось обновить индекс пакетов OpenWrt.'
+	# A stopped fake-IP engine can leave 198.18/16 DNS answers alive briefly.
+	# Do not destroy an otherwise valid cached index in that window: the
+	# subsequent apk add and simulation remain the authoritative checks.
+	if find /tmp/cache/apk -type f -name 'APKINDEX.*' -mmin -1440 2>/dev/null | grep -q .; then
+		log 'Reusing package indexes refreshed within the last 24 hours.'
+	else
+		apk --timeout 15 update >> "$LOG" 2>&1 || log 'Package index refresh failed; validating against the cached signed index.'
+	fi
 	update_status runtime 'Устанавливаем системные компоненты OUM…'
 	ensure_oum_runtime || die 'Не удалось установить системные компоненты OUM.'
 	update_status downloading 'Загружаем и проверяем полный комплект нового движка…'
@@ -563,6 +647,8 @@ prepare_assets() {
 	fi
 	update_status dependencies 'Проверяем совместимость системных зависимостей…'
 	simulate_engine "$engine" || die 'Системные зависимости нового движка недоступны или несовместимы.'
+	update_status dependencies_install 'Заранее устанавливаем зависимости до остановки текущего соединения…'
+	prepare_engine_runtime "$engine" || die 'Не удалось заранее установить зависимости нового движка; текущий движок не изменён.'
 }
 
 preflight_engine() {
@@ -591,6 +677,7 @@ switch_engine() {
 		update_status rollback_assets 'Готовим проверенный комплект для автоматического возврата…'
 		download_engine "$CURRENT" || die 'Не удалось подготовить комплект автоматического возврата.'
 		simulate_engine "$CURRENT" || die 'Комплект автоматического возврата несовместим с системой.'
+		prepare_engine_runtime "$CURRENT" || die 'Не удалось закрепить зависимости для автоматического возврата; текущий движок не изменён.'
 		update_status backup 'Сохраняем конфигурацию текущего движка…'
 		save_engine "$CURRENT" || die 'Не удалось сохранить конфигурацию текущего движка.'
 	fi
@@ -599,6 +686,8 @@ switch_engine() {
 	CURRENT_REMOVED=1
 	remove_engine "$CURRENT" || die 'Не удалось безопасно удалить прежний движок; запускаем автоматический возврат.'
 	control_plane_checkpoint
+	update_status restaging 'Повторно проверяем локальный комплект после удаления прежнего движка…'
+	download_engine "$TARGET" || die 'Проверенный комплект нового движка исчез после пакетной операции.'
 	update_status installing 'Устанавливаем новый движок из проверенного комплекта…'
 	install_engine "$TARGET" || die 'Новый движок не установился; запускаем автоматический возврат.'
 	control_plane_checkpoint
