@@ -401,7 +401,98 @@ function unmanagedTunnels(uci) {
 	return result;
 }
 
+function radioInterfaceForBand(uci, band) {
+	let phy = '';
+	uci.foreach('wireless', 'wifi-device', (radio) => {
+		if (!length(phy) && radio.band == band)
+			phy = radio.phy ?? '';
+	});
+	if (!match(phy, /^[A-Za-z0-9_-]+$/))
+		return '';
+	let process = popen('/usr/bin/iwinfo 2>/dev/null');
+	if (!process)
+		return '';
+	let iface = '';
+	for (let line = process.read('line'); length(line); line = process.read('line')) {
+		let found = match(line, /^(\S+)\s+ESSID:/);
+		if (found && (found[1] == phy || substr(found[1], 0, length(phy) + 1) == `${phy}-`)) {
+			iface = found[1];
+			break;
+		}
+	}
+	process.close();
+	return iface;
+}
+
+function wispStatusData(uci) {
+	let enabled = uci.get('wireless', 'oum_wisp', 'mode') == 'sta' && uci.get('wireless', 'oum_wisp', 'disabled') != '1';
+	let bus = connect();
+	let state = enabled ? (bus?.call('network.interface.wwan', 'status') ?? {}) : {};
+	let device = uci.get('wireless', 'oum_wisp', 'device') ?? '';
+	let band = uci.get('wireless', device, 'band') ?? '2g';
+	let signal = null;
+	let iface = radioInterfaceForBand(uci, band);
+	if (enabled && length(iface)) {
+		let process = popen(`/usr/bin/iwinfo ${iface} info 2>/dev/null`);
+		if (process) {
+			for (let line = process.read('line'); length(line); line = process.read('line')) {
+				let found = match(line, /Signal:\s*(-?[0-9]+)\s*dBm/);
+				if (found) signal = +found[1];
+			}
+			process.close();
+		}
+	}
+	return {
+		enabled,
+		connected: enabled && state.up == true,
+		ssid: enabled ? (uci.get('wireless', 'oum_wisp', 'ssid') ?? '') : '',
+		ip: state['ipv4-address']?.[0]?.address ?? '',
+		signal,
+		band,
+		rollback: access('/etc/oum/rollback/wireless-wisp') ? true : false
+	};
+}
+
+function scanWifiNetworks(uci, band) {
+	let iface = radioInterfaceForBand(uci, band);
+	if (!length(iface))
+		return [];
+	let process = popen(`/usr/bin/iwinfo ${iface} scan 2>/dev/null`);
+	if (!process)
+		return [];
+	let result = [], current = null;
+	let finish = () => {
+		if (!current || !length(current.ssid ?? '')) return;
+		let existing = filter(result, (item) => item.ssid == current.ssid)[0];
+		if (!existing || (current.signal ?? -200) > (existing.signal ?? -200)) {
+			if (existing) result = filter(result, (item) => item !== existing);
+			push(result, current);
+		}
+	};
+	for (let line = process.read('line'); length(line); line = process.read('line')) {
+		if (match(line, /^Cell [0-9]+ - Address:/)) {
+			finish();
+			current = { ssid: '', signal: -200, encryption: 'Неизвестно', band };
+			continue;
+		}
+		if (!current) continue;
+		let ssid = match(line, /^\s*ESSID:\s*"(.*)"\s*$/);
+		if (ssid) current.ssid = ssid[1];
+		let signal = match(line, /Signal:\s*(-?[0-9]+)\s*dBm/);
+		if (signal) current.signal = +signal[1];
+		let encryption = match(line, /^\s*Encryption:\s*(.+?)\s*$/);
+		if (encryption) current.encryption = trim(encryption[1]);
+	}
+	finish();
+	process.close();
+	return sort(result, (a, b) => b.signal - a.signal || (a.ssid < b.ssid ? -1 : 1));
+}
+
 function networkStatus() {
+	let uci = cursor();
+	let wisp = wispStatusData(uci);
+	if (wisp.connected)
+		return { up: true, ipv4: wisp.ip, device: 'wwan', proto: 'dhcp', via: 'wifi', ssid: wisp.ssid };
 	let result = { up: false, ipv4: '', device: '', proto: '' };
 	let bus = connect();
 	let status = bus?.call('network.interface.wan', 'status');
@@ -419,6 +510,7 @@ function capabilityStatus() {
 	let mobileControl = length(glob('/dev/cdc-wdm*')) > 0 || length(glob('/dev/ttyUSB*')) > 0;
 	return {
 		mesh_driver: system("iw list 2>/dev/null | grep -q 'mesh point'") == 0,
+		wisp_supported: system("iw list 2>/dev/null | grep -qE '\\* (managed|STA)$'") == 0,
 		mesh_runtime: system("apk info 2>/dev/null | grep -Eq '^wpad($|-(mesh-)?(mbedtls|openssl|wolfssl)$)'") == 0,
 		mesh_runtime_bundle: system("/usr/libexec/oum-mesh-runtime status >/dev/null 2>&1") == 0,
 		usb_host: length(glob('/sys/bus/usb/devices/usb*')) > 0,
@@ -532,6 +624,7 @@ function settingsStatusData() {
 			id: uci.get('wireless', 'oum_mesh', 'mesh_id') ?? '',
 			band: uci.get('wireless', uci.get('wireless', 'oum_mesh', 'device') ?? '', 'band') ?? '5g'
 		},
+		wisp: wispStatusData(uci),
 		project: {
 			version: trim(readfile('/etc/oum/version') ?? 'development'),
 			rollback: length(projectRollback) > 0
@@ -1264,6 +1357,46 @@ const methods = {
 		}
 	},
 
+	wispStatus: {
+		call: function() {
+			return wispStatusData(cursor());
+		}
+	},
+
+	scanWifi: {
+		args: { band: '2g' },
+		call: function(request) {
+			let band = request.args.band ?? '2g';
+			if (!(band in [ '2g', '5g' ]))
+				return failure('invalid_band', 'Выберите диапазон сканирования.');
+			if (!capabilityStatus().wisp_supported)
+				return failure('wisp_unsupported', 'Радиодрайвер не поддерживает режим Wi-Fi клиента.');
+			let networks = scanWifiNetworks(cursor(), band);
+			return { ok: true, band, networks };
+		}
+	},
+
+	setWisp: {
+		args: { enabled: false, ssid: '', password: '', band: '2g' },
+		call: function(request) {
+			let enabled = request.args.enabled;
+			let ssid = request.args.ssid ?? '';
+			let password = request.args.password ?? '';
+			let band = request.args.band ?? '2g';
+			if (type(enabled) != 'bool')
+				return failure('invalid_state', 'Некорректный режим репитера.');
+			if (enabled && (type(ssid) != 'string' || length(ssid) < 1 || length(ssid) > 32 || match(ssid, /[\r\n]/)))
+				return failure('invalid_ssid', 'Имя исходной Wi-Fi сети должно содержать от 1 до 32 байт.');
+			if (enabled && (type(password) != 'string' || (length(password) && (length(password) < 8 || length(password) > 63)) || match(password, /[\r\n]/)))
+				return failure('invalid_password', 'Пароль должен содержать 8–63 символа; для открытой сети оставьте поле пустым.');
+			if (!(band in [ '2g', '5g' ]))
+				return failure('invalid_band', 'Выберите диапазон репитера.');
+			if (enabled && !capabilityStatus().wisp_supported)
+				return failure('wisp_unsupported', 'Радиодрайвер не поддерживает режим Wi-Fi клиента.');
+			return startSystemJob('wisp', { enabled, ssid, password, band });
+		}
+	},
+
 	applyMeshSettings: {
 		args: { enabled: 0, mesh_id: '', password: '', band: '' },
 		call: function(request) {
@@ -1324,7 +1457,7 @@ const methods = {
 		args: { kind: '' },
 		call: function(request) {
 			let kind = request.args.kind ?? '';
-			if (!(kind in [ 'wifi', 'wan', 'lan' ]))
+			if (!(kind in [ 'wifi', 'wan', 'lan', 'wisp' ]))
 				return failure('invalid_kind', 'Неизвестный тип настроек.');
 			return startSystemJob(`rollback_${kind}`, {});
 		}

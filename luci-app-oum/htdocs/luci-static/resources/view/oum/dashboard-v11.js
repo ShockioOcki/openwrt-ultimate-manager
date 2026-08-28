@@ -581,7 +581,9 @@ return view.extend({
 			tunnelWarning.textContent = unmanaged.length ?
 				`Найдены сетевые туннели вне OUM: ${unmanaged.map((item) => `${item.name} (${item.up ? 'поднят' : 'выключен'})`).join(', ')}. Их маршруты могут конфликтовать с выбранным VPN-движком.` : '';
 			root.querySelector('#wan-state').textContent = fresh.wan?.up ? 'Подключён' : 'Нет соединения';
-			root.querySelector('#wan-detail').textContent = fresh.wan?.ipv4 ? `${fresh.wan.ipv4} · ${String(fresh.wan.proto || '').toUpperCase()}` : String(fresh.wan?.proto || '').toUpperCase();
+			root.querySelector('#wan-detail').textContent = fresh.wan?.via === 'wifi' ?
+				`через Wi-Fi${fresh.wan.ssid ? ` · ${fresh.wan.ssid}` : ''}${fresh.wan.ipv4 ? ` · ${fresh.wan.ipv4}` : ''}` :
+				(fresh.wan?.ipv4 ? `${fresh.wan.ipv4} · ${String(fresh.wan.proto || '').toUpperCase()}` : String(fresh.wan?.proto || '').toUpperCase());
 			root.querySelector('#client-count').textContent = String(fresh.clients?.length || 0);
 			const ssids = Array.from(new Set((fresh.wifi || []).map((item) => item.ssid)));
 			root.querySelector('#wifi-detail').textContent = ssids.length ? ssids.join(' · ') : 'Wi-Fi выключен';

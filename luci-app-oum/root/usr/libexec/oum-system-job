@@ -126,6 +126,86 @@ apply_mesh() {
 	fi
 }
 
+restore_wisp_backup() {
+	[ ! -f "$ROLLBACK/wireless-wisp" ] || cp "$ROLLBACK/wireless-wisp" /etc/config/wireless
+	[ ! -f "$ROLLBACK/network-wisp" ] || cp "$ROLLBACK/network-wisp" /etc/config/network
+	[ ! -f "$ROLLBACK/firewall-wisp" ] || cp "$ROLLBACK/firewall-wisp" /etc/config/firewall
+	/etc/init.d/network reload >/dev/null 2>&1 || true
+	wifi reload >/dev/null 2>&1 || true
+	/etc/init.d/firewall reload >/dev/null 2>&1 || true
+}
+
+apply_wisp() {
+	enabled="$(json_value .enabled)"
+	ssid="$(json_value .ssid)"
+	password="$(json_value .password)"
+	band="$(json_value .band)"
+	mkdir -p "$ROLLBACK"
+	cp /etc/config/wireless "$ROLLBACK/wireless-wisp"
+	cp /etc/config/network "$ROLLBACK/network-wisp"
+	cp /etc/config/firewall "$ROLLBACK/firewall-wisp"
+	chmod 600 "$ROLLBACK/wireless-wisp" "$ROLLBACK/network-wisp" "$ROLLBACK/firewall-wisp"
+	wan_zone="$(uci -q show firewall | sed -n "s/^firewall\.\([^.=]*\)\.name='wan'$/\1/p" | head -n 1)"
+	[ -n "$wan_zone" ] || { restore_wisp_backup; fail firewall_missing 'Не найдена WAN-зона firewall.'; }
+	uci -q del_list "firewall.$wan_zone.network=wwan" || true
+	if [ "$enabled" != true ]; then
+		uci -q delete wireless.oum_wisp || true
+		uci -q delete network.wwan || true
+		uci -q commit wireless
+		uci -q commit network
+		uci -q commit firewall
+		/etc/init.d/network reload >/dev/null 2>&1 || { restore_wisp_backup; fail wisp_reload_failed 'Не удалось отключить Wi-Fi репитер.'; }
+		wifi reload >/dev/null 2>&1 || { restore_wisp_backup; fail wisp_reload_failed 'Не удалось перезапустить Wi-Fi.'; }
+		/etc/init.d/firewall reload >/dev/null 2>&1 || true
+		write_status success disabled 'Репитер отключён; кабельный WAN снова используется как обычно.'
+		return
+	fi
+	radio=''
+	for candidate in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-device$/\1/p'); do
+		[ "$(uci -q get "wireless.$candidate.band" || true)" = "$band" ] || continue
+		radio="$candidate"
+		break
+	done
+	[ -n "$radio" ] || { restore_wisp_backup; fail wisp_radio_missing 'Не найден выбранный радиодиапазон.'; }
+	uci -q set wireless.oum_wisp='wifi-iface'
+	uci -q set "wireless.oum_wisp.device=$radio"
+	uci -q set wireless.oum_wisp.mode='sta'
+	uci -q set wireless.oum_wisp.network='wwan'
+	uci -q set "wireless.oum_wisp.ssid=$ssid"
+	uci -q set wireless.oum_wisp.disabled='0'
+	if [ -n "$password" ]; then
+		uci -q set wireless.oum_wisp.encryption='psk2'
+		uci -q set "wireless.oum_wisp.key=$password"
+	else
+		uci -q set wireless.oum_wisp.encryption='none'
+		uci -q delete wireless.oum_wisp.key || true
+	fi
+	uci -q set network.wwan='interface'
+	uci -q set network.wwan.proto='dhcp'
+	uci -q add_list "firewall.$wan_zone.network=wwan"
+	uci -q commit wireless
+	uci -q commit network
+	uci -q commit firewall
+	/etc/init.d/network reload >/dev/null 2>&1 || { restore_wisp_backup; fail wisp_reload_failed 'Сеть не приняла настройки репитера.'; }
+	wifi reload >/dev/null 2>&1 || { restore_wisp_backup; fail wisp_reload_failed 'Wi-Fi не принял настройки репитера.'; }
+	/etc/init.d/firewall reload >/dev/null 2>&1 || true
+	connected=0
+	for delay in 1 2 3 4 5 6 7 8 9 10; do
+		sleep 2
+		[ "$(ubus call network.interface.wwan status 2>/dev/null | jsonfilter -e '@.up' || true)" = true ] || continue
+		connected=1
+		break
+	done
+	[ "$connected" = 1 ] || { restore_wisp_backup; fail wisp_connect_failed 'Не удалось подключиться к Wi-Fi. Проверьте имя сети и пароль.'; }
+	write_status success connected 'Репитер подключён; интернет приходит по Wi-Fi, локальная сеть OUM изолирована.'
+}
+
+rollback_wisp() {
+	[ -f "$ROLLBACK/wireless-wisp" ] && [ -f "$ROLLBACK/network-wisp" ] && [ -f "$ROLLBACK/firewall-wisp" ] || fail rollback_missing 'Предыдущая конфигурация репитера не найдена.'
+	restore_wisp_backup
+	write_status success rolled_back 'Предыдущая конфигурация Wi-Fi репитера восстановлена.'
+}
+
 rollback_lan() {
 	[ -f "$ROLLBACK/network-lan" ] || fail rollback_missing 'Предыдущая LAN-конфигурация не найдена.'
 	previous="$(cat "$ROLLBACK/lan-address" 2>/dev/null || true)"
@@ -163,11 +243,13 @@ case "$ACTION" in
 	lan) write_status running applying 'Сохраняем новый LAN-адрес…'; apply_lan ;;
 	mesh) write_status running applying 'Проверяем и применяем Mesh…'; apply_mesh ;;
 	mesh_runtime) write_status running installing 'Устанавливаем совместимую поддержку Mesh…'; /usr/libexec/oum-mesh-runtime install || fail mesh_runtime_failed 'Mesh-компонент не установился; исходный Wi-Fi восстановлен.'; write_status success installed 'Mesh готов. Wi-Fi перезапущен, обычные точки доступа сохранены.' ;;
+	wisp) write_status running applying 'Подключаем репитер к выбранной Wi-Fi сети…'; apply_wisp ;;
 	project_update) write_status running downloading 'Загружаем и проверяем новую версию OUM…'; /usr/libexec/oum-project-manager update || fail update_failed 'Обновление OUM не установилось; текущая версия сохранена.'; write_status success updated 'OUM обновлён. Интерфейс перезагружается.' ;;
 	project_rollback) write_status running rollback 'Восстанавливаем предыдущую версию OUM…'; /usr/libexec/oum-project-manager rollback || fail rollback_failed 'Не удалось восстановить предыдущую версию OUM.'; write_status success rolled_back 'Предыдущая версия OUM восстановлена.' ;;
 	rollback_wifi) write_status running rollback 'Восстанавливаем Wi-Fi…'; rollback_config wireless ;;
 	rollback_wan) write_status running rollback 'Восстанавливаем подключение…'; rollback_config network ;;
 	rollback_lan) write_status running rollback 'Восстанавливаем LAN-адрес…'; rollback_lan ;;
+	rollback_wisp) write_status running rollback 'Восстанавливаем репитер…'; rollback_wisp ;;
 	dns) apply_dns ;;
 	engine) target="$(json_value .engine)"; [ "$target" != podkop ] || /usr/libexec/oum-awg-manager ready || fail reboot_required 'После первичной установки OUM один раз перезапустите роутер для активации AmneziaWG.'; write_status running preparing 'Проверяем прямой доступ и выполняем чистую замену VPN-движка…'; if ! OUM_ENGINE_STATUS="$STATUS" /usr/libexec/oum-engine-manager switch "$target"; then message="$(cat /tmp/oum-engine-error 2>/dev/null || true)"; fail engine_failed "${message:-Не удалось выполнить чистую установку VPN-движка.}"; fi; mkdir -p /etc/oum; : > /etc/oum/reboot-required; write_status success switched 'Новый VPN-движок установлен. Можно перезагрузить роутер сейчас или сделать это позже.' ;;
 	podkop_configure) interface="$(json_value .interface)"; write_status running configuring 'Связываем Podkop с отдельным туннелем и настраиваем Zapret для YouTube…'; /usr/libexec/oum-podkop-config configure "$interface" || fail podkop_failed 'Podkop не прошёл проверку; службы остановлены, прежняя конфигурация сохранена.'; write_status success configured 'Podkop работает через отдельный туннель; Zapret для прямого YouTube завершает запуск.' ;;

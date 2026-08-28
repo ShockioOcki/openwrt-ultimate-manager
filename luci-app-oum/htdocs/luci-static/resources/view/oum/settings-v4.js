@@ -20,6 +20,8 @@ const callApplyWan = rpc.declare({
 const callApplyLan = rpc.declare({ object: 'oum', method: 'applyLanSettings', params: [ 'address' ], expect: { '': {} } });
 const callApplyMesh = rpc.declare({ object: 'oum', method: 'applyMeshSettings', params: [ 'enabled', 'mesh_id', 'password', 'band' ], expect: { '': {} } });
 const callInstallMeshRuntime = rpc.declare({ object: 'oum', method: 'installMeshRuntime', expect: { '': {} } });
+const callScanWifi = rpc.declare({ object: 'oum', method: 'scanWifi', params: [ 'band' ], expect: { '': {} } });
+const callSetWisp = rpc.declare({ object: 'oum', method: 'setWisp', params: [ 'enabled', 'ssid', 'password', 'band' ], expect: { '': {} } });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
 const callSwitchEngine = rpc.declare({ object: 'oum', method: 'switchVpnEngine', params: [ 'engine' ], expect: { '': {} } });
 const callSetEngineDnsPreferences = rpc.declare({ object: 'oum', method: 'setEngineDnsPreferences', params: [ 'engine', 'server', 'bootstrap' ], expect: { '': {} } });
@@ -133,6 +135,7 @@ return view.extend({
 		const wan = settings.wan || {};
 		const lan = settings.lan || { address: '192.168.5.1', prefix: 24, rollback: false, rollback_address: '' };
 		const mesh = settings.mesh || { enabled: false, id: '', band: '5g' };
+		const wisp = settings.wisp || { enabled: false, connected: false, ssid: '', ip: '', signal: null, band: '2g', rollback: false };
 		const project = settings.project || { version: 'development', rollback: false };
 		const projectUpdatable = project.version && project.version !== 'development';
 		const dns = settings.dns || {
@@ -167,7 +170,7 @@ return view.extend({
 			(capabilities.mesh_runtime ? 'Mesh поддерживается и программный компонент установлен.' :
 				(capabilities.mesh_runtime_bundle ? 'Радиомодуль поддерживает Mesh. Совместимый компонент готов к установке.' : 'Радиомодуль поддерживает Mesh, но для этой прошивки нет проверенного комплекта.'));
 		const meshReady = capabilities.mesh_driver === true && capabilities.mesh_runtime === true;
-		const usbState = !capabilities.usb_host ? 'USB-контроллер не обнаружен.' :
+		const usbState = !capabilities.usb_host ? '' :
 			[ capabilities.usb_storage ? 'накопитель' : '', capabilities.usb_network ? 'сетевое устройство' : '', capabilities.usb_modem ? 'модем' : '' ].filter(Boolean).join(', ') || 'USB-порт доступен, подключённых устройств нет.';
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
@@ -178,7 +181,7 @@ return view.extend({
 				.oum-setting-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.oum-setting-choice{display:flex;gap:9px;padding:12px;border:1px solid #ccd3dc;border-radius:9px;cursor:pointer}.oum-setting-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-setting-choice span{display:flex;flex-direction:column;gap:4px}.oum-setting-choice small,.oum-help{opacity:.7;line-height:1.45}.oum-source-choice.is-disabled{opacity:.5;cursor:not-allowed}
 				.oum-setting-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-setting-field{margin:11px 0}.oum-setting-field label{display:block;font-weight:600;margin-bottom:6px}.oum-setting-field input,.oum-setting-field select{width:100%;min-height:42px;box-sizing:border-box}.oum-setting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.oum-job-state{padding:11px 13px;border-radius:8px;background:rgba(127,127,127,.1);margin:0 0 16px}.oum-job-state[data-state="idle"]{display:none}.oum-job-state[data-state="failed"]{background:rgba(201,75,75,.16)}.oum-job-state[data-state="success"]{background:rgba(43,155,104,.16)}
 				.oum-maintenance{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.oum-maintenance-card{border:1px solid #d8dde5;border-radius:10px;padding:14px;min-width:0}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
-				.oum-capability-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-capability{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-capability h4{margin:0 0 8px}.oum-capability-state{line-height:1.45}
+				.oum-capability-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.oum-capability{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-capability h4{margin:0 0 8px}.oum-capability-state{line-height:1.45}.oum-network-extension{border-top:1px solid #d8dde5;margin-top:16px;padding-top:16px}.oum-network-extension h4{margin:0 0 7px}.oum-wisp-results{display:grid;gap:7px;margin:10px 0}.oum-wisp-result{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left}.oum-wisp-result span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-wisp-status{padding:10px 12px;border-radius:8px;background:rgba(127,127,127,.1);margin:10px 0}
 				.oum-engine-current{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px;border-radius:9px;background:rgba(127,127,127,.1);margin-bottom:14px}.oum-engine-current small{opacity:.7}.oum-engine-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-engine-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-engine-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-engine-choice span{display:flex;flex-direction:column;gap:5px}.oum-engine-choice small{opacity:.72;line-height:1.4}.oum-engine-choice.is-disabled{opacity:.55;cursor:not-allowed}.oum-engine-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
 				.oum-dns-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.oum-dns-engine{min-width:0;border-top:1px solid #d8dde5;padding-top:12px}.oum-dns-engine h4{margin:0 0 4px}.oum-dns-engine .oum-setting-field{margin:10px 0}.oum-dns-engine .oum-help{display:block;overflow-wrap:anywhere}
 				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:14px}.oum-inline-warning{padding:11px 13px;border:1px solid #b28a29;background:rgba(178,138,41,.16);border-radius:9px;margin:12px 0;line-height:1.45}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}.oum-podkop-transports{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-transport-card{border:1px solid #ccd3dc;border-radius:11px;padding:14px}.oum-transport-card[data-active="true"]{border-color:#2b9b68}.oum-transport-card h4{margin:0 0 7px}.oum-transport-card textarea{width:100%;min-height:150px;font-family:monospace;box-sizing:border-box;margin:8px 0}
@@ -245,35 +248,51 @@ return view.extend({
 						E('button', { 'class': 'btn cbi-button-action', id: 'apply-lan', 'data-system-action': '' }, 'Изменить LAN-адрес'),
 						E('button', { 'class': 'btn', id: 'rollback-lan', 'data-system-action': '', disabled: lan.rollback ? null : '' }, lan.rollback_address ? `Вернуть ${lan.rollback_address}` : 'Вернуть предыдущий')
 					]),
-					E('hr'),
-					E('div', { 'class': 'oum-capability-grid' }, [
-						E('div', { 'class': 'oum-capability' }, [
-							E('h4', {}, 'Mesh'),
-							E('div', { 'class': 'oum-capability-state' }, meshState)
-						]),
-						E('div', { 'class': 'oum-capability' }, [
-							E('h4', {}, 'USB и 4G'),
-							E('div', { 'class': 'oum-capability-state' }, usbState)
-						])
-					]),
-					E('h4', {}, 'Mesh 802.11s'),
-					E('p', { 'class': 'oum-help' }, meshReady ? 'Создаётся отдельный mesh point в LAN; обычная точка доступа Wi-Fi остаётся включённой.' : 'Опция подготовлена, но заблокирована до установки совместимого wpad-mesh той же ревизии, что и hostapd-common.'),
-					...(!meshReady && capabilities.mesh_runtime_bundle ? [ E('div', { 'class': 'oum-setting-actions' }, [
-						E('button', { 'class': 'btn cbi-button-action', id: 'install-mesh-runtime', 'data-system-action': '' }, 'Установить поддержку Mesh'),
-						E('span', { 'class': 'oum-help' }, 'Wi-Fi перезапустится на несколько секунд. При ошибке OUM вернёт исходный компонент.')
+					...((capabilities.mesh_driver || capabilities.wisp_supported || capabilities.usb_host) ? [ E('div', { 'class': 'oum-capability-grid oum-network-extension' }, [
+						...(capabilities.mesh_driver ? [ E('div', { 'class': 'oum-capability' }, [ E('h4', {}, 'Mesh'), E('div', { 'class': 'oum-capability-state' }, meshState) ]) ] : []),
+						...(capabilities.wisp_supported ? [ E('div', { 'class': 'oum-capability' }, [ E('h4', {}, 'Wi-Fi как интернет'), E('div', { 'class': 'oum-capability-state' }, wisp.connected ? `Подключено к ${wisp.ssid}${wisp.ip ? ` · ${wisp.ip}` : ''}` : (wisp.enabled ? 'Подключение не установлено' : 'Выключено')) ]) ] : []),
+						...(capabilities.usb_host ? [ E('div', { 'class': 'oum-capability' }, [ E('h4', {}, 'USB и 4G'), E('div', { 'class': 'oum-capability-state' }, usbState) ]) ] : [])
 					]) ] : []),
-					E('div', { 'class': 'oum-setting-fields' }, [
-						field('Имя Mesh', E('input', { id: 'mesh-id', maxlength: 32, value: mesh.id || '', placeholder: 'HomeMesh', disabled: meshReady ? null : '' })),
-						field('Диапазон', E('select', { id: 'mesh-band', disabled: meshReady ? null : '' }, [
-							E('option', { value: '5g', selected: mesh.band !== '2g' ? '' : null }, '5 ГГц — рекомендуется'),
-							E('option', { value: '2g', selected: mesh.band === '2g' ? '' : null }, '2,4 ГГц — больше дальность')
-						])),
-						field('Пароль Mesh', E('input', { id: 'mesh-password', type: 'password', minlength: 8, maxlength: 63, autocomplete: 'new-password', placeholder: mesh.enabled ? 'Задайте заново для изменения' : 'Минимум 8 символов', disabled: meshReady ? null : '' }))
-					]),
-					E('div', { 'class': 'oum-setting-actions' }, [
-						E('button', { 'class': 'btn cbi-button-action', id: 'enable-mesh', 'data-system-action': '', disabled: meshReady ? null : '' }, mesh.enabled ? 'Обновить Mesh' : 'Включить Mesh'),
-						E('button', { 'class': 'btn', id: 'disable-mesh', 'data-system-action': '', disabled: mesh.enabled ? null : '' }, 'Отключить Mesh')
-					])
+					...(capabilities.mesh_driver ? [ E('section', { 'class': 'oum-network-extension' }, [
+						E('h4', {}, 'Mesh между роутерами OUM'),
+						E('p', { 'class': 'oum-help' }, meshReady ? 'Объединяет два или больше совместимых роутеров OUM в бесшовную сеть. На каждом узле укажите одинаковые Mesh ID и пароль; обычные точки Wi-Fi останутся включены.' : 'Для Mesh нужен совместимый wpad-mesh той же ревизии, что и hostapd-common.'),
+						...(!meshReady && capabilities.mesh_runtime_bundle ? [ E('div', { 'class': 'oum-setting-actions' }, [
+							E('button', { 'class': 'btn cbi-button-action', id: 'install-mesh-runtime', 'data-system-action': '' }, 'Установить поддержку Mesh'),
+							E('span', { 'class': 'oum-help' }, 'Wi-Fi перезапустится на несколько секунд; при ошибке OUM вернёт исходный компонент.')
+						]) ] : []),
+						E('div', { 'class': 'oum-setting-fields' }, [
+							field('Mesh ID', E('input', { id: 'mesh-id', maxlength: 32, value: mesh.id || '', placeholder: 'HomeMesh', disabled: meshReady ? null : '' })),
+							field('Диапазон', E('select', { id: 'mesh-band', disabled: meshReady ? null : '' }, [
+								E('option', { value: '5g', selected: mesh.band !== '2g' ? '' : null }, '5 ГГц — выше скорость'),
+								E('option', { value: '2g', selected: mesh.band === '2g' ? '' : null }, '2,4 ГГц — больше дальность')
+							])),
+							field('Пароль Mesh', E('input', { id: 'mesh-password', type: 'password', minlength: 8, maxlength: 63, autocomplete: 'new-password', placeholder: mesh.enabled ? 'Введите заново для изменения' : 'Минимум 8 символов', disabled: meshReady ? null : '' }))
+						]),
+						E('div', { 'class': 'oum-setting-actions' }, [
+							E('button', { 'class': 'btn cbi-button-action', id: 'enable-mesh', 'data-system-action': '', disabled: meshReady ? null : '' }, mesh.enabled ? 'Обновить Mesh' : 'Включить Mesh'),
+							E('button', { 'class': 'btn', id: 'disable-mesh', 'data-system-action': '', disabled: mesh.enabled ? null : '' }, 'Отключить Mesh')
+						])
+					]) ] : []),
+					...(capabilities.wisp_supported ? [ E('section', { 'class': 'oum-network-extension' }, [
+						E('h4', {}, 'Интернет от другой Wi-Fi сети (WISP)'),
+						E('p', { 'class': 'oum-help' }, 'Роутер подключится к обычной точке Wi-Fi как клиент, а ваши LAN и Wi-Fi останутся отдельной защищённой сетью. Кабельный WAN не удаляется.'),
+						E('div', { id: 'wisp-status', 'class': 'oum-wisp-status' }, wisp.connected ? `Подключено: ${wisp.ssid}${wisp.ip ? ` · ${wisp.ip}` : ''}${wisp.signal != null ? ` · ${wisp.signal} dBm` : ''}` : (wisp.enabled ? 'Настройка включена, но соединения нет.' : 'WISP выключен.')),
+						E('div', { 'class': 'oum-setting-fields' }, [
+							field('Диапазон', E('select', { id: 'wisp-band' }, [
+								E('option', { value: '2g', selected: wisp.band !== '5g' ? '' : null }, '2,4 ГГц'),
+								E('option', { value: '5g', selected: wisp.band === '5g' ? '' : null }, '5 ГГц')
+							])),
+							field('Исходная сеть', E('input', { id: 'wisp-ssid', maxlength: 32, value: wisp.ssid || '', placeholder: 'Выберите после сканирования или введите имя' })),
+							field('Пароль исходной сети', E('input', { id: 'wisp-password', type: 'password', minlength: 8, maxlength: 63, autocomplete: 'new-password', placeholder: wisp.enabled ? 'Введите для переподключения' : 'Для открытой сети оставьте пустым' }))
+						]),
+						E('div', { 'class': 'oum-setting-actions' }, [
+							E('button', { 'class': 'btn', id: 'scan-wisp' }, 'Найти сети'),
+							E('button', { 'class': 'btn cbi-button-action', id: 'enable-wisp', 'data-system-action': '' }, wisp.enabled ? 'Переподключить' : 'Подключить'),
+							E('button', { 'class': 'btn', id: 'disable-wisp', 'data-system-action': '', disabled: wisp.enabled ? null : '' }, 'Отключить'),
+							E('button', { 'class': 'btn', id: 'rollback-wisp', 'data-system-action': '', disabled: wisp.rollback ? null : '' }, 'Вернуть предыдущие')
+						]),
+						E('div', { id: 'wisp-results', 'class': 'oum-wisp-results', hidden: '' })
+					]) ] : [])
 				])
 			]),
 			E('details', { 'class': 'oum-settings-panel oum-protected', open: '' }, [
@@ -484,7 +503,7 @@ return view.extend({
 				if (zapretStatus && status.action?.startsWith('zapret_'))
 					zapretStatus.textContent = status.message || 'Операция Zapret выполняется…';
 				if (status.action === 'engine') return;
-				if ((status.action === 'dns' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
+				if ((status.action === 'dns' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'wisp' || status.action === 'rollback_wisp' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
 					acknowledgeStatus(status).finally(() => window.setTimeout(() => window.location.reload(), 900));
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
@@ -577,7 +596,8 @@ return view.extend({
 				ui.addNotification(null, E('p', {}, error.message), 'error');
 			});
 		});
-		root.querySelector('#enable-mesh').addEventListener('click', async (event) => {
+		const enableMeshButton = root.querySelector('#enable-mesh');
+		if (enableMeshButton) enableMeshButton.addEventListener('click', async (event) => {
 			event.preventDefault();
 			const meshId = value('#mesh-id');
 			const password = value('#mesh-password');
@@ -592,10 +612,59 @@ return view.extend({
 			if (await confirmation('Установить поддержку Mesh?', 'Обычные точки Wi-Fi будут недоступны несколько секунд. OUM проверит версию и контрольные суммы; при ошибке выполнит откат.', 'Установить', false))
 				start(callInstallMeshRuntime());
 		});
-		root.querySelector('#disable-mesh').addEventListener('click', async (event) => {
+		const disableMeshButton = root.querySelector('#disable-mesh');
+		if (disableMeshButton) disableMeshButton.addEventListener('click', async (event) => {
 			event.preventDefault();
 			if (await confirmation('Отключить Mesh?', 'Будет удалён только управляемый интерфейс OUM Mesh. Обычный Wi-Fi останется включён.', 'Отключить', true))
 				start(callApplyMesh(0, '', '', mesh.band || '5g'));
+		});
+		const wispResults = root.querySelector('#wisp-results');
+		const scanWispButton = root.querySelector('#scan-wisp');
+		if (scanWispButton) scanWispButton.addEventListener('click', (event) => {
+			event.preventDefault();
+			const band = value('#wisp-band');
+			scanWispButton.disabled = true;
+			scanWispButton.textContent = 'Ищем…';
+			callScanWifi(band).then((result) => {
+				resultError(result, 'Не удалось найти Wi-Fi сети.');
+				const networks = result.networks || [];
+				wispResults.hidden = false;
+				wispResults.replaceChildren(...(networks.length ? networks.map((network) => E('button', {
+					type: 'button',
+					'class': 'btn oum-wisp-result',
+					click: () => {
+						root.querySelector('#wisp-ssid').value = network.ssid;
+						wispResults.hidden = true;
+					}
+				}, [ E('span', {}, network.ssid), E('small', {}, `${network.signal} dBm · ${network.encryption}`) ])) : [ E('p', { 'class': 'oum-help' }, 'Сети не найдены. Можно ввести имя вручную.') ]));
+			}).catch((error) => ui.addNotification(null, E('p', {}, error.message), 'error')).finally(() => {
+				scanWispButton.disabled = false;
+				scanWispButton.textContent = 'Найти сети';
+			});
+		});
+		const enableWispButton = root.querySelector('#enable-wisp');
+		if (enableWispButton) enableWispButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			const ssid = rawValue('#wisp-ssid').trim();
+			const password = rawValue('#wisp-password');
+			const band = value('#wisp-band');
+			if (!ssid) return ui.addNotification(null, E('p', {}, 'Выберите или введите исходную Wi-Fi сеть.'), 'warning');
+			if (password && (password.length < 8 || password.length > 63)) return ui.addNotification(null, E('p', {}, 'Пароль должен содержать от 8 до 63 символов.'), 'warning');
+			const conflict = mesh.enabled && mesh.band === band ? ' Mesh использует тот же диапазон; скорость и устойчивость могут снизиться.' : '';
+			if (await confirmation('Подключить интернет по Wi-Fi?', `Роутер подключится к «${ssid}» и проверит получение интернета.${conflict} При ошибке прежняя сеть восстановится.`, wisp.enabled ? 'Переподключить' : 'Подключить', false))
+				start(callSetWisp(true, ssid, password, band));
+		});
+		const disableWispButton = root.querySelector('#disable-wisp');
+		if (disableWispButton) disableWispButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			if (await confirmation('Отключить интернет по Wi-Fi?', 'Управляемое WISP-подключение будет удалено; кабельный WAN останется без изменений.', 'Отключить', true))
+				start(callSetWisp(false, '', '', wisp.band || '2g'));
+		});
+		const rollbackWispButton = root.querySelector('#rollback-wisp');
+		if (rollbackWispButton) rollbackWispButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			if (await confirmation('Вернуть настройки WISP?', 'Будут восстановлены сеть, Wi-Fi и firewall до последнего изменения WISP.', 'Восстановить', true))
+				start(callRollback('wisp'));
 		});
 		const podkopButton = root.querySelector('#configure-podkop');
 		if (podkopButton) podkopButton.addEventListener('click', async (event) => {
