@@ -78,6 +78,47 @@ function validDeviceAlias(alias) {
 	return Array.from(alias).length <= 32 && /^[\p{L}\p{N} _.\-]*$/u.test(alias);
 }
 
+function loadQrLibrary() {
+	const load = (path) => new Promise((resolve, reject) => {
+		const script = document.createElement('script');
+		script.src = L.resource(`view/oum/${path}`);
+		script.onload = resolve;
+		script.onerror = () => reject(new Error('Не удалось загрузить локальный генератор QR.'));
+		document.head.appendChild(script);
+	});
+	const main = window.qrcode ? Promise.resolve() : load('qrcode.min.js');
+	return main.then(() => window.qrcode?.stringToBytesFuncs?.['UTF-8'] ? null : load('qrcode_UTF8.js'));
+}
+
+function escapeWifiQr(value) {
+	return String(value || '').replace(/[\\;,":]/g, '\\$&');
+}
+
+function drawQr(canvas, text) {
+	window.qrcode.stringToBytes = window.qrcode.stringToBytesFuncs['UTF-8'];
+	const code = window.qrcode(0, 'M');
+	code.addData(text, 'Byte');
+	code.make();
+	const count = code.getModuleCount();
+	const quiet = 4;
+	const logicalSize = 200;
+	const scale = Math.max(1, Math.floor(logicalSize / (count + quiet * 2)));
+	const size = (count + quiet * 2) * scale;
+	const ratio = window.devicePixelRatio || 1;
+	canvas.width = size * ratio;
+	canvas.height = size * ratio;
+	canvas.style.width = `${size}px`;
+	canvas.style.height = `${size}px`;
+	const ctx = canvas.getContext('2d');
+	ctx.scale(ratio, ratio);
+	ctx.fillStyle = '#fff';
+	ctx.fillRect(0, 0, size, size);
+	ctx.fillStyle = '#000';
+	for (let row = 0; row < count; row++)
+		for (let col = 0; col < count; col++)
+			if (code.isDark(row, col)) ctx.fillRect((col + quiet) * scale, (row + quiet) * scale, scale, scale);
+}
+
 function formatBytes(value) {
 	let amount = Math.max(0, Number(value) || 0);
 	const units = [ 'Б', 'КБ', 'МБ', 'ГБ', 'ТБ' ];
@@ -144,7 +185,7 @@ return view.extend({
 				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}.oum-device-cell{min-width:180px}.oum-device-name-row,.oum-device-alias-form{display:flex;align-items:center;gap:8px;min-width:0}.oum-device-name{min-width:0;overflow-wrap:anywhere}.oum-device-rename{padding:5px 8px;min-height:32px;white-space:nowrap}.oum-device-alias-form input{min-width:120px;max-width:220px;height:36px}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:#c0392b}.oum-client-paused{opacity:.55}.oum-device-help{margin:0 0 12px}.oum-offline{margin-top:14px}.oum-offline>summary{cursor:pointer;font-weight:600;padding:8px 0}.oum-pause-button{white-space:nowrap}
 				.oum-muted{opacity:.68}.oum-warning{padding:12px 14px;border:1px solid #b28a29;background:rgba(178,138,41,.16);border-radius:10px;margin-top:14px;line-height:1.45}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
 				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:rgba(127,127,127,.1);margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}.oum-node-quick,.oum-node-all-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-				.oum-node-actions,.oum-subscription-head{display:flex;align-items:center;gap:8px}.oum-subscription{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #d8dde5}.oum-subscription-head{justify-content:space-between}.oum-subscription-head h3{margin:0}.oum-subscription-progress{height:9px;border-radius:999px;background:rgba(127,127,127,.18);overflow:hidden;margin:13px 0 8px}.oum-subscription-progress>span{display:block;height:100%;background:#32b67a;transition:width .3s}.oum-subscription-data{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}.oum-subscription-status{margin-top:7px;font-size:.85em}
+				.oum-node-actions,.oum-subscription-head{display:flex;align-items:center;gap:8px}.oum-subscription{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #d8dde5}.oum-subscription-head{justify-content:space-between;flex-wrap:wrap}.oum-subscription-head h3{margin:0}.oum-subscription-status{min-width:0;flex:1;font-size:.92em}.oum-qr-wrap{display:grid;justify-items:center;gap:12px}.oum-qr-wrap canvas{background:#fff;border-radius:8px}
 				.oum-node{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:start;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-node>span:first-child{min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.35}.oum-node .btn{white-space:nowrap}.oum-delay{min-width:62px;text-align:right;white-space:nowrap}
 				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-hint{font-size:.86em;margin:2px 0 8px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
 				.oum-node-all{margin-top:13px}.oum-node-all>summary{cursor:pointer;font-weight:600;padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
@@ -161,7 +202,7 @@ return view.extend({
 			E('div', { 'class': 'oum-warning', id: 'reboot-required-warning', hidden: '' }, 'После замены VPN-движка рекомендуется перезагрузить роутер из раздела «Настройки».'),
 			E('div', { 'class': 'oum-cards' }, [
 				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
-				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, '') ]),
+				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, ''), E('button', { 'class': 'btn cbi-button', id: 'show-wifi-qr' }, 'Показать QR') ]),
 				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Температура'), E('strong', { id: 'thermal-state' }, '—'), E('div', { 'class': 'oum-muted' }, 'Максимум по датчикам') ]),
 				E('div', { 'class': 'oum-card' }, [
 					E('small', {}, 'VPN-движок'),
@@ -193,14 +234,9 @@ return view.extend({
 					E('div', { 'class': 'oum-subscription', id: 'subscription-panel', hidden: '' }, [
 						E('div', { 'class': 'oum-subscription-head' }, [
 							E('h3', {}, 'Подписка'),
+							E('span', { 'class': 'oum-subscription-status oum-muted', id: 'subscription-status', title: 'Данные обновляются автоматически каждые 30 минут.' }, '—'),
 							E('button', { 'class': 'btn cbi-button', id: 'refresh-subscription' }, 'Обновить')
-						]),
-						E('div', { 'class': 'oum-subscription-progress', id: 'subscription-progress' }, E('span', {})),
-						E('div', { 'class': 'oum-subscription-data' }, [
-							E('strong', { id: 'subscription-traffic' }, '—'),
-							E('strong', { id: 'subscription-expire' }, '—')
-						]),
-						E('div', { 'class': 'oum-subscription-status oum-muted', id: 'subscription-status' }, '')
+						])
 					]),
 					E('div', { id: 'passwall-panel', hidden: '' }, [
 						E('div', { 'class': 'oum-node-head' }, [
@@ -298,19 +334,17 @@ return view.extend({
 					]),
 					E('div', { 'class': 'oum-node-controls', id: 'node-controls' }, [
 						E('div', { 'class': 'oum-node-head' }, [
-							E('h3', { id: 'node-panel-title' }, 'VPN-нода'),
+							E('h3', { id: 'node-panel-title' }, 'Точка подключения'),
 							E('div', { 'class': 'oum-node-actions' }, [
 								E('a', { 'class': 'btn cbi-button', id: 'zashboard-link', href: zashboardUrl, target: '_blank', rel: 'noreferrer' }, 'Zashboard'),
-								E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Измерить TCP')
+								E('button', { 'class': 'btn cbi-button-action', id: 'show-node-picker' }, 'Выбрать ноду')
 							])
 						]),
 						E('div', { 'class': 'oum-current-node', id: 'current-node' }, 'Нет активной ноды'),
-						E('div', { 'class': 'oum-node-hint oum-muted' }, 'Задержка нод — лёгкое TCP-соединение до их серверов; это не полный HTTPS-отклик.'),
 						E('div', { 'class': 'oum-node-message oum-muted', id: 'node-message' }),
-						E('div', { 'class': 'oum-node-title' }, 'Быстрый доступ'),
-						E('div', { 'class': 'oum-node-list oum-node-quick', id: 'node-list' }),
-						E('details', { 'class': 'oum-node-all' }, [
-							E('summary', { id: 'all-nodes-summary' }, 'Все ноды'),
+						E('details', { 'class': 'oum-node-all', id: 'node-picker' }, [
+							E('summary', { id: 'all-nodes-summary' }, 'Список нод'),
+							E('div', { 'class': 'oum-node-actions' }, [ E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Измерить TCP'), E('span', { 'class': 'oum-node-hint oum-muted' }, 'Лёгкое TCP-соединение до сервера ноды.') ]),
 							E('div', { 'class': 'oum-node-list oum-node-all-grid', id: 'all-node-list' })
 						])
 					])
@@ -320,8 +354,8 @@ return view.extend({
 
 		const nodePanel = root.querySelector('#node-panel');
 		const nodeControls = root.querySelector('#node-controls');
-		const nodeList = root.querySelector('#node-list');
 		const allNodeList = root.querySelector('#all-node-list');
+		const nodePicker = root.querySelector('#node-picker');
 		const nodeMessage = root.querySelector('#node-message');
 		const measureButton = root.querySelector('#measure-nodes');
 		const nodePanelTitle = root.querySelector('#node-panel-title');
@@ -329,6 +363,7 @@ return view.extend({
 		const subscriptionPanel = root.querySelector('#subscription-panel');
 		const subscriptionRefresh = root.querySelector('#refresh-subscription');
 		const subscriptionStatus = root.querySelector('#subscription-status');
+		const wifiQrButton = root.querySelector('#show-wifi-qr');
 		const vpnToggle = root.querySelector('#vpn-toggle');
 		const vpnControlMessage = root.querySelector('#vpn-control-message');
 		const policyMessage = root.querySelector('#policy-message');
@@ -518,31 +553,22 @@ return view.extend({
 			if (subscriptionPanel.hidden) return;
 			subscriptionRefresh.disabled = info.refreshing === true;
 			if (!info.available) {
-				root.querySelector('#subscription-progress').hidden = true;
-				root.querySelector('#subscription-traffic').textContent = 'Данные о трафике недоступны';
-				root.querySelector('#subscription-expire').textContent = '';
 				subscriptionStatus.textContent = info.refreshing ? 'Получаем данные у провайдера…' : 'Провайдер не передал сведения о подписке.';
 				return;
 			}
 
 			const used = Number(info.upload || 0) + Number(info.download || 0);
 			const total = Number(info.total || 0);
-			const percent = total > 0 ? Math.min(100, Math.max(0, used / total * 100)) : 0;
-			const progress = root.querySelector('#subscription-progress');
-			progress.hidden = total <= 0;
-			progress.firstElementChild.style.width = `${percent}%`;
-			root.querySelector('#subscription-traffic').textContent = total > 0 ?
-				`${formatBytes(used)} из ${formatBytes(total)}` : `${formatBytes(used)} использовано`;
+			const traffic = total > 0 ? `${formatBytes(used)} из ${formatBytes(total)}` : `${formatBytes(used)} использовано`;
 
 			const expires = Number(info.expire || 0);
+			let expiry = 'без ограничения срока';
 			if (expires > 0) {
 				const days = Math.max(0, Math.ceil((expires - Date.now() / 1000) / 86400));
 				const date = new Date(expires * 1000).toLocaleDateString('ru-RU');
-				root.querySelector('#subscription-expire').textContent = `Осталось ${days} дн. · до ${date}`;
-			} else {
-				root.querySelector('#subscription-expire').textContent = 'Без ограничения срока';
+				expiry = `до ${date} (${days} дн.)`;
 			}
-			subscriptionStatus.textContent = info.refreshing ? 'Обновляем данные…' : 'Данные подписки обновляются автоматически каждые 30 минут.';
+			subscriptionStatus.textContent = info.refreshing ? 'Обновляем данные…' : `${traffic} · ${expiry}`;
 		};
 
 		const updateDashboard = (fresh) => {
@@ -559,6 +585,7 @@ return view.extend({
 			root.querySelector('#client-count').textContent = String(fresh.clients?.length || 0);
 			const ssids = Array.from(new Set((fresh.wifi || []).map((item) => item.ssid)));
 			root.querySelector('#wifi-detail').textContent = ssids.length ? ssids.join(' · ') : 'Wi-Fi выключен';
+			wifiQrButton.hidden = !(fresh.wifi || []).length;
 			root.querySelector('#thermal-state').textContent = fresh.thermal?.maximum != null ? `${Math.round(fresh.thermal.maximum)} °C` : 'Нет данных';
 			root.querySelector('#active-source').textContent = sourceNames[vpnEngine === 'passwall' ? 'passwall' : (vpnEngine === 'podkop' ? 'podkop' : fresh.active_source)] || fresh.active_source;
 			vpnEnabled = fresh.vpn_enabled === true;
@@ -685,7 +712,7 @@ return view.extend({
 			if (!fresh.available) return;
 			const isPasswall = fresh.engine === 'passwall';
 			nodeControls.dataset.engine = isPasswall ? 'passwall' : 'openclash';
-			nodePanelTitle.textContent = isPasswall ? 'Выбор ноды' : 'VPN-нода';
+			nodePanelTitle.textContent = 'Точка подключения';
 			zashboardLink.hidden = isPasswall;
 			zashboardLink.style.display = isPasswall ? 'none' : '';
 			measureButton.disabled = fresh.applying === true;
@@ -703,11 +730,8 @@ return view.extend({
 				fresh.current_id ? node.id === fresh.current_id : node.name === fresh.current);
 			root.querySelector('#current-node').textContent = current ?
 				`${current.name} · ${delayText(current, 'TCP не измерен')}` : (fresh.current || 'Не выбрана');
-			nodeList.replaceChildren(...preferredNodes(fresh).map((node) => makeNode(node, false)));
-			if (!nodeList.children.length)
-				nodeList.appendChild(E('div', { 'class': 'oum-muted' }, 'Других нод в профиле нет.'));
 			const all = sortedNodes(fresh.nodes);
-			root.querySelector('#all-nodes-summary').textContent = `Все ноды (${all.length})`;
+			root.querySelector('#all-nodes-summary').textContent = `Список нод (${all.length})`;
 			allNodeList.replaceChildren(...all.map((node) => makeNode(node,
 				fresh.current_id ? node.id === fresh.current_id : node.name === fresh.current)));
 		};
@@ -732,6 +756,10 @@ return view.extend({
 				measureButton.textContent = 'Измерить TCP';
 			});
 		});
+		root.querySelector('#show-node-picker').addEventListener('click', () => {
+			nodePicker.open = !nodePicker.open;
+			if (nodePicker.open) nodePicker.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+		});
 
 		subscriptionRefresh.addEventListener('click', (ev) => {
 			ev.preventDefault();
@@ -750,6 +778,43 @@ return view.extend({
 				subscriptionStatus.textContent = err.message;
 				subscriptionRefresh.disabled = false;
 			});
+		});
+		wifiQrButton.addEventListener('click', () => {
+			const network = (dashboardState.wifi || [])[0];
+			if (!network) return;
+			const password = E('input', { type: 'password', autocomplete: 'off', placeholder: 'Пароль Wi-Fi', 'aria-label': 'Пароль Wi-Fi' });
+			const error = E('p', { 'class': 'oum-node-message', 'data-state': 'idle' });
+			const generate = async () => {
+				const key = password.value;
+				if (network.password_set && !key) {
+					error.dataset.state = 'failed';
+					error.textContent = 'Введите действующий пароль Wi-Fi. OUM не читает и не показывает сохранённый пароль.';
+					password.focus();
+					return;
+				}
+				try {
+					await loadQrLibrary();
+					const payload = network.password_set ? `WIFI:T:WPA;S:${escapeWifiQr(network.ssid)};P:${escapeWifiQr(key)};;` : `WIFI:T:nopass;S:${escapeWifiQr(network.ssid)};;`;
+					const canvas = E('canvas', { 'aria-label': `QR-код сети ${network.ssid}` });
+					drawQr(canvas, payload);
+					password.value = '';
+					ui.showModal(`Wi-Fi: ${network.ssid}`, [
+						E('div', { 'class': 'oum-qr-wrap' }, [ canvas, E('strong', {}, 'Наведи камерой телефона'), E('span', { 'class': 'oum-muted' }, 'Пароль не сохранён в браузере.') ]),
+						E('div', { 'class': 'right' }, E('button', { 'class': 'btn cbi-button-action', click: ui.hideModal }, 'Готово'))
+					]);
+				}
+				catch (qrError) {
+					error.dataset.state = 'failed';
+					error.textContent = qrError.message;
+				}
+			};
+			ui.showModal('Подключить телефон к Wi-Fi', [
+				E('p', {}, `Сеть: ${network.ssid}`),
+				...(network.password_set ? [ E('p', { 'class': 'oum-muted' }, 'Введите пароль только для создания QR-кода. Он не будет сохранён.'), password ] : []),
+				error,
+				E('div', { 'class': 'right' }, [ E('button', { 'class': 'btn', click: ui.hideModal }, 'Отмена'), ' ', E('button', { 'class': 'btn cbi-button-action important', click: generate }, 'Создать QR') ])
+			]);
+			if (network.password_set) window.requestAnimationFrame(() => password.focus());
 		});
 
 		vpnToggle.addEventListener('click', (ev) => {

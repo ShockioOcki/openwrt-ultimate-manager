@@ -371,7 +371,12 @@ function wifiStatus(uci) {
 	let networks = [];
 	uci.foreach('wireless', 'wifi-iface', (iface) => {
 		if (iface.mode == 'ap' && iface.disabled != '1' && length(iface.ssid ?? ''))
-			push(networks, { ssid: iface.ssid, device: iface.device ?? '' });
+			push(networks, {
+				ssid: iface.ssid,
+				device: iface.device ?? '',
+				password_set: length(iface.key ?? '') > 0,
+				encryption: iface.encryption ?? 'none'
+			});
 	});
 	return networks;
 }

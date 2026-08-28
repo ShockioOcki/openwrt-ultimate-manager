@@ -44,6 +44,7 @@ sh -n "$ROOT/tests/test_contracts.sh"
 sh -n "$ROOT/tests/test_device_alias.sh"
 sh -n "$ROOT/tests/test_device_pause.sh"
 sh -n "$ROOT/tests/test_engine_ux.sh"
+sh -n "$ROOT/tests/test_dashboard_compact.sh"
 sh -n "$ROOT/luci-app-oum/root/etc/uci-defaults/90_oum_firstboot"
 sh -n "$ROOT/luci-app-oum/root/etc/uci-defaults/91_oum_login_default"
 python3 -m json.tool "$ROOT/luci-app-oum/root/usr/share/luci/menu.d/luci-app-oum.json" >/dev/null
