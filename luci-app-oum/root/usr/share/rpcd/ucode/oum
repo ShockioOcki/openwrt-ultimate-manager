@@ -16,6 +16,9 @@ const RESTORE_INPUT = '/tmp/oum-restore.b64';
 const PASSWALL_NODE_CACHE = '/tmp/oum-passwall-nodes.cache';
 const OPENCLASH_NODE_CACHE = '/tmp/oum-openclash-nodes.cache';
 const ZAPRET_STRATEGY_STATE = '/etc/oum/zapret-strategy-state';
+const TRAFFIC_CURRENT = '/tmp/oum-traffic-current.tsv';
+const TRAFFIC_HISTORY = '/tmp/oum-traffic-history.tsv';
+const TRAFFIC_TIMESTAMP = '/tmp/oum-traffic-timestamp';
 
 function shellquote(value) {
 	return `'${replace(value ?? '', "'", "'\\''")}'`;
@@ -417,6 +420,54 @@ function thermalStatus() {
 			maximum = value;
 	}
 	return { maximum, sensors };
+}
+
+function healthStatus() {
+	let bus = connect();
+	let info = bus?.call('system', 'info') ?? {};
+	let memory = info.memory ?? {};
+	let total = +(memory.total ?? 0);
+	let available = +(memory.available ?? memory.free ?? 0);
+	let used = total > available ? total - available : 0;
+	let thermal = thermalStatus();
+	let temperature = thermal.maximum;
+	return {
+		uptime: +(info.uptime ?? 0),
+		load: +(info.load?.[0] ?? 0) / 65535,
+		memory_total: total,
+		memory_used: used,
+		memory_percent: total > 0 ? used * 100 / total : 0,
+		temperature,
+		temperature_state: temperature == null ? 'unknown' : (temperature < 65 ? 'normal' : (temperature <= 75 ? 'warm' : 'hot'))
+	};
+}
+
+function trafficStatusData() {
+	let last = +(trim(readfile(TRAFFIC_TIMESTAMP) ?? '0'));
+	if (access('/usr/libexec/oum-traffic') && !access('/tmp/oum-traffic.lock') && time() - last >= 60)
+		system('(/usr/libexec/oum-traffic) >/tmp/oum-traffic.log 2>&1 &');
+	let current = {}, first = {}, points = {};
+	for (let line in split(readfile(TRAFFIC_CURRENT) ?? '', '\n')) {
+		let fields = match(line, /^(\d+\.\d+\.\d+\.\d+)\t(\d+)\t(\d+)$/);
+		if (fields) current[fields[1]] = { down: +fields[2], up: +fields[3] };
+	}
+	let cutoff = time() - 86400;
+	for (let line in split(readfile(TRAFFIC_HISTORY) ?? '', '\n')) {
+		let fields = match(line, /^(\d+)\t(\d+\.\d+\.\d+\.\d+)\t(\d+)\t(\d+)$/);
+		if (!fields || +fields[1] < cutoff) continue;
+		let ip = fields[2], total = +fields[3] + +fields[4];
+		if (!first[ip]) first[ip] = { down: +fields[3], up: +fields[4] };
+		if (!points[ip]) points[ip] = [];
+		push(points[ip], total);
+	}
+	let result = {};
+	for (let ip, value in current) {
+		let base = first[ip] ?? { down: 0, up: 0 };
+		let down = value.down >= base.down ? value.down - base.down : value.down;
+		let up = value.up >= base.up ? value.up - base.up : value.up;
+		result[ip] = { down, up, points: slice(points[ip] ?? [], -24) };
+	}
+	return result;
 }
 
 function wifiStatus(uci) {
@@ -1769,6 +1820,9 @@ const methods = {
 		call: function() {
 			const uci = cursor();
 			const clients = connectedClients(uci);
+			const traffic = trafficStatusData();
+			for (let client in clients)
+				client.traffic = traffic[client.ip] ?? { down: 0, up: 0, points: [] };
 			const passwall = passwallStatusData();
 			const podkop = podkopStatusData();
 			const engine = podkop.installed ? 'podkop' : (passwall.installed ? 'passwall' : 'openclash');
@@ -1777,7 +1831,7 @@ const methods = {
 				wifi: wifiStatus(uci),
 				clients,
 				offline_clients: offlineClients(uci, clients),
-				thermal: thermalStatus(),
+				health: healthStatus(),
 				active_source: uci.get('oum', 'main', 'active_source') ?? 'none',
 				vpn_engine: engine,
 				vpn_enabled: engine == 'podkop' ? podkop.enabled : (engine == 'passwall' ? passwall.enabled : uci.get('openclash', 'config', 'enable') == '1'),

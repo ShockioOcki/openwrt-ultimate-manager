@@ -34,7 +34,7 @@
 	},
 	"oum/settings": {
 		"title": "Настройки",
-		"order": 3,
+		"order": 4,
 		"action": {
 			"type": "view",
 			"path": "oum/settings-v4"
@@ -54,6 +54,17 @@
 		"depends": {
 			"acl": [ "luci-app-oum" ],
 			"uci": { "oum": true }
+		}
+	},
+	"oum/help": {
+		"title": "Помощь",
+		"order": 5,
+		"action": {
+			"type": "view",
+			"path": "oum/help-v1"
+		},
+		"depends": {
+			"acl": [ "luci-app-oum" ]
 		}
 	},
 	"oum/logout": {

@@ -130,6 +130,23 @@ function formatBytes(value) {
 	return `${amount.toFixed(unit > 1 ? 1 : 0)} ${units[unit]}`;
 }
 
+function formatUptime(seconds) {
+	const days = Math.floor(Number(seconds || 0) / 86400);
+	const hours = Math.floor((Number(seconds || 0) % 86400) / 3600);
+	return days > 0 ? `${days}д ${hours}ч` : `${hours}ч`;
+}
+
+function trafficCell(traffic) {
+	const points = (traffic?.points || []).map(Number);
+	const max = Math.max(...points, 1);
+	const width = 58, height = 14;
+	const coords = points.length > 1 ? points.map((point, index) => `${Math.round(index * width / (points.length - 1))},${Math.round(height - point * height / max)}`).join(' ') : '';
+	return E('td', { 'class': 'oum-traffic-cell' }, [
+		E('span', {}, `${formatBytes(traffic?.down || 0)} ↓ · ${formatBytes(traffic?.up || 0)} ↑`),
+		coords ? E('svg', { viewBox: `0 0 ${width} ${height}`, width, height, 'aria-hidden': 'true' }, E('polyline', { points: coords, fill: 'none', stroke: 'currentColor', 'stroke-width': 2 })) : ''
+	]);
+}
+
 return view.extend({
 	load() { return Promise.all([ callStatus(), callDashboardStatus(), callNodeStatus(), callPodkopRoutingStatus() ]); },
 
@@ -182,7 +199,7 @@ return view.extend({
 			E('style', {}, `
 				.oum-dashboard{max-width:1050px;margin:0 auto}.oum-page-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-page-head h2{margin:0}.oum-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
 				.oum-card,.oum-panel{border:1px solid #ccd3dc;border-radius:12px;padding:16px}.oum-card small{display:block;opacity:.7;margin-bottom:8px}.oum-card strong{font-size:1.1rem}.oum-vpn-card-row{display:flex;align-items:center;justify-content:space-between;gap:8px}.oum-vpn-card-row button{padding:4px 9px}.oum-card-message{font-size:.82em;margin-top:7px;min-height:1.2em}
-				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}.oum-device-cell{min-width:180px}.oum-device-name-row,.oum-device-alias-form{display:flex;align-items:center;gap:8px;min-width:0}.oum-device-name{min-width:0;overflow-wrap:anywhere}.oum-device-rename{padding:5px 8px;min-height:32px;white-space:nowrap}.oum-device-alias-form input{min-width:120px;max-width:220px;height:36px}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:#c0392b}.oum-client-paused{opacity:.55}.oum-device-help{margin:0 0 12px}.oum-offline{margin-top:14px}.oum-offline>summary{cursor:pointer;font-weight:600;padding:8px 0}.oum-pause-button{white-space:nowrap}
+				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}.oum-device-cell{min-width:180px}.oum-device-name-row,.oum-device-alias-form{display:flex;align-items:center;gap:8px;min-width:0}.oum-device-name{min-width:0;overflow-wrap:anywhere}.oum-device-rename{padding:5px 8px;min-height:32px;white-space:nowrap}.oum-device-alias-form input{min-width:120px;max-width:220px;height:36px}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:#c0392b}.oum-client-paused{opacity:.55}.oum-device-help{margin:0 0 12px}.oum-offline{margin-top:14px}.oum-offline>summary{cursor:pointer;font-weight:600;padding:8px 0}.oum-pause-button{white-space:nowrap}.oum-health{font-size:.95rem!important;line-height:1.45}.oum-health[data-temperature="warm"]{color:#b27b19}.oum-health[data-temperature="hot"]{color:#c94b4b}.oum-traffic-cell{min-width:145px;font-variant-numeric:tabular-nums}.oum-traffic-cell span{display:block;white-space:nowrap;font-size:.86em}.oum-traffic-cell svg{display:block;margin-top:4px;color:#2673ec;opacity:.8}
 				.oum-muted{opacity:.68}.oum-warning{padding:12px 14px;border:1px solid #b28a29;background:rgba(178,138,41,.16);border-radius:10px;margin-top:14px;line-height:1.45}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
 				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:rgba(127,127,127,.1);margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}.oum-node-quick,.oum-node-all-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 				.oum-node-actions,.oum-subscription-head{display:flex;align-items:center;gap:8px}.oum-subscription{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #d8dde5}.oum-subscription-head{justify-content:space-between;flex-wrap:wrap}.oum-subscription-head h3{margin:0}.oum-subscription-status{min-width:0;flex:1;font-size:.92em}.oum-qr-wrap{display:grid;justify-items:center;gap:12px}.oum-qr-wrap canvas{background:#fff;border-radius:8px}
@@ -203,7 +220,7 @@ return view.extend({
 			E('div', { 'class': 'oum-cards' }, [
 				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
 				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, ''), E('button', { 'class': 'btn cbi-button', id: 'show-wifi-qr' }, 'Показать QR') ]),
-				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Температура'), E('strong', { id: 'thermal-state' }, '—'), E('div', { 'class': 'oum-muted' }, 'Максимум по датчикам') ]),
+				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Состояние'), E('strong', { id: 'health-state', 'class': 'oum-health' }, '—') ]),
 				E('div', { 'class': 'oum-card' }, [
 					E('small', {}, 'VPN-движок'),
 					E('div', { 'class': 'oum-vpn-card-row' }, [
@@ -218,7 +235,7 @@ return view.extend({
 					E('h3', {}, 'Подключённые устройства'),
 					E('p', { 'class': 'oum-muted oum-device-help' }, 'Не знаешь, какое это устройство? Выключи его — оно пропадёт из списка примерно через 10 секунд. После этого его можно переименовать в разделе «Недавно были». '),
 					E('table', { 'class': 'oum-clients' }, [
-						E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'IP-адрес'), E('th', {}, 'Подключение'), E('th', { 'class': 'optional' }, 'MAC'), E('th', {}, 'Маршрутизация'), E('th', {}, 'Доступ') ])),
+						E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'IP-адрес'), E('th', {}, 'Подключение'), E('th', { 'class': 'optional' }, 'MAC'), E('th', {}, 'Трафик за 24 ч'), E('th', {}, 'Маршрутизация'), E('th', {}, 'Доступ') ])),
 						E('tbody', { id: 'client-list' })
 					]),
 					E('details', { 'class': 'oum-offline', id: 'offline-section', hidden: '' }, [
@@ -588,7 +605,11 @@ return view.extend({
 			const ssids = Array.from(new Set((fresh.wifi || []).map((item) => item.ssid)));
 			root.querySelector('#wifi-detail').textContent = ssids.length ? ssids.join(' · ') : 'Wi-Fi выключен';
 			wifiQrButton.hidden = !(fresh.wifi || []).length;
-			root.querySelector('#thermal-state').textContent = fresh.thermal?.maximum != null ? `${Math.round(fresh.thermal.maximum)} °C` : 'Нет данных';
+			const health = fresh.health || {};
+			const temperatureText = health.temperature != null ? `${Math.round(health.temperature)}°C ${health.temperature_state === 'hot' ? 'проветрить' : (health.temperature_state === 'warm' ? 'теплее' : 'норм')}` : 'темп. —';
+			const healthNode = root.querySelector('#health-state');
+			healthNode.dataset.temperature = health.temperature_state || 'unknown';
+			healthNode.textContent = `Up ${formatUptime(health.uptime)} · CPU ${Number(health.load || 0).toFixed(2)} · RAM ${health.memory_percent || 0}% · ${temperatureText}`;
 			root.querySelector('#active-source').textContent = sourceNames[vpnEngine === 'passwall' ? 'passwall' : (vpnEngine === 'podkop' ? 'podkop' : fresh.active_source)] || fresh.active_source;
 			vpnEnabled = fresh.vpn_enabled === true;
 			vpnToggle.textContent = vpnEnabled ? 'Отключить' : 'Включить';
@@ -622,7 +643,7 @@ return view.extend({
 				body.replaceChildren(...(fresh.clients || []).map((client) => E('tr', { 'class': client.paused ? 'oum-client-paused' : '' }, [
 				nameCell(client), E('td', {}, client.ip),
 				E('td', {}, client.medium === 'wifi' ? 'Wi-Fi' : (client.medium === 'ethernet' ? 'Кабель' : 'Не определено')),
-				E('td', { 'class': 'optional' }, client.mac),
+				E('td', { 'class': 'optional' }, client.mac), trafficCell(client.traffic),
 				E('td', {}, policySelect(client)),
 				E('td', {}, pauseButton(client))
 			])));
@@ -636,7 +657,7 @@ return view.extend({
 				}));
 			}
 			if (!fresh.clients?.length)
-				body.appendChild(E('tr', {}, E('td', { colspan: 6, 'class': 'oum-muted' }, 'Нет активных устройств')));
+				body.appendChild(E('tr', {}, E('td', { colspan: 7, 'class': 'oum-muted' }, 'Нет активных устройств')));
 			const offlineSection = root.querySelector('#offline-section');
 			offlineSection.hidden = !(fresh.offline_clients || []).length;
 			root.querySelector('#offline-summary').textContent = `Недавно были (офлайн) · ${(fresh.offline_clients || []).length}`;
