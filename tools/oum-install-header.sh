@@ -4,7 +4,7 @@ set -eu
 OUM_INSTALLER_VERSION='@OUM_INSTALLER_VERSION@'
 OUM_PAYLOAD_SHA256='@OUM_PAYLOAD_SHA256@'
 OUM_PAYLOAD_SIZE='@OUM_PAYLOAD_SIZE@'
-OUM_BASE_PACKAGES='luci-base rpcd rpcd-mod-ucode uhttpd uhttpd-mod-ubus curl ca-bundle ruby ruby-yaml unzip jsonfilter nftables-json iw'
+OUM_BASE_PACKAGES='luci-base rpcd rpcd-mod-ucode uhttpd uhttpd-mod-ubus curl ca-bundle ruby ruby-yaml unzip jsonfilter nftables-json iw iwinfo dnsmasq firewall4'
 
 oum_die() {
 	printf 'OUM installer: %s\n' "$*" >&2

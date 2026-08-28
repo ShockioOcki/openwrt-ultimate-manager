@@ -148,7 +148,7 @@ HTTP-ответ через прокси до выбранного тестово
 
 Установщик автоматически проверяет и добавляет только обязательную основу OUM:
 `luci-base`, `rpcd`, `rpcd-mod-ucode`, `uhttpd`, `uhttpd-mod-ubus`, `curl`,
-`ca-bundle`, `ruby`, `ruby-yaml`, `unzip`, `jsonfilter`, `nftables-json` и `iw`.
+`ca-bundle`, `ruby`, `ruby-yaml`, `unzip`, `jsonfilter`, `nftables-json`, `iw`, `iwinfo`, `dnsmasq` и `firewall4`.
 Список установленной основой версии сохраняется в `/etc/oum/base-packages`.
 Пакеты VPN-движков в базовый набор не входят и заменяются вместе с выбранным
 движком, чтобы не расходовать flash-память одновременно.
