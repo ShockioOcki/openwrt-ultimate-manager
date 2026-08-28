@@ -22,7 +22,8 @@ const callApplyMesh = rpc.declare({ object: 'oum', method: 'applyMeshSettings', 
 const callInstallMeshRuntime = rpc.declare({ object: 'oum', method: 'installMeshRuntime', expect: { '': {} } });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
 const callSwitchEngine = rpc.declare({ object: 'oum', method: 'switchVpnEngine', params: [ 'engine' ], expect: { '': {} } });
-const callSetEngineDnsPreferences = rpc.declare({ object: 'oum', method: 'setEngineDnsPreferences', params: [ 'openclash', 'bootstrap_openclash', 'passwall', 'bootstrap_passwall', 'podkop', 'bootstrap_podkop' ], expect: { '': {} } });
+const callSetEngineDnsPreferences = rpc.declare({ object: 'oum', method: 'setEngineDnsPreferences', params: [ 'engine', 'server', 'bootstrap' ], expect: { '': {} } });
+const callRebootRouter = rpc.declare({ object: 'oum', method: 'rebootRouter', expect: { '': {} } });
 const callConfigurePodkop = rpc.declare({ object: 'oum', method: 'configurePodkop', params: [ 'interface' ], expect: { '': {} } });
 const callImportPodkopAwg = rpc.declare({ object: 'oum', method: 'importPodkopAwg', params: [ 'payload' ], expect: { '': {} } });
 const callImportPodkopReality = rpc.declare({ object: 'oum', method: 'importPodkopReality', params: [ 'payload' ], expect: { '': {} } });
@@ -142,7 +143,15 @@ return view.extend({
 		const engines = settings.engines || { current: 'none', supported: false, passwall: {}, openclash: {}, podkop: {} };
 		const unmanagedTunnels = settings.unmanaged_tunnels || [];
 		const engineTitle = engines.current === 'passwall' ? 'PassWall' : (engines.current === 'podkop' ? 'Podkop + Zapret' : (engines.current === 'openclash' ? 'OpenClash' : 'не установлен'));
+		const engineMissing = !engines.current || engines.current === 'none';
+		const engineActionLabel = engineMissing ? 'Установить движок' : 'Заменить движок';
 		const engineVersion = engines.current === 'passwall' ? engines.passwall.version : (engines.current === 'podkop' ? engines.podkop.version : engines.openclash.version);
+		const activeDns = engineMissing ? null : {
+			server: dns[engines.current],
+			bootstrap: dns[`bootstrap_${engines.current}`],
+			help: engines.current === 'openclash' ? 'Bootstrap записывается в default-nameserver профиля Mihomo.' :
+				(engines.current === 'passwall' ? 'Bootstrap используется как прямой DNS для поиска удалённого DNS.' : 'Используется штатный параметр bootstrap_dns_server Podkop.')
+		};
 		const podkopInterfaces = Array.from(new Set([ engines.podkop?.interface || '', ...unmanagedTunnels.map((item) => item.name) ].filter(Boolean)));
 		const youtubeMode = engines.podkop?.youtube_mode || 'zapret';
 		const sourceSupported = engines.current === 'openclash' || engines.current === 'passwall';
@@ -182,6 +191,11 @@ return view.extend({
 			]),
 			E('p', { 'class': 'oum-help' }, 'Пароли не показываются в браузере. Оставьте поле пароля пустым, чтобы сохранить действующий.'),
 			E('div', { id: 'system-job', 'class': 'oum-job-state', role: 'status', 'aria-live': 'polite', 'data-state': initialJob.state || 'idle' }, initialJob.message || ''),
+			E('div', { 'class': 'oum-inline-warning', id: 'reboot-required', hidden: settings.reboot_required ? null : '' }, [
+				E('strong', {}, 'Рекомендуется перезагрузка'),
+				E('p', {}, 'VPN-движок уже установлен. Перезагрузите роутер в удобный момент, чтобы заново поднять сетевые модули и правила.'),
+				E('button', { 'class': 'btn cbi-button-action', id: 'reboot-router' }, 'Перезагрузить сейчас')
+			]),
 			E('div', { 'class': 'oum-settings-grid' }, [
 				E('section', { 'class': 'oum-settings-panel' }, [
 					E('h3', {}, 'Wi-Fi'),
@@ -278,38 +292,26 @@ return view.extend({
 					]),
 					E('p', { 'class': 'oum-help' }, `OUM временно остановит VPN и проверит прямой доступ к GitHub. Затем старый движок и его настройки будут полностью удалены, а выбранный движок установлен заново.${engines.passwall.cache_ready ? ' Локальный комплект PassWall готов.' : ''}`),
 					E('div', { 'class': 'oum-engine-actions' }, [
-						E('button', { 'class': 'btn cbi-button-action', id: 'switch-engine', 'data-system-action': '', disabled: engines.supported ? null : '' }, 'Заменить движок'),
-						E('span', { 'class': 'oum-help' }, engines.supported ? 'Настройки старого движка не переносятся.' : 'Для этой платформы ещё нет проверенного пакета переключения.')
+						E('button', { 'class': 'btn cbi-button-action', id: 'switch-engine', 'data-system-action': '', disabled: engines.supported ? null : '' }, engineActionLabel),
+						E('span', { 'class': 'oum-help' }, engines.supported ? (engineMissing ? 'Выберите и установите движок для работы VPN.' : 'Настройки старого движка не переносятся.') : 'Для этой платформы нет проверенного пакета.')
 					])
 				])
 			]),
 			E('details', { 'class': 'oum-settings-panel oum-protected' }, [
 					E('summary', {}, 'DNS для VPN'),
 					E('div', { 'class': 'oum-protected-content' }, [
-					E('p', { 'class': 'oum-help' }, 'Основной DNS обрабатывает запросы клиентов. Bootstrap DNS разрешает адрес вышестоящего DNS и помогает запустить его без циклической зависимости. Значения хранятся отдельно для каждого движка.'),
-					E('div', { 'class': 'oum-dns-grid' }, [
+					E('p', { 'class': 'oum-help' }, engineMissing ? 'Выберите движок — настройки DNS появятся после установки.' : `DNS для активного движка (сейчас: ${engineTitle}). При смене движка его DNS останется сохранён отдельно.`),
+					...(activeDns ? [ E('div', { 'class': 'oum-dns-grid' }, [
 						E('section', { 'class': 'oum-dns-engine' }, [
-							E('h4', {}, 'OpenClash'),
-							field('Основной DNS', dnsSelect('dns-openclash', dns.openclash)),
-							field('Bootstrap DNS', dnsSelect('bootstrap-dns-openclash', dns.bootstrap_openclash)),
-							E('small', { 'class': 'oum-help' }, 'Bootstrap записывается в default-nameserver профиля Mihomo.')
-						]),
-						E('section', { 'class': 'oum-dns-engine' }, [
-							E('h4', {}, 'PassWall'),
-							field('Основной DNS', dnsSelect('dns-passwall', dns.passwall)),
-							field('Bootstrap DNS', dnsSelect('bootstrap-dns-passwall', dns.bootstrap_passwall)),
-							E('small', { 'class': 'oum-help' }, 'Bootstrap используется как прямой DNS для поиска удалённого DNS.')
-						]),
-						E('section', { 'class': 'oum-dns-engine' }, [
-							E('h4', {}, 'Podkop + Zapret'),
-							field('Основной DNS', dnsSelect('dns-podkop', dns.podkop)),
-							field('Bootstrap DNS', dnsSelect('bootstrap-dns-podkop', dns.bootstrap_podkop)),
-							E('small', { 'class': 'oum-help' }, 'Используется штатный параметр bootstrap_dns_server Podkop.')
+							E('h4', {}, engineTitle),
+							field('Основной DNS', dnsSelect('dns-current', activeDns.server)),
+							field('Bootstrap DNS', dnsSelect('bootstrap-dns-current', activeDns.bootstrap)),
+							E('small', { 'class': 'oum-help' }, activeDns.help)
 						])
-						]),
+					]) ] : []),
 						E('div', { 'class': 'oum-setting-actions' }, [
-							E('button', { 'class': 'btn cbi-button-action', id: 'apply-engine-dns', 'data-system-action': '' }, 'Применить DNS'),
-							E('span', { 'class': 'oum-help' }, `Все пары сохранятся отдельно; ${engineTitle} будет перезапущен сейчас.`)
+							E('button', { 'class': 'btn cbi-button-action', id: 'apply-engine-dns', 'data-system-action': '', disabled: engineMissing ? '' : null }, 'Применить DNS'),
+							E('span', { 'class': 'oum-help' }, engineMissing ? 'Сначала установите VPN-движок.' : `${engineTitle} будет кратковременно перезапущен.`)
 						])
 					])
 				]),
@@ -428,6 +430,7 @@ return view.extend({
 		const sourceLabel = root.querySelector('#source-label');
 		const engineButton = root.querySelector('#switch-engine');
 		let watching = false;
+		let pendingEngineTitle = '';
 
 		const setBusy = (busy) => root.querySelectorAll('[data-system-action]').forEach((button) => {
 			if (busy && button.dataset.wasDisabled == null)
@@ -443,19 +446,45 @@ return view.extend({
 		const acknowledgeStatus = (status) => callClearSystemJobStatus(status.action || '', status.code || '')
 			.then((result) => result?.ok === true ? true : false)
 			.catch(() => false);
+		const rebootNow = () => {
+			ui.showModal('Перезагрузка роутера', [ E('p', {}, 'Соединение прервётся примерно на минуту. Подождите и снова откройте панель OUM.') ]);
+			callRebootRouter().catch((error) => ui.addNotification(null, E('p', {}, error.message), 'error'));
+		};
+		const showEngineJob = (status) => {
+			const title = status.state === 'running' ? `${engineMissing ? 'Установка' : 'Смена'}: ${pendingEngineTitle || 'VPN-движок'}` :
+				(status.state === 'success' ? 'VPN-движок установлен' : 'Не удалось установить VPN-движок');
+			const progress = status.total > 0 ? E('progress', { max: status.total, value: status.progress || 0 }) : E('progress', {});
+			const actions = status.state === 'running' ? [
+				E('button', { 'class': 'btn', disabled: '' }, 'Операция выполняется…')
+			] : (status.state === 'success' ? [
+				E('button', { 'class': 'btn', click: () => acknowledgeStatus(status).finally(() => { ui.hideModal(); window.location.reload(); }) }, 'Позже'),
+				' ',
+				E('button', { 'class': 'btn cbi-button-action important', click: rebootNow }, 'Перезагрузить сейчас')
+			] : [
+				E('button', { 'class': 'btn cbi-button-action important', click: () => { ui.hideModal(); acknowledgeStatus(status); } }, 'Закрыть')
+			]);
+			ui.showModal(title, [
+				E('p', {}, status.message || 'Подготавливаем операцию…'),
+				progress,
+				E('p', { 'class': 'oum-help' }, status.code ? `Этап: ${status.code}` : 'Ожидаем статус…'),
+				E('div', { 'class': 'right' }, actions)
+			]);
+		};
 		const watchJob = () => {
 			if (watching) return;
 			watching = true;
 			setBusy(true);
 			const tick = () => callSystemJobStatus().then((status) => {
 				paintStatus(status);
+				if (status.action === 'engine') showEngineJob(status);
 				if (status.state === 'running') return window.setTimeout(tick, 1500);
 				watching = false;
 				setBusy(false);
 				const zapretStatus = root.querySelector('#zapret-status');
 				if (zapretStatus && status.action?.startsWith('zapret_'))
 					zapretStatus.textContent = status.message || 'Операция Zapret выполняется…';
-				if ((status.action === 'engine' || status.action === 'dns' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
+				if (status.action === 'engine') return;
+				if ((status.action === 'dns' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
 					acknowledgeStatus(status).finally(() => window.setTimeout(() => window.location.reload(), 900));
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
@@ -464,7 +493,12 @@ return view.extend({
 			resultError(result, 'Не удалось запустить операцию.');
 			paintStatus({ state: 'running', message: 'Операция запущена…' });
 			watchJob();
-		}).catch((error) => ui.addNotification(null, E('p', {}, error.message), 'error'));
+		}).catch((error) => {
+			if (pendingEngineTitle)
+				showEngineJob({ state: 'failed', code: 'start_failed', message: error.message });
+			else
+				ui.addNotification(null, E('p', {}, error.message), 'error');
+		});
 		const updateWanFields = () => root.querySelector('#pppoe-settings').hidden = selected('wan_type') !== 'pppoe';
 		const updateWifiFields = () => root.querySelector('#ssid-5').disabled = selected('wifi_mode') === 'smart';
 		const updateVpnInput = () => {
@@ -493,28 +527,26 @@ return view.extend({
 			if (event.target.name === 'wifi_mode') updateWifiFields();
 			if (event.target.name === 'vpn_source') updateVpnInput();
 		});
+		root.querySelector('#reboot-router').addEventListener('click', rebootNow);
 		engineButton.addEventListener('click', async (event) => {
 			event.preventDefault();
 			const target = selected('vpn_engine');
 			if (!target || target === engines.current) return ui.addNotification(null, E('p', {}, 'Выберите другой VPN-движок.'), 'warning');
 			const title = target === 'passwall' ? 'PassWall' : (target === 'podkop' ? 'Podkop + Zapret' : 'OpenClash');
-			const text = `Старый VPN-движок и его настройки будут полностью удалены. ${title} установится с чистой конфигурацией и останется выключенным до добавления подключения.`;
-			if (await confirmation(`Перейти на ${title}?`, text, 'Заменить движок', true))
+			const text = engineMissing ? `${title} будет установлен с чистой конфигурацией и останется выключенным до добавления подключения.` : `Старый VPN-движок и его настройки будут полностью удалены. ${title} установится с чистой конфигурацией и останется выключенным до добавления подключения.`;
+			if (await confirmation(engineMissing ? `Установить ${title}?` : `Перейти на ${title}?`, text, engineActionLabel, true)) {
+				pendingEngineTitle = title;
+				showEngineJob({ state: 'running', code: 'queued', message: 'Запускаем установку…' });
 				start(callSwitchEngine(target));
+			}
 		});
 		root.querySelector('#apply-engine-dns').addEventListener('click', async (event) => {
 			event.preventDefault();
 			if (engines.current === 'none') return ui.addNotification(null, E('p', {}, 'Сначала установите VPN-движок.'), 'warning');
-			const values = [
-				value('#dns-openclash'), value('#bootstrap-dns-openclash'),
-				value('#dns-passwall'), value('#bootstrap-dns-passwall'),
-				value('#dns-podkop'), value('#bootstrap-dns-podkop')
-			];
-			const offset = [ 'openclash', 'passwall', 'podkop' ].indexOf(engines.current) * 2;
-			const activeServer = values[offset];
-			const activeBootstrap = values[offset + 1];
+			const activeServer = value('#dns-current');
+			const activeBootstrap = value('#bootstrap-dns-current');
 			if (await confirmation('Изменить DNS?', `Для ${engineTitle} сейчас будут применены основной DNS ${activeServer} и Bootstrap DNS ${activeBootstrap}; VPN кратковременно перезапустится.`, 'Применить', false))
-				start(callSetEngineDnsPreferences(...values));
+				start(callSetEngineDnsPreferences(engines.current, activeServer, activeBootstrap));
 		});
 		root.querySelector('#apply-lan').addEventListener('click', async (event) => {
 			event.preventDefault();
@@ -698,6 +730,7 @@ return view.extend({
 		updateWifiFields();
 		updateVpnInput();
 		if (initialJob.state === 'running') watchJob();
+		else if (initialJob.action === 'engine' && initialJob.state !== 'idle') showEngineJob(initialJob);
 		else if (initialJob.state === 'success')
 			window.setTimeout(() => acknowledgeStatus(initialJob).then((cleared) => { if (cleared) paintStatus({ state: 'idle', message: '' }); }), 5000);
 		if (initialVpnJob.state === 'running') watchVpnJob(); else showVpnJob(initialVpnJob);

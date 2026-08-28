@@ -540,6 +540,7 @@ function settingsStatusData() {
 			bootstrap_podkop: uci.get('oum', 'main', 'bootstrap_dns_podkop') ?? '77.88.8.1'
 		},
 		engines: engineStatusData(),
+		reboot_required: access('/etc/oum/reboot-required') ? true : false,
 		unmanaged_tunnels: unmanagedTunnels(uci),
 		capabilities: capabilityStatus(),
 		rollback_wifi: access('/etc/oum/rollback/wireless') ? true : false,
@@ -1325,22 +1326,31 @@ const methods = {
 	},
 
 	setEngineDnsPreferences: {
-		args: { openclash: '', bootstrap_openclash: '', passwall: '', bootstrap_passwall: '', podkop: '', bootstrap_podkop: '' },
+		args: { engine: '', server: '', bootstrap: '' },
 		call: function(request) {
 			let allowed = [ '77.88.8.8', '77.88.8.1', '1.1.1.1', '1.0.0.1', '8.8.8.8', '8.8.4.4', '9.9.9.9', '149.112.112.112' ];
-			for (let name in [ 'openclash', 'bootstrap_openclash', 'passwall', 'bootstrap_passwall', 'podkop', 'bootstrap_podkop' ])
-				if (!((request.args[name] ?? '') in allowed))
-					return failure('invalid_dns', 'Выберите основной и Bootstrap DNS из проверенного списка для каждого движка.');
+			let engine = request.args.engine ?? '';
+			let status = engineStatusData();
+			if (!(engine in [ 'openclash', 'passwall', 'podkop' ]) || engine != status.current)
+				return failure('engine_changed', 'Активный VPN-движок изменился. Обновите страницу.');
+			if (!((request.args.server ?? '') in allowed) || !((request.args.bootstrap ?? '') in allowed))
+				return failure('invalid_dns', 'Выберите основной и Bootstrap DNS из проверенного списка.');
 			if (!access('/usr/libexec/oum-dns-manager'))
 				return failure('runtime_missing', 'Компонент настройки DNS не установлен.');
 			return startSystemJob('dns', {
-				openclash: request.args.openclash,
-				bootstrap_openclash: request.args.bootstrap_openclash,
-				passwall: request.args.passwall,
-				bootstrap_passwall: request.args.bootstrap_passwall,
-				podkop: request.args.podkop,
-				bootstrap_podkop: request.args.bootstrap_podkop
+				engine,
+				server: request.args.server,
+				bootstrap: request.args.bootstrap
 			});
+		}
+	},
+
+	rebootRouter: {
+		call: function() {
+			if (configurationBusy())
+				return failure('configuration_busy', 'Дождитесь завершения текущей операции.');
+			system('rm -f /etc/oum/reboot-required; (sleep 2; reboot) >/tmp/oum-reboot.log 2>&1 &');
+			return { ok: true, message: 'Роутер перезагружается…' };
 		}
 	},
 
@@ -1567,6 +1577,7 @@ const methods = {
 				vpn_engine: engine,
 				vpn_enabled: engine == 'podkop' ? podkop.enabled : (engine == 'passwall' ? passwall.enabled : uci.get('openclash', 'config', 'enable') == '1'),
 				vpn_ready: vpnReady(),
+				reboot_required: access('/etc/oum/reboot-required') ? true : false,
 				policy_applying: access('/tmp/oum-device-policy.lock') ? true : false,
 				passwall,
 				podkop,

@@ -143,28 +143,16 @@ rollback_config() {
 }
 
 apply_dns() {
-	openclash="$(json_value .openclash)"
-	bootstrap_openclash="$(json_value .bootstrap_openclash)"
-	passwall="$(json_value .passwall)"
-	bootstrap_passwall="$(json_value .bootstrap_passwall)"
-	podkop="$(json_value .podkop)"
-	bootstrap_podkop="$(json_value .bootstrap_podkop)"
+	requested_engine="$(json_value .engine)"
+	server="$(json_value .server)"
+	bootstrap="$(json_value .bootstrap)"
 	engine="$(/usr/libexec/oum-engine-manager current)"
-	case "$engine" in
-		openclash) server="$openclash"; bootstrap="$bootstrap_openclash" ;;
-		passwall) server="$passwall"; bootstrap="$bootstrap_passwall" ;;
-		podkop) server="$podkop"; bootstrap="$bootstrap_podkop" ;;
-		*) fail engine_missing 'Сначала установите VPN-движок.' ;;
-	esac
+	[ "$requested_engine" = "$engine" ] || fail engine_changed 'Активный VPN-движок изменился. Повторите настройку DNS.'
 	write_status running dns 'Применяем основной и Bootstrap DNS выбранного VPN-движка…'
 	/usr/libexec/oum-dns-manager apply "$engine" "$server" "$bootstrap" ||
 		fail dns_failed 'DNS не прошёл проверку; предыдущая конфигурация восстановлена.'
-	uci -q set "oum.main.dns_openclash=$openclash"
-	uci -q set "oum.main.bootstrap_dns_openclash=$bootstrap_openclash"
-	uci -q set "oum.main.dns_passwall=$passwall"
-	uci -q set "oum.main.bootstrap_dns_passwall=$bootstrap_passwall"
-	uci -q set "oum.main.dns_podkop=$podkop"
-	uci -q set "oum.main.bootstrap_dns_podkop=$bootstrap_podkop"
+	uci -q set "oum.main.dns_$engine=$server"
+	uci -q set "oum.main.bootstrap_dns_$engine=$bootstrap"
 	uci -q commit oum
 	write_status success applied 'Основной и Bootstrap DNS сохранены; активный VPN-движок перезапущен.'
 }
@@ -181,7 +169,7 @@ case "$ACTION" in
 	rollback_wan) write_status running rollback 'Восстанавливаем подключение…'; rollback_config network ;;
 	rollback_lan) write_status running rollback 'Восстанавливаем LAN-адрес…'; rollback_lan ;;
 	dns) apply_dns ;;
-	engine) target="$(json_value .engine)"; [ "$target" != podkop ] || /usr/libexec/oum-awg-manager ready || fail reboot_required 'После первичной установки OUM один раз перезапустите роутер для активации AmneziaWG.'; write_status running preparing 'Проверяем прямой доступ и выполняем чистую замену VPN-движка…'; if ! OUM_ENGINE_STATUS="$STATUS" /usr/libexec/oum-engine-manager switch "$target"; then message="$(cat /tmp/oum-engine-error 2>/dev/null || true)"; fail engine_failed "${message:-Не удалось выполнить чистую установку VPN-движка.}"; fi; write_status success switched 'Новый VPN-движок установлен без старых настроек. Добавьте подключение ниже.' ;;
+	engine) target="$(json_value .engine)"; [ "$target" != podkop ] || /usr/libexec/oum-awg-manager ready || fail reboot_required 'После первичной установки OUM один раз перезапустите роутер для активации AmneziaWG.'; write_status running preparing 'Проверяем прямой доступ и выполняем чистую замену VPN-движка…'; if ! OUM_ENGINE_STATUS="$STATUS" /usr/libexec/oum-engine-manager switch "$target"; then message="$(cat /tmp/oum-engine-error 2>/dev/null || true)"; fail engine_failed "${message:-Не удалось выполнить чистую установку VPN-движка.}"; fi; mkdir -p /etc/oum; : > /etc/oum/reboot-required; write_status success switched 'Новый VPN-движок установлен. Можно перезагрузить роутер сейчас или сделать это позже.' ;;
 	podkop_configure) interface="$(json_value .interface)"; write_status running configuring 'Связываем Podkop с отдельным туннелем и настраиваем Zapret для YouTube…'; /usr/libexec/oum-podkop-config configure "$interface" || fail podkop_failed 'Podkop не прошёл проверку; службы остановлены, прежняя конфигурация сохранена.'; write_status success configured 'Podkop работает через отдельный туннель; Zapret для прямого YouTube завершает запуск.' ;;
 	podkop_awg) write_status running awg_installing 'Проверяем комплект AmneziaWG и создаём отдельный туннель…'; /usr/libexec/oum-awg-manager import "$REQUEST" || fail awg_failed 'AWG-туннель не прошёл проверку; прежняя сеть восстановлена.'; write_status success configured 'AWG-туннель создан и Podkop запущен через него.' ;;
 	podkop_proxy) write_status running proxy_configuring 'Проверяем Reality и создаём защищённое подключение Podkop…'; /usr/libexec/oum-podkop-config proxy "$REQUEST" || fail podkop_proxy_failed 'Reality не прошёл проверку; предыдущее подключение восстановлено.'; write_status success configured 'Reality проверен и используется Podkop.' ;;

@@ -158,6 +158,7 @@ return view.extend({
 				E('a', { 'class': 'btn cbi-button', href: L.url('oum', 'logout') }, 'Выйти')
 			]),
 			E('div', { 'class': 'oum-warning', id: 'unmanaged-tunnel-warning', hidden: '' }),
+			E('div', { 'class': 'oum-warning', id: 'reboot-required-warning', hidden: '' }, 'После замены VPN-движка рекомендуется перезагрузить роутер из раздела «Настройки».'),
 			E('div', { 'class': 'oum-cards' }, [
 				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
 				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, '') ]),
@@ -548,6 +549,7 @@ return view.extend({
 			dashboardState = fresh;
 			vpnEngine = fresh.vpn_engine || 'openclash';
 			const tunnelWarning = root.querySelector('#unmanaged-tunnel-warning');
+			root.querySelector('#reboot-required-warning').hidden = fresh.reboot_required !== true;
 			const unmanaged = fresh.unmanaged_tunnels || [];
 			tunnelWarning.hidden = unmanaged.length === 0;
 			tunnelWarning.textContent = unmanaged.length ?
