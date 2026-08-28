@@ -72,6 +72,7 @@ apply_pause_rules() {
 }
 
 apply_pause_rules
+/usr/libexec/oum-adguard >/tmp/oum-adguard.log 2>&1 || exit 1
 
 if [ -x /etc/init.d/podkop ] && [ -f /etc/config/podkop ]; then
 	for ip in $(uci -q get oum.main.managed_podkop_direct_ips || true); do

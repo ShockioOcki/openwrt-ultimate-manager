@@ -46,6 +46,10 @@ sh -n "$ROOT/tests/test_device_pause.sh"
 sh -n "$ROOT/tests/test_engine_ux.sh"
 sh -n "$ROOT/tests/test_dashboard_compact.sh"
 sh -n "$ROOT/tests/test_wisp.sh"
+sh -n "$ROOT/tests/test_parental.sh"
+sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-parental-cron"
+sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-adguard"
+sh -n "$ROOT/luci-app-oum/root/etc/uci-defaults/94_oum_parental"
 sh -n "$ROOT/luci-app-oum/root/etc/uci-defaults/90_oum_firstboot"
 sh -n "$ROOT/luci-app-oum/root/etc/uci-defaults/91_oum_login_default"
 python3 -m json.tool "$ROOT/luci-app-oum/root/usr/share/luci/menu.d/luci-app-oum.json" >/dev/null
@@ -55,5 +59,6 @@ if command -v node >/dev/null 2>&1; then
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/first-run-v2.js"
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v11.js"
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/settings-v4.js"
+	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/parental-v1.js"
 fi
 printf 'syntax tests: OK\n'

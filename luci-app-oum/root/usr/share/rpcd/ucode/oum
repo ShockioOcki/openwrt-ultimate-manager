@@ -216,8 +216,26 @@ function validDeviceAlias(value) {
 function deviceSectionHasState(uci, section) {
 	return (uci.get('oum', section, 'policy') ?? 'default') != 'default' ||
 		uci.get('oum', section, 'paused') == '1' ||
+		uci.get('oum', section, 'manual_paused') == '1' ||
+		uci.get('oum', section, 'schedule_paused') == '1' ||
 		uci.get('oum', section, 'sched_enabled') == '1' ||
-		(uci.get('oum', section, 'adblock') ?? 'off') != 'off';
+		(uci.get('oum', section, 'adblock') ?? 'inherit') != 'inherit';
+}
+
+function validScheduleTime(value) {
+	let found = match(value ?? '', /^([01][0-9]|2[0-3]):([0-5][0-9])$/);
+	return found ? true : false;
+}
+
+function validScheduleDays(value) {
+	if (type(value) != 'string' || !match(value, /^[1-7](,[1-7])*$/))
+		return false;
+	let seen = {};
+	for (let day in split(value, ',')) {
+		if (seen[day]) return false;
+		seen[day] = true;
+	}
+	return true;
 }
 
 function connectedClients(uci) {
@@ -226,6 +244,7 @@ function connectedClients(uci) {
 	let policies = {};
 	let paused = {};
 	let aliases = {};
+	let parental = {};
 	let dhcpNames = {};
 	let aliasMigrated = false;
 	let lanValue = uci.get('network', 'lan', 'ipaddr') ?? '';
@@ -245,6 +264,12 @@ function connectedClients(uci) {
 				aliasMigrated = true;
 			}
 			if (length(alias)) aliases[mac] = alias;
+			parental[mac] = {
+				manual_paused: device.manual_paused == '1' || (device.paused == '1' && device.schedule_paused != '1' && device.manual_paused == null),
+				schedule_paused: device.schedule_paused == '1', sched_enabled: device.sched_enabled == '1',
+				sched_days: device.sched_days ?? '1,2,3,4,5', start: device.sched_start ?? '22:00', stop: device.sched_stop ?? '07:00',
+				adblock: device.adblock ?? 'inherit'
+			};
 		}
 	});
 	if (aliasMigrated)
@@ -315,6 +340,14 @@ function connectedClients(uci) {
 			expires: client.expires,
 			policy: client.policy,
 			paused: client.paused ?? false,
+			manual_paused: parental[mac]?.manual_paused ?? false,
+			schedule_paused: parental[mac]?.schedule_paused ?? false,
+			sched_enabled: parental[mac]?.sched_enabled ?? false,
+			sched_days: parental[mac]?.sched_days ?? '1,2,3,4,5',
+			start: parental[mac]?.start ?? '22:00',
+			stop: parental[mac]?.stop ?? '07:00',
+			adblock: parental[mac]?.adblock ?? 'inherit',
+			online: true,
 			seen: client.seen
 		});
 	}
@@ -333,7 +366,7 @@ function offlineClients(uci, online) {
 		let alias = trim(device.alias ?? '');
 		let policy = device.policy ?? 'default';
 		let isPaused = device.paused == '1';
-		if (!length(alias) && policy == 'default' && !isPaused)
+		if (!length(alias) && policy == 'default' && !isPaused && !deviceSectionHasState(uci, device['.name']))
 			return;
 		push(result, {
 			name: length(alias) ? alias : `Устройство ${replace(substr(mac, 9), /:/g, '-')}`,
@@ -344,10 +377,29 @@ function offlineClients(uci, online) {
 			expires: 0,
 			policy,
 			paused: isPaused,
+			manual_paused: device.manual_paused == '1' || (isPaused && device.schedule_paused != '1' && device.manual_paused == null),
+			schedule_paused: device.schedule_paused == '1',
+			sched_enabled: device.sched_enabled == '1',
+			sched_days: device.sched_days ?? '1,2,3,4,5',
+			start: device.sched_start ?? '22:00',
+			stop: device.sched_stop ?? '07:00',
+			adblock: device.adblock ?? 'inherit',
+			online: false,
 			seen: false
 		});
 	});
 	return sort(result, (a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0));
+}
+
+function parentalStatusData(uci) {
+	let online = connectedClients(uci);
+	let result = [];
+	for (let client in online) push(result, client);
+	for (let client in offlineClients(uci, online)) push(result, client);
+	return {
+		mode: uci.get('oum', 'main', 'adguard_mode') ?? 'off',
+		devices: sort(result, (a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0))
+	};
 }
 
 function thermalStatus() {
@@ -1910,10 +1962,15 @@ const methods = {
 				uci.set('oum', section, 'mac', mac);
 				if (client?.ip)
 					uci.set('oum', section, 'ip', client.ip);
+				uci.set('oum', section, 'manual_paused', '1');
 				uci.set('oum', section, 'paused', '1');
 			}
 			else if (section) {
-				uci.delete('oum', section, 'paused');
+				uci.delete('oum', section, 'manual_paused');
+				if (uci.get('oum', section, 'schedule_paused') == '1')
+					uci.set('oum', section, 'paused', '1');
+				else
+					uci.delete('oum', section, 'paused');
 				if (!length(uci.get('oum', section, 'alias') ?? '') && !deviceSectionHasState(uci, section))
 					uci.delete('oum', section);
 			}
@@ -1922,6 +1979,93 @@ const methods = {
 			if (system('(/usr/libexec/oum-device-policy apply) >/tmp/oum-device-policy-start.log 2>&1 &') != 0)
 				return failure('apply_failed', 'Не удалось применить паузу устройства.');
 			return { ok: true, mac, paused, message: paused ? 'Доступ в интернет приостановлен.' : 'Доступ в интернет восстановлен.' };
+		}
+	},
+
+	parentalStatus: {
+		call: function() {
+			return parentalStatusData(cursor());
+		}
+	},
+
+	setParentalSchedule: {
+		args: { mac: '', enabled: false, days: '', start: '', stop: '' },
+		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			let mac = uc(request.args.mac ?? '');
+			let enabled = request.args.enabled;
+			let days = request.args.days ?? '';
+			let start = request.args.start ?? '';
+			let stop = request.args.stop ?? '';
+			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
+				return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
+			if (type(enabled) != 'bool')
+				return failure('invalid_state', 'Некорректное состояние расписания.');
+			if (enabled && (!validScheduleDays(days) || !validScheduleTime(start) || !validScheduleTime(stop) || start == stop))
+				return failure('invalid_schedule', 'Выберите дни и укажите разное время начала и окончания.');
+			let uci = cursor(), section = null;
+			uci.foreach('oum', 'device', (device) => {
+				if (uc(device.mac ?? '') == mac) section = device['.name'];
+			});
+			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
+			if (!client && !section)
+				return failure('client_unknown', 'Сначала подключите устройство к роутеру.');
+			if (!section) section = uci.add('oum', 'device');
+			uci.set('oum', section, 'mac', mac);
+			if (client?.ip) uci.set('oum', section, 'ip', client.ip);
+			if (enabled) {
+				uci.set('oum', section, 'sched_enabled', '1');
+				uci.set('oum', section, 'sched_days', days);
+				uci.set('oum', section, 'sched_start', start);
+				uci.set('oum', section, 'sched_stop', stop);
+			}
+			else {
+				uci.delete('oum', section, 'sched_enabled');
+				uci.delete('oum', section, 'schedule_paused');
+				if (uci.get('oum', section, 'manual_paused') == '1') uci.set('oum', section, 'paused', '1');
+				else uci.delete('oum', section, 'paused');
+			}
+			if (!uci.commit('oum')) return failure('commit_failed', 'Не удалось сохранить расписание.');
+			let applyCommand = enabled ? '/usr/libexec/oum-parental-cron' : '/usr/libexec/oum-device-policy apply';
+			if (system(`${applyCommand} >/tmp/oum-parental.log 2>&1`) != 0)
+				return failure('apply_failed', 'Расписание сохранено, но применить его сейчас не удалось.');
+			return { ok: true, mac, enabled, message: enabled ? 'Расписание сохранено.' : 'Расписание отключено.' };
+		}
+	},
+
+	setAdGuard: {
+		args: { mode: 'off' },
+		call: function(request) {
+			let mode = request.args.mode ?? 'off';
+			if (!(mode in [ 'off', 'standard', 'family' ]))
+				return failure('invalid_mode', 'Выберите режим DNS-фильтра.');
+			return startSystemJob('adguard', { mode });
+		}
+	},
+
+	setDeviceAdGuard: {
+		args: { mac: '', mode: 'inherit' },
+		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			let mac = uc(request.args.mac ?? '');
+			let mode = request.args.mode ?? 'inherit';
+			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/)) return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
+			if (!(mode in [ 'inherit', 'off', 'standard', 'family' ])) return failure('invalid_mode', 'Выберите режим DNS-фильтра.');
+			let uci = cursor(), section = null;
+			uci.foreach('oum', 'device', (device) => { if (uc(device.mac ?? '') == mac) section = device['.name']; });
+			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
+			if (!client && !section) return failure('client_unknown', 'Сначала подключите устройство к роутеру.');
+			if (!section) section = uci.add('oum', 'device');
+			uci.set('oum', section, 'mac', mac);
+			if (client?.ip) uci.set('oum', section, 'ip', client.ip);
+			if (mode == 'inherit') uci.delete('oum', section, 'adblock');
+			else uci.set('oum', section, 'adblock', mode);
+			if (!length(uci.get('oum', section, 'alias') ?? '') && !deviceSectionHasState(uci, section)) uci.delete('oum', section);
+			if (!uci.commit('oum')) return failure('commit_failed', 'Не удалось сохранить DNS-фильтр устройства.');
+			if (system('/usr/libexec/oum-adguard >/tmp/oum-adguard.log 2>&1') != 0) return failure('apply_failed', 'Настройка сохранена, но DNS-фильтр не применился.');
+			return { ok: true, mac, mode, message: 'DNS-фильтр устройства сохранён. Переподключите его к Wi-Fi для немедленного применения.' };
 		}
 	},
 

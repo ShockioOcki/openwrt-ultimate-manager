@@ -1,0 +1,57 @@
+#!/bin/sh
+
+set -e
+
+LOCK=/tmp/oum-parental-cron.lock
+mkdir "$LOCK" 2>/dev/null || exit 0
+trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT INT TERM
+
+IPKG_INSTROOT="${IPKG_INSTROOT:-}"
+export IPKG_INSTROOT
+. /lib/functions.sh
+
+now_day="$(date +%u)"
+now_time="$(date +%H%M)"
+yesterday=$((now_day - 1))
+[ "$yesterday" -ge 1 ] || yesterday=7
+changed=0
+
+has_day() {
+	case ",$1," in *,$2,*) return 0;; *) return 1;; esac
+}
+
+apply_schedule() {
+	local section="$1" enabled days start stop start_num stop_num should manual old
+	config_get enabled "$section" sched_enabled '0'
+	config_get days "$section" sched_days '1,2,3,4,5'
+	config_get start "$section" sched_start '22:00'
+	config_get stop "$section" sched_stop '07:00'
+	config_get manual "$section" manual_paused '0'
+	config_get old "$section" schedule_paused '0'
+	should=0
+	if [ "$enabled" = 1 ]; then
+		start_num="$(printf '%s' "$start" | tr -d ':')"
+		stop_num="$(printf '%s' "$stop" | tr -d ':')"
+		case "$start_num:$stop_num:$now_time" in *[!0-9:]*|'::') return 0;; esac
+		if [ "$start_num" -lt "$stop_num" ]; then
+			has_day "$days" "$now_day" && [ "$now_time" -ge "$start_num" ] && [ "$now_time" -lt "$stop_num" ] && should=1
+		else
+			{ has_day "$days" "$now_day" && [ "$now_time" -ge "$start_num" ]; } ||
+				{ has_day "$days" "$yesterday" && [ "$now_time" -lt "$stop_num" ]; } && should=1
+		fi
+	fi
+	[ "$old" = "$should" ] || changed=1
+	if [ "$should" = 1 ]; then
+		uci -q set "oum.$section.schedule_paused=1"
+		uci -q set "oum.$section.paused=1"
+	else
+		uci -q delete "oum.$section.schedule_paused" || true
+		if [ "$manual" = 1 ]; then uci -q set "oum.$section.paused=1"; else uci -q delete "oum.$section.paused" || true; fi
+	fi
+}
+
+config_load oum
+config_foreach apply_schedule device
+[ "$changed" = 1 ] || exit 0
+uci -q commit oum
+/usr/libexec/oum-device-policy apply >/tmp/oum-parental-apply.log 2>&1

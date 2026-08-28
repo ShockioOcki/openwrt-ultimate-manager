@@ -503,7 +503,7 @@ return view.extend({
 				if (zapretStatus && status.action?.startsWith('zapret_'))
 					zapretStatus.textContent = status.message || 'Операция Zapret выполняется…';
 				if (status.action === 'engine') return;
-				if ((status.action === 'dns' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'wisp' || status.action === 'rollback_wisp' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
+				if ((status.action === 'dns' || status.action === 'adguard' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'wisp' || status.action === 'rollback_wisp' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
 					acknowledgeStatus(status).finally(() => window.setTimeout(() => window.location.reload(), 900));
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();

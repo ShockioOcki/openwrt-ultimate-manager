@@ -44,6 +44,18 @@
 			"uci": { "oum": true }
 		}
 	},
+	"oum/parental": {
+		"title": "Родительский контроль",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "oum/parental-v1"
+		},
+		"depends": {
+			"acl": [ "luci-app-oum" ],
+			"uci": { "oum": true }
+		}
+	},
 	"oum/logout": {
 		"firstchild_ineligible": true,
 		"action": {

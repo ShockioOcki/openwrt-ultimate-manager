@@ -206,6 +206,23 @@ rollback_wisp() {
 	write_status success rolled_back 'Предыдущая конфигурация Wi-Fi репитера восстановлена.'
 }
 
+apply_adguard() {
+	mode="$(json_value .mode)"
+	mkdir -p "$ROLLBACK"
+	cp /etc/config/dhcp "$ROLLBACK/dhcp-adguard"
+	cp /etc/config/oum "$ROLLBACK/oum-adguard"
+	chmod 600 "$ROLLBACK/dhcp-adguard" "$ROLLBACK/oum-adguard"
+	uci -q set "oum.main.adguard_mode=$mode"
+	uci -q commit oum
+	if ! /usr/libexec/oum-adguard >/tmp/oum-adguard.log 2>&1; then
+		cp "$ROLLBACK/dhcp-adguard" /etc/config/dhcp
+		cp "$ROLLBACK/oum-adguard" /etc/config/oum
+		/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+		fail adguard_failed 'DNS-фильтр не применился; прежняя конфигурация восстановлена.'
+	fi
+	write_status success applied 'DNS-фильтр сохранён. Переподключите устройства к Wi-Fi для немедленного применения.'
+}
+
 rollback_lan() {
 	[ -f "$ROLLBACK/network-lan" ] || fail rollback_missing 'Предыдущая LAN-конфигурация не найдена.'
 	previous="$(cat "$ROLLBACK/lan-address" 2>/dev/null || true)"
@@ -244,6 +261,7 @@ case "$ACTION" in
 	mesh) write_status running applying 'Проверяем и применяем Mesh…'; apply_mesh ;;
 	mesh_runtime) write_status running installing 'Устанавливаем совместимую поддержку Mesh…'; /usr/libexec/oum-mesh-runtime install || fail mesh_runtime_failed 'Mesh-компонент не установился; исходный Wi-Fi восстановлен.'; write_status success installed 'Mesh готов. Wi-Fi перезапущен, обычные точки доступа сохранены.' ;;
 	wisp) write_status running applying 'Подключаем репитер к выбранной Wi-Fi сети…'; apply_wisp ;;
+	adguard) write_status running applying 'Применяем DNS-фильтр…'; apply_adguard ;;
 	project_update) write_status running downloading 'Загружаем и проверяем новую версию OUM…'; /usr/libexec/oum-project-manager update || fail update_failed 'Обновление OUM не установилось; текущая версия сохранена.'; write_status success updated 'OUM обновлён. Интерфейс перезагружается.' ;;
 	project_rollback) write_status running rollback 'Восстанавливаем предыдущую версию OUM…'; /usr/libexec/oum-project-manager rollback || fail rollback_failed 'Не удалось восстановить предыдущую версию OUM.'; write_status success rolled_back 'Предыдущая версия OUM восстановлена.' ;;
 	rollback_wifi) write_status running rollback 'Восстанавливаем Wi-Fi…'; rollback_config wireless ;;
