@@ -11,7 +11,7 @@
 		},
 		"write": {
 			"ubus": {
-					"oum": [ "applySetup", "startVpnImport", "selectNode", "setVpnEnabled", "setDevicePolicy", "setDeviceAlias", "setDevicePaused", "setParentalSchedule", "setAdGuard", "setDeviceAdGuard", "rebootRouter", "refreshSubscriptionInfo", "applyWifiSettings", "applyWanSettings", "applyLanSettings", "applyMeshSettings", "installMeshRuntime", "setWisp", "updateProject", "rollbackProject", "rollbackSettings", "switchVpnEngine", "configurePodkop", "importPodkopAwg", "importPodkopReality", "startZapretStrategy", "applyPodkopRouting", "setPodkopYoutubeMode", "setZapretQuic", "prepareZapretManager", "createBackup", "restoreBackup", "resetVpn", "resetFirstRun", "clearSystemJobStatus", "setEngineDnsPreferences" ]
+					"oum": [ "applySetup", "startVpnImport", "selectNode", "setVpnEnabled", "setDevicePolicy", "setDeviceAlias", "setDevicePaused", "setParentalSchedule", "setAdGuard", "setDeviceAdGuard", "setWifiEnabled", "rebootRouter", "refreshSubscriptionInfo", "applyWifiSettings", "applyWanSettings", "applyLanSettings", "applyMeshSettings", "installMeshRuntime", "setWisp", "updateProject", "rollbackProject", "rollbackSettings", "switchVpnEngine", "configurePodkop", "importPodkopAwg", "importPodkopReality", "startZapretStrategy", "applyPodkopRouting", "setPodkopYoutubeMode", "setZapretQuic", "prepareZapretManager", "createBackup", "restoreBackup", "resetVpn", "resetFirstRun", "clearSystemJobStatus", "setEngineDnsPreferences" ]
 			},
 			"uci": [ "oum" ]
 		}

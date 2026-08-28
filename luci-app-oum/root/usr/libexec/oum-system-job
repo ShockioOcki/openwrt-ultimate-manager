@@ -71,6 +71,43 @@ apply_wifi() {
 	write_status success applied 'Настройки Wi-Fi применены. Подключитесь к сети заново, если её имя изменилось.'
 }
 
+toggle_wifi() {
+	enabled="$(json_value .enabled)"
+	mkdir -p "$ROLLBACK"
+	cp /etc/config/wireless "$ROLLBACK/wireless-toggle"
+	chmod 600 "$ROLLBACK/wireless-toggle"
+	state_file="$ROLLBACK/wireless-toggle-enabled"
+	if [ "$enabled" = true ]; then
+		if [ -s "$state_file" ]; then
+			while IFS= read -r section; do
+				printf '%s' "$section" | grep -Eq '^[A-Za-z0-9_]+$' || continue
+				[ "$(uci -q get "wireless.$section.mode" || true)" = ap ] || continue
+				uci -q set "wireless.$section.disabled=0"
+			done < "$state_file"
+		else
+			for section in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-iface$/\1/p'); do
+				[ "$(uci -q get "wireless.$section.mode" || true)" = ap ] || continue
+				uci -q set "wireless.$section.disabled=0"
+			done
+		fi
+	else
+		: > "$state_file"
+		for section in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-iface$/\1/p'); do
+			[ "$(uci -q get "wireless.$section.mode" || true)" = ap ] || continue
+			[ "$(uci -q get "wireless.$section.disabled" || echo 0)" = 1 ] || printf '%s\n' "$section" >> "$state_file"
+			uci -q set "wireless.$section.disabled=1"
+		done
+		chmod 600 "$state_file"
+	fi
+	uci -q commit wireless || fail commit_failed 'Не удалось сохранить состояние Wi-Fi.'
+	if ! wifi reload >/dev/null 2>&1; then
+		cp "$ROLLBACK/wireless-toggle" /etc/config/wireless
+		wifi reload >/dev/null 2>&1 || true
+		fail reload_failed 'Wi-Fi не перезапустился; предыдущие настройки восстановлены.'
+	fi
+	write_status success applied "$([ "$enabled" = true ] && echo 'Wi-Fi включён.' || echo 'Wi-Fi выключен. Для включения подключитесь кабелем к LAN-порту.')"
+}
+
 apply_wan() {
 	wan_type="$(json_value .wan_type)"
 	username="$(json_value .pppoe_user)"
@@ -256,6 +293,7 @@ apply_dns() {
 
 case "$ACTION" in
 	wifi) write_status running applying 'Применяем настройки Wi-Fi…'; apply_wifi ;;
+	wifi_toggle) write_status running applying 'Изменяем состояние Wi-Fi…'; toggle_wifi ;;
 	wan) write_status running applying 'Применяем настройки подключения…'; apply_wan ;;
 	lan) write_status running applying 'Сохраняем новый LAN-адрес…'; apply_lan ;;
 	mesh) write_status running applying 'Проверяем и применяем Mesh…'; apply_mesh ;;

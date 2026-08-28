@@ -658,6 +658,7 @@ function settingsStatusData() {
 	let projectRollback = glob('/etc/oum/project-rollback/oum-*.tar.gz');
 	return {
 		wifi: {
+			enabled: length(wifiStatus(uci)) > 0,
 			mode: length(ap24.ssid ?? '') && ap24.ssid == ap5.ssid ? 'smart' : 'separate',
 			ssid_24: ap24.ssid ?? '',
 			ssid_5: ap5.ssid ?? '',
@@ -1217,7 +1218,10 @@ function validate(args) {
 		return failure('invalid_wifi_password', 'Пароль Wi-Fi должен содержать от 8 до 63 символов.');
 
 	if (type(args.admin_password) != 'string' || length(args.admin_password) < 6)
-		return failure('invalid_admin_password', 'Новый пароль панели должен содержать минимум 6 символов.');
+		return failure('invalid_admin_password', args.admin_no_password ? 'Задайте пароль root минимум из 6 символов.' : 'Новый пароль панели должен содержать минимум 6 символов.');
+
+	if (type(args.admin_no_password) != 'bool')
+		return failure('invalid_admin_mode', 'Некорректный режим входа в панель.');
 
 	if (!(args.vpn_type in [ 'none', 'subscription', 'awg', 'proxy' ]))
 		return failure('invalid_vpn', 'Неизвестный тип VPN.');
@@ -1249,13 +1253,15 @@ function setRootPassword(password) {
 }
 
 function setAdminPassword(uci, password) {
-	let proc = popen(`/usr/sbin/uhttpd -m ${shellquote(password)} 2>/dev/null`);
-	if (!proc)
-		return false;
-
-	let hash = trim(proc.read('all'));
-	let rc = proc.close();
-	if (rc != 0 || !match(hash, /^\$1\$/))
+	let hash = '';
+	if (length(password)) {
+		let proc = popen(`/usr/sbin/uhttpd -m ${shellquote(password)} 2>/dev/null`);
+		if (!proc) return false;
+		hash = trim(proc.read('all'));
+		let rc = proc.close();
+		if (rc != 0 || !match(hash, /^\$1\$/)) return false;
+	}
+	else if (system("id admin >/dev/null 2>&1 && /bin/busybox passwd -d admin >/dev/null 2>&1 || true") != 0)
 		return false;
 
 	let found = false;
@@ -1369,6 +1375,15 @@ const methods = {
 				ssid_5: args.wifi_mode == 'smart' ? args.ssid_24 : args.ssid_5,
 				wifi_password: args.wifi_password
 			});
+		}
+	},
+
+	setWifiEnabled: {
+		args: { enabled: false },
+		call: function(request) {
+			if (type(request.args.enabled) != 'bool')
+				return failure('invalid_state', 'Некорректное состояние Wi-Fi.');
+			return startSystemJob('wifi_toggle', { enabled: request.args.enabled });
 		}
 	},
 
@@ -2202,6 +2217,7 @@ const methods = {
 			ssid_5: '',
 			wifi_password: '',
 			admin_password: '',
+			admin_no_password: false,
 			vpn_type: 'none'
 		},
 		call: function(request) {
@@ -2230,7 +2246,7 @@ const methods = {
 				uci.set('oum', 'main', 'setup_complete', '1');
 
 				phase = 'admin_password';
-				if (!setAdminPassword(uci, request.args.admin_password)) {
+				if (!setAdminPassword(uci, request.args.admin_no_password ? '' : request.args.admin_password)) {
 					restoreConfigs();
 					return failure('password_failed', 'Не удалось изменить пароль панели.');
 				}

@@ -14,6 +14,7 @@ const callStartVpnImport = rpc.declare({
 const callApplyWifi = rpc.declare({
 	object: 'oum', method: 'applyWifiSettings', params: [ 'wifi_mode', 'ssid_24', 'ssid_5', 'wifi_password' ], expect: { '': {} }
 });
+const callSetWifiEnabled = rpc.declare({ object: 'oum', method: 'setWifiEnabled', params: [ 'enabled' ], expect: { '': {} } });
 const callApplyWan = rpc.declare({
 	object: 'oum', method: 'applyWanSettings', params: [ 'wan_type', 'pppoe_user', 'pppoe_password' ], expect: { '': {} }
 });
@@ -215,6 +216,7 @@ return view.extend({
 					E('p', { 'class': 'oum-help' }, 'Регион US и шифрование WPA2/WPA3 mixed сохраняются автоматически.'),
 					E('div', { 'class': 'oum-setting-actions' }, [
 						E('button', { 'class': 'btn cbi-button-action', id: 'apply-wifi', 'data-system-action': '' }, 'Применить Wi-Fi'),
+						E('button', { 'class': `btn ${wifi.enabled === false ? 'cbi-button-action' : 'cbi-button-negative'}`, id: 'toggle-wifi', 'data-system-action': '' }, wifi.enabled === false ? 'Включить Wi-Fi' : 'Отключить Wi-Fi'),
 						E('button', { 'class': 'btn', id: 'rollback-wifi', disabled: settings.rollback_wifi ? null : '', 'data-system-action': '' }, 'Вернуть предыдущие')
 					])
 				]),
@@ -503,7 +505,7 @@ return view.extend({
 				if (zapretStatus && status.action?.startsWith('zapret_'))
 					zapretStatus.textContent = status.message || 'Операция Zapret выполняется…';
 				if (status.action === 'engine') return;
-				if ((status.action === 'dns' || status.action === 'adguard' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'wisp' || status.action === 'rollback_wisp' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
+				if ((status.action === 'wifi_toggle' || status.action === 'dns' || status.action === 'adguard' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'wisp' || status.action === 'rollback_wisp' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
 					acknowledgeStatus(status).finally(() => window.setTimeout(() => window.location.reload(), 900));
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
@@ -748,6 +750,16 @@ return view.extend({
 			if (password !== rawValue('#wifi-password-confirm')) return ui.addNotification(null, E('p', {}, 'Пароли Wi-Fi не совпадают.'), 'warning');
 			if (!await confirmation('Изменить Wi-Fi?', 'Беспроводные устройства отключатся и должны будут подключиться заново.', 'Применить', false)) return;
 			start(callApplyWifi(mode, ssid24, ssid5, password));
+		});
+		root.querySelector('#toggle-wifi').addEventListener('click', async (event) => {
+			event.preventDefault();
+			const enable = wifi.enabled === false;
+			if (enable) {
+				if (await confirmation('Включить Wi-Fi?', 'Будут включены точки доступа, которые работали до отключения.', 'Включить', false)) start(callSetWifiEnabled(true));
+				return;
+			}
+			if (await confirmation('Отключить Wi-Fi?', 'Отключение Wi-Fi оборвёт беспроводное подключение. Для восстановления понадобится проводное подключение к LAN-порту роутера (кабель). Продолжить?', 'Отключить', true))
+				start(callSetWifiEnabled(false));
 		});
 		root.querySelector('#apply-wan').addEventListener('click', async () => {
 			const type = selected('wan_type'), username = value('#pppoe-user'), password = rawValue('#pppoe-password');
