@@ -224,6 +224,7 @@ function connectedClients(uci) {
 	let clients = {};
 	let stations = wirelessStations();
 	let policies = {};
+	let paused = {};
 	let aliases = {};
 	let dhcpNames = {};
 	let aliasMigrated = false;
@@ -235,6 +236,7 @@ function connectedClients(uci) {
 		if (match(device.mac ?? '', /^[0-9A-Fa-f:]{17}$/)) {
 			let mac = uc(device.mac);
 			policies[mac] = device.policy ?? 'default';
+			paused[mac] = device.paused == '1';
 			let alias = trim(device.alias ?? '');
 			let legacy = trim(device.name ?? '');
 			if (!length(alias) && length(legacy) && legacy != '*' && lc(legacy) != 'unknown' && validDeviceAlias(legacy)) {
@@ -272,6 +274,7 @@ function connectedClients(uci) {
 			medium: stations[mac] ? 'wifi' : 'unknown',
 			expires: +fields[1],
 			policy: policies[mac] ?? 'default',
+			paused: paused[mac] ?? false,
 			seen: stations[mac] ? true : false
 		};
 	}
@@ -292,6 +295,7 @@ function connectedClients(uci) {
 				medium: stations[mac] ? 'wifi' : 'ethernet',
 				expires: current.expires ?? 0,
 				policy: policies[mac] ?? 'default',
+				paused: paused[mac] ?? false,
 				seen: true
 			};
 		}
@@ -310,9 +314,39 @@ function connectedClients(uci) {
 			medium: client.medium,
 			expires: client.expires,
 			policy: client.policy,
+			paused: client.paused ?? false,
 			seen: client.seen
 		});
 	}
+	return sort(result, (a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0));
+}
+
+function offlineClients(uci, online) {
+	let active = {};
+	for (let client in online)
+		active[client.mac] = true;
+	let result = [];
+	uci.foreach('oum', 'device', (device) => {
+		let mac = uc(device.mac ?? '');
+		if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/) || active[mac])
+			return;
+		let alias = trim(device.alias ?? '');
+		let policy = device.policy ?? 'default';
+		let isPaused = device.paused == '1';
+		if (!length(alias) && policy == 'default' && !isPaused)
+			return;
+		push(result, {
+			name: length(alias) ? alias : `Устройство ${replace(substr(mac, 9), /:/g, '-')}`,
+			alias,
+			mac,
+			ip: device.ip ?? '',
+			medium: 'offline',
+			expires: 0,
+			policy,
+			paused: isPaused,
+			seen: false
+		});
+	});
 	return sort(result, (a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0));
 }
 
@@ -1519,13 +1553,15 @@ const methods = {
 	dashboardStatus: {
 		call: function() {
 			const uci = cursor();
+			const clients = connectedClients(uci);
 			const passwall = passwallStatusData();
 			const podkop = podkopStatusData();
 			const engine = podkop.installed ? 'podkop' : (passwall.installed ? 'passwall' : 'openclash');
 			return {
 				wan: networkStatus(),
 				wifi: wifiStatus(uci),
-				clients: connectedClients(uci),
+				clients,
+				offline_clients: offlineClients(uci, clients),
 				thermal: thermalStatus(),
 				active_source: uci.get('oum', 'main', 'active_source') ?? 'none',
 				vpn_engine: engine,
@@ -1695,6 +1731,48 @@ const methods = {
 			if (!uci.commit('oum'))
 				return failure('commit_failed', 'Не удалось сохранить имя устройства.');
 			return { ok: true, mac, alias, message: length(alias) ? 'Имя устройства сохранено.' : 'Пользовательское имя удалено.' };
+		}
+	},
+
+	setDevicePaused: {
+		args: { mac: '', paused: false },
+		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			let mac = uc(request.args.mac ?? '');
+			let paused = request.args.paused;
+			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
+				return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
+			if (type(paused) != 'bool')
+				return failure('invalid_state', 'Некорректное состояние паузы.');
+
+			const uci = cursor();
+			let section = null;
+			uci.foreach('oum', 'device', (device) => {
+				if (uc(device.mac ?? '') == mac)
+					section = device['.name'];
+			});
+			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
+			if (!client && !section)
+				return failure('client_unknown', 'Сначала подключите устройство к роутеру.');
+			if (paused) {
+				if (!section)
+					section = uci.add('oum', 'device');
+				uci.set('oum', section, 'mac', mac);
+				if (client?.ip)
+					uci.set('oum', section, 'ip', client.ip);
+				uci.set('oum', section, 'paused', '1');
+			}
+			else if (section) {
+				uci.delete('oum', section, 'paused');
+				if (!length(uci.get('oum', section, 'alias') ?? '') && !deviceSectionHasState(uci, section))
+					uci.delete('oum', section);
+			}
+			if (!uci.commit('oum'))
+				return failure('commit_failed', 'Не удалось сохранить паузу устройства.');
+			if (system('(/usr/libexec/oum-device-policy apply) >/tmp/oum-device-policy-start.log 2>&1 &') != 0)
+				return failure('apply_failed', 'Не удалось применить паузу устройства.');
+			return { ok: true, mac, paused, message: paused ? 'Доступ в интернет приостановлен.' : 'Доступ в интернет восстановлен.' };
 		}
 	},
 

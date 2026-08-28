@@ -11,6 +11,7 @@ const callSelectNode = rpc.declare({ object: 'oum', method: 'selectNode', params
 const callSetVpnEnabled = rpc.declare({ object: 'oum', method: 'setVpnEnabled', params: [ 'enabled' ], expect: { '': {} } });
 const callSetDevicePolicy = rpc.declare({ object: 'oum', method: 'setDevicePolicy', params: [ 'mac', 'policy' ], expect: { '': {} } });
 const callSetDeviceAlias = rpc.declare({ object: 'oum', method: 'setDeviceAlias', params: [ 'mac', 'alias' ], expect: { '': {} } });
+const callSetDevicePaused = rpc.declare({ object: 'oum', method: 'setDevicePaused', params: [ 'mac', 'paused' ], expect: { '': {} } });
 const callRefreshSubscriptionInfo = rpc.declare({ object: 'oum', method: 'refreshSubscriptionInfo', expect: { '': {} } });
 const callPodkopRoutingStatus = rpc.declare({ object: 'oum', method: 'podkopRoutingStatus', expect: { '': {} } });
 const callApplyPodkopRouting = rpc.declare({ object: 'oum', method: 'applyPodkopRouting', params: [ 'proxy_lists', 'proxy_domains', 'proxy_subnets', 'direct_lists', 'direct_domains', 'direct_subnets', 'youtube_mode' ], expect: { '': {} } });
@@ -140,7 +141,7 @@ return view.extend({
 			E('style', {}, `
 				.oum-dashboard{max-width:1050px;margin:0 auto}.oum-page-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-page-head h2{margin:0}.oum-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
 				.oum-card,.oum-panel{border:1px solid #ccd3dc;border-radius:12px;padding:16px}.oum-card small{display:block;opacity:.7;margin-bottom:8px}.oum-card strong{font-size:1.1rem}.oum-vpn-card-row{display:flex;align-items:center;justify-content:space-between;gap:8px}.oum-vpn-card-row button{padding:4px 9px}.oum-card-message{font-size:.82em;margin-top:7px;min-height:1.2em}
-				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}.oum-device-cell{min-width:180px}.oum-device-name-row,.oum-device-alias-form{display:flex;align-items:center;gap:8px;min-width:0}.oum-device-name{min-width:0;overflow-wrap:anywhere}.oum-device-rename{padding:5px 8px;min-height:32px;white-space:nowrap}.oum-device-alias-form input{min-width:120px;max-width:220px;height:36px}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:#c0392b}
+				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}.oum-device-cell{min-width:180px}.oum-device-name-row,.oum-device-alias-form{display:flex;align-items:center;gap:8px;min-width:0}.oum-device-name{min-width:0;overflow-wrap:anywhere}.oum-device-rename{padding:5px 8px;min-height:32px;white-space:nowrap}.oum-device-alias-form input{min-width:120px;max-width:220px;height:36px}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:#c0392b}.oum-client-paused{opacity:.55}.oum-device-help{margin:0 0 12px}.oum-offline{margin-top:14px}.oum-offline>summary{cursor:pointer;font-weight:600;padding:8px 0}.oum-pause-button{white-space:nowrap}
 				.oum-muted{opacity:.68}.oum-warning{padding:12px 14px;border:1px solid #b28a29;background:rgba(178,138,41,.16);border-radius:10px;margin-top:14px;line-height:1.45}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
 				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:rgba(127,127,127,.1);margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}.oum-node-quick,.oum-node-all-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 				.oum-node-actions,.oum-subscription-head{display:flex;align-items:center;gap:8px}.oum-subscription{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #d8dde5}.oum-subscription-head{justify-content:space-between}.oum-subscription-head h3{margin:0}.oum-subscription-progress{height:9px;border-radius:999px;background:rgba(127,127,127,.18);overflow:hidden;margin:13px 0 8px}.oum-subscription-progress>span{display:block;height:100%;background:#32b67a;transition:width .3s}.oum-subscription-data{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}.oum-subscription-status{margin-top:7px;font-size:.85em}
@@ -171,11 +172,19 @@ return view.extend({
 				])
 			]),
 			E('div', { 'class': 'oum-panels' }, [
-				E('section', { 'class': 'oum-panel' }, [
+				E('section', { 'class': 'oum-panel', id: 'devices-panel' }, [
 					E('h3', {}, 'Подключённые устройства'),
+					E('p', { 'class': 'oum-muted oum-device-help' }, 'Не знаешь, какое это устройство? Выключи его — оно пропадёт из списка примерно через 10 секунд. После этого его можно переименовать в разделе «Недавно были». '),
 					E('table', { 'class': 'oum-clients' }, [
-						E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'IP-адрес'), E('th', {}, 'Подключение'), E('th', { 'class': 'optional' }, 'MAC'), E('th', {}, 'Маршрутизация') ])),
+						E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'IP-адрес'), E('th', {}, 'Подключение'), E('th', { 'class': 'optional' }, 'MAC'), E('th', {}, 'Маршрутизация'), E('th', {}, 'Доступ') ])),
 						E('tbody', { id: 'client-list' })
+					]),
+					E('details', { 'class': 'oum-offline', id: 'offline-section', hidden: '' }, [
+						E('summary', { id: 'offline-summary' }, 'Недавно были (офлайн)'),
+						E('table', { 'class': 'oum-clients' }, [
+							E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'Последний IP'), E('th', { 'class': 'optional' }, 'MAC'), E('th', {}, 'Маршрутизация'), E('th', {}, 'Доступ') ])),
+							E('tbody', { id: 'offline-client-list' })
+						])
 					]),
 					E('div', { 'class': 'oum-policy-message oum-muted', id: 'policy-message' }, 'Режим применяется к выбранному устройству и сохраняется после перезагрузки.')
 				]),
@@ -558,9 +567,10 @@ return view.extend({
 				(fresh.vpn_ready === true ? 'VPN работает' : 'VPN запускается или требует внимания');
 			updateSubscription(fresh);
 			const body = root.querySelector('#client-list');
-			const activeEditor = body.querySelector('[data-device-alias-input]');
-			if (!editingAliasMac || !activeEditor) body.replaceChildren(...(fresh.clients || []).map((client) => E('tr', {}, [
-				E('td', { 'class': 'oum-device-cell' }, editingAliasMac === client.mac ?
+			const offlineBody = root.querySelector('#offline-client-list');
+			const devicePanel = root.querySelector('#devices-panel');
+			const activeEditor = devicePanel.querySelector('[data-device-alias-input]');
+			const nameCell = (client) => E('td', { 'class': 'oum-device-cell' }, editingAliasMac === client.mac ?
 					E('div', { 'class': 'oum-device-alias-form' }, [
 						E('input', { 'data-device-alias-input': client.mac, maxlength: 32, value: client.alias || client.name, 'aria-label': `Новое имя для ${client.name}` }),
 						E('button', { type: 'button', 'class': 'btn cbi-button-action oum-device-rename', 'data-device-action': 'save', 'data-device-mac': client.mac }, 'Сохранить'),
@@ -569,13 +579,36 @@ return view.extend({
 					E('div', { 'class': 'oum-device-name-row' }, [
 						E('span', { 'class': 'oum-device-name' }, client.name),
 						E('button', { type: 'button', 'class': 'btn cbi-button oum-device-rename', 'data-device-action': 'edit', 'data-device-mac': client.mac }, 'Переименовать')
-					])), E('td', {}, client.ip),
+					]));
+			const pauseButton = (client) => E('button', {
+				type: 'button',
+				'class': `btn ${client.paused ? 'cbi-button-action' : 'cbi-button'} oum-pause-button`,
+				'data-device-action': 'pause',
+				'data-device-mac': client.mac,
+				'data-device-paused': client.paused ? '1' : '0'
+			}, client.paused ? 'Возобновить' : 'Пауза');
+			if (!editingAliasMac || !activeEditor) {
+				body.replaceChildren(...(fresh.clients || []).map((client) => E('tr', { 'class': client.paused ? 'oum-client-paused' : '' }, [
+				nameCell(client), E('td', {}, client.ip),
 				E('td', {}, client.medium === 'wifi' ? 'Wi-Fi' : (client.medium === 'ethernet' ? 'Кабель' : 'Не определено')),
 				E('td', { 'class': 'optional' }, client.mac),
-				E('td', {}, policySelect(client))
+				E('td', {}, policySelect(client)),
+				E('td', {}, pauseButton(client))
 			])));
+				offlineBody.replaceChildren(...(fresh.offline_clients || []).map((client) => {
+					const select = policySelect(client);
+					select.disabled = true;
+					return E('tr', { 'class': client.paused ? 'oum-client-paused' : '' }, [
+						nameCell(client), E('td', {}, client.ip || '—'), E('td', { 'class': 'optional' }, client.mac),
+						E('td', {}, select), E('td', {}, pauseButton(client))
+					]);
+				}));
+			}
 			if (!fresh.clients?.length)
-				body.appendChild(E('tr', {}, E('td', { colspan: 5, 'class': 'oum-muted' }, 'Нет активных DHCP-клиентов')));
+				body.appendChild(E('tr', {}, E('td', { colspan: 6, 'class': 'oum-muted' }, 'Нет активных устройств')));
+			const offlineSection = root.querySelector('#offline-section');
+			offlineSection.hidden = !(fresh.offline_clients || []).length;
+			root.querySelector('#offline-summary').textContent = `Недавно были (офлайн) · ${(fresh.offline_clients || []).length}`;
 			for (const select of body.querySelectorAll('.oum-policy'))
 				select.disabled = false;
 			policyMessage.textContent = vpnEngine === 'passwall' ?
@@ -782,7 +815,7 @@ return view.extend({
 			}).finally(() => { target.disabled = false; });
 		});
 
-		root.querySelector('#client-list').addEventListener('click', (ev) => {
+		root.querySelector('#devices-panel').addEventListener('click', (ev) => {
 			const action = ev.target.closest('[data-device-action]');
 			if (!action) return;
 			ev.preventDefault();
@@ -800,6 +833,22 @@ return view.extend({
 			if (action.dataset.deviceAction === 'cancel') {
 				editingAliasMac = null;
 				updateDashboard(dashboardState);
+				return;
+			}
+			if (action.dataset.deviceAction === 'pause') {
+				const paused = action.dataset.devicePaused !== '1';
+				action.disabled = true;
+				policyMessage.dataset.state = 'idle';
+				policyMessage.textContent = paused ? 'Приостанавливаем доступ устройства…' : 'Восстанавливаем доступ устройства…';
+				callSetDevicePaused(mac, paused).then((result) => {
+					if (!result.ok) throw new Error(result.message || 'Не удалось изменить доступ устройства.');
+					policyMessage.textContent = result.message;
+					return new Promise((resolve) => window.setTimeout(resolve, 2300)).then(() => callDashboardStatus()).then(updateDashboard);
+				}).catch((error) => {
+					policyMessage.dataset.state = 'failed';
+					policyMessage.textContent = error.message;
+					action.disabled = false;
+				});
 				return;
 			}
 			const input = root.querySelector(`[data-device-alias-input="${mac}"]`);
@@ -825,7 +874,7 @@ return view.extend({
 			});
 		});
 
-		root.querySelector('#client-list').addEventListener('keydown', (ev) => {
+		root.querySelector('#devices-panel').addEventListener('keydown', (ev) => {
 			const input = ev.target.closest('[data-device-alias-input]');
 			if (!input) return;
 			if (ev.key === 'Enter') {
