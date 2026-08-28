@@ -272,14 +272,14 @@ return view.extend({
 					E('div', { 'class': 'oum-inline-warning', hidden: unmanagedTunnels.length ? null : '' }, unmanagedTunnels.length ?
 						`Найдены туннели вне OUM: ${unmanagedTunnels.map((item) => item.name).join(', ')}. Перед включением другого движка проверьте их маршруты.` : ''),
 					E('div', { 'class': 'oum-engine-choices' }, [
-						engineChoice('openclash', 'OpenClash', `Управляемый выпуск ${engines.openclash.target_version || ''}. Удобен для подписок, AWG и прокси.`, engines.current === 'openclash', false),
+						engineChoice('openclash', 'OpenClash', `Управляемый выпуск ${engines.openclash.target_version || ''}. Подписки, AWG и прокси.`, engines.current === 'openclash', false),
 						engineChoice('passwall', 'PassWall', `Закреплённая версия ${engines.passwall.target_version || '26.5.11-r1'}. Тонкая маршрутизация через Xray.`, engines.current === 'passwall', false),
 						engineChoice('podkop', 'Podkop + Zapret', `Podkop ${engines.podkop?.target_version || 'с AWG-туннелем'}. YouTube напрямую через Zapret.`, engines.current === 'podkop', false)
 					]),
-					E('p', { 'class': 'oum-help' }, `Перед заменой OUM проверяет полный комплект, сохраняет конфигурацию и только затем удаляет старые пакеты. При ошибке выполняется автоматический возврат.${engines.passwall.cache_ready ? ' Локальный комплект PassWall готов.' : ' Для приватной разработки комплект PassWall должен быть заранее загружен на роутер.'}`),
+					E('p', { 'class': 'oum-help' }, `OUM временно остановит VPN и проверит прямой доступ к GitHub. Затем старый движок и его настройки будут полностью удалены, а выбранный движок установлен заново.${engines.passwall.cache_ready ? ' Локальный комплект PassWall готов.' : ''}`),
 					E('div', { 'class': 'oum-engine-actions' }, [
 						E('button', { 'class': 'btn cbi-button-action', id: 'switch-engine', 'data-system-action': '', disabled: engines.supported ? null : '' }, 'Заменить движок'),
-						E('span', { 'class': 'oum-help' }, engines.supported ? 'Сохранённая конфигурация выбранного движка восстановится автоматически.' : 'Для этой платформы ещё нет проверенного пакета переключения.')
+						E('span', { 'class': 'oum-help' }, engines.supported ? 'Настройки старого движка не переносятся.' : 'Для этой платформы ещё нет проверенного пакета переключения.')
 					])
 				])
 			]),
@@ -498,9 +498,7 @@ return view.extend({
 			const target = selected('vpn_engine');
 			if (!target || target === engines.current) return ui.addNotification(null, E('p', {}, 'Выберите другой VPN-движок.'), 'warning');
 			const title = target === 'passwall' ? 'PassWall' : (target === 'podkop' ? 'Podkop + Zapret' : 'OpenClash');
-			const saved = target === 'passwall' ? engines.passwall.saved : (target === 'podkop' ? engines.podkop.saved : engines.openclash.saved);
-			const text = saved ? `OUM заменит пакеты и восстановит сохранённую конфигурацию ${title}. VPN кратковременно отключится.` :
-				`OUM установит ${title} без личной конфигурации. После замены VPN останется выключенным, пока вы не добавите подключение.`;
+			const text = `Старый VPN-движок и его настройки будут полностью удалены. ${title} установится с чистой конфигурацией и останется выключенным до добавления подключения.`;
 			if (await confirmation(`Перейти на ${title}?`, text, 'Заменить движок', true))
 				start(callSwitchEngine(target));
 		});
