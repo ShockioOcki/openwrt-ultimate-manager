@@ -184,11 +184,49 @@ function wirelessStations() {
 	return stations;
 }
 
+function deviceAliasLength(value) {
+	let count = 0;
+	for (let i = 0; i < length(value); i++) {
+		let byte = ord(substr(value, i, 1));
+		if ((byte & 0xc0) != 0x80)
+			count++;
+	}
+	return count;
+}
+
+function validDeviceAlias(value) {
+	if (type(value) != 'string')
+		return false;
+	let count = deviceAliasLength(value);
+	if (count > 32)
+		return false;
+	for (let i = 0; i < length(value); i++) {
+		let byte = ord(substr(value, i, 1));
+		if (byte >= 0x80)
+			continue;
+		let allowed = byte == 32 || byte == 45 || byte == 46 || byte == 95 ||
+			(byte >= 48 && byte <= 57) || (byte >= 65 && byte <= 90) ||
+			(byte >= 97 && byte <= 122);
+		if (!allowed)
+			return false;
+	}
+	return true;
+}
+
+function deviceSectionHasState(uci, section) {
+	return (uci.get('oum', section, 'policy') ?? 'default') != 'default' ||
+		uci.get('oum', section, 'paused') == '1' ||
+		uci.get('oum', section, 'sched_enabled') == '1' ||
+		(uci.get('oum', section, 'adblock') ?? 'off') != 'off';
+}
+
 function connectedClients(uci) {
 	let clients = {};
 	let stations = wirelessStations();
 	let policies = {};
-	let savedNames = {};
+	let aliases = {};
+	let dhcpNames = {};
+	let aliasMigrated = false;
 	let lanValue = uci.get('network', 'lan', 'ipaddr') ?? '';
 	let lanAddress = replace(type(lanValue) == 'array' ? (lanValue[0] ?? '') : lanValue, /\/.*/, '');
 	let lanPrefix = replace(lanAddress, /\.[0-9]+$/, '.');
@@ -197,8 +235,25 @@ function connectedClients(uci) {
 		if (match(device.mac ?? '', /^[0-9A-Fa-f:]{17}$/)) {
 			let mac = uc(device.mac);
 			policies[mac] = device.policy ?? 'default';
-			if (length(device.name ?? '')) savedNames[mac] = device.name;
+			let alias = trim(device.alias ?? '');
+			let legacy = trim(device.name ?? '');
+			if (!length(alias) && length(legacy) && legacy != '*' && lc(legacy) != 'unknown' && validDeviceAlias(legacy)) {
+				alias = legacy;
+				uci.set('oum', device['.name'], 'alias', alias);
+				aliasMigrated = true;
+			}
+			if (length(alias)) aliases[mac] = alias;
 		}
+	});
+	if (aliasMigrated)
+		uci.commit('oum');
+	uci.foreach('dhcp', 'host', (host) => {
+		let name = trim(host.name ?? '');
+		let hostMacs = type(host.mac) == 'array' ? host.mac : [ host.mac ];
+		if (!length(name)) return;
+		for (let hostMac in hostMacs)
+			if (match(hostMac ?? '', /^[0-9A-Fa-f:]{17}$/))
+				dhcpNames[uc(hostMac)] = name;
 	});
 	let leases = readfile('/tmp/dhcp.leases') ?? '';
 	for (let line in split(leases, '\n')) {
@@ -206,8 +261,12 @@ function connectedClients(uci) {
 		if (!fields)
 			continue;
 		let mac = uc(fields[2]);
+		let leaseName = fields[4] ?? '';
+		let usefulLeaseName = leaseName != '*' && length(leaseName) >= 2 && length(leaseName) <= 32 &&
+			!match(leaseName, /^android-[0-9a-f]+$/i);
 		clients[mac] = {
-			name: fields[4] == '*' ? (savedNames[mac] ?? '') : fields[4],
+			name: aliases[mac] ?? dhcpNames[mac] ?? (usefulLeaseName ? leaseName : ''),
+			alias: aliases[mac] ?? '',
 			mac,
 			ip: fields[3],
 			medium: stations[mac] ? 'wifi' : 'unknown',
@@ -226,7 +285,8 @@ function connectedClients(uci) {
 			let mac = uc(fields[3]);
 			let current = clients[mac] ?? {};
 			clients[mac] = {
-				name: current.name ?? savedNames[mac] ?? '',
+				name: current.name ?? aliases[mac] ?? dhcpNames[mac] ?? '',
+				alias: aliases[mac] ?? '',
 				mac,
 				ip: fields[1],
 				medium: stations[mac] ? 'wifi' : 'ethernet',
@@ -241,9 +301,10 @@ function connectedClients(uci) {
 	for (let mac, client in clients) {
 		if (!client.seen)
 			continue;
-		if (!length(client.name ?? '')) client.name = `Устройство ${substr(mac, 9)}`;
+		if (!length(client.name ?? '')) client.name = `Устройство ${replace(substr(mac, 9), /:/g, '-')}`;
 		push(result, {
 			name: client.name,
+			alias: client.alias ?? '',
 			mac: client.mac,
 			ip: client.ip,
 			medium: client.medium,
@@ -1575,15 +1636,19 @@ const methods = {
 					section = device['.name'];
 			});
 			if (policy == 'default') {
-				if (section)
-					uci.delete('oum', section);
+				if (section) {
+					uci.delete('oum', section, 'policy');
+					uci.delete('oum', section, 'ip');
+					uci.delete('oum', section, 'name');
+					if (!length(uci.get('oum', section, 'alias') ?? '') && !deviceSectionHasState(uci, section))
+						uci.delete('oum', section);
+				}
 			}
 			else {
 				if (!section)
 					section = uci.add('oum', 'device');
 				uci.set('oum', section, 'mac', mac);
 				uci.set('oum', section, 'ip', client.ip);
-				uci.set('oum', section, 'name', client.name);
 				uci.set('oum', section, 'policy', policy);
 			}
 			if (!uci.commit('oum'))
@@ -1591,6 +1656,45 @@ const methods = {
 			if (system('(/usr/libexec/oum-device-policy apply) >/tmp/oum-device-policy-start.log 2>&1 &') != 0)
 				return failure('apply_failed', 'Не удалось применить режим устройства.');
 			return { ok: true, mac, policy, message: 'Настройка сохранена и применяется…' };
+		}
+	},
+
+	setDeviceAlias: {
+		args: { mac: '', alias: '' },
+		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			let mac = uc(request.args.mac ?? '');
+			let alias = trim(request.args.alias ?? '');
+			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
+				return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
+			if (!validDeviceAlias(alias))
+				return failure('invalid_alias', 'Имя: максимум 32 символа; разрешены буквы, цифры, пробел, дефис, точка и подчёркивание.');
+
+			const uci = cursor();
+			let section = null;
+			uci.foreach('oum', 'device', (device) => {
+				if (uc(device.mac ?? '') == mac)
+					section = device['.name'];
+			});
+			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
+			if (!client && !section)
+				return failure('client_offline', 'Устройство ещё не сохранено и сейчас не подключено к роутеру.');
+
+			if (length(alias)) {
+				if (!section)
+					section = uci.add('oum', 'device');
+				uci.set('oum', section, 'mac', mac);
+				uci.set('oum', section, 'alias', alias);
+			}
+			else if (section) {
+				uci.delete('oum', section, 'alias');
+				if (!deviceSectionHasState(uci, section))
+					uci.delete('oum', section);
+			}
+			if (!uci.commit('oum'))
+				return failure('commit_failed', 'Не удалось сохранить имя устройства.');
+			return { ok: true, mac, alias, message: length(alias) ? 'Имя устройства сохранено.' : 'Пользовательское имя удалено.' };
 		}
 	},
 
