@@ -496,6 +496,10 @@ function unmanagedTunnels(uci) {
 		let name = section['.name'] ?? '';
 		if (!(proto in [ 'amneziawg', 'wireguard' ]) || !match(name, /^[A-Za-z0-9_]+$/))
 			return;
+		// OUM keeps its own AWG interface between engine changes so Podkop can
+		// reuse it. It is managed by OUM even while another engine is active.
+		if (section.oum_managed == '1')
+			return;
 		if (podkopInstalled() && (uci.get('podkop', 'main', 'interface') ?? '') == name)
 			return;
 		let state = bus?.call(`network.interface.${name}`, 'status') ?? {};

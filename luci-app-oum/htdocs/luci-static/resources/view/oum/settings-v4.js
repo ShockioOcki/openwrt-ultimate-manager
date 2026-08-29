@@ -146,6 +146,7 @@ return view.extend({
 		};
 		const engines = settings.engines || { current: 'none', supported: false, passwall: {}, openclash: {}, podkop: {} };
 		const unmanagedTunnels = settings.unmanaged_tunnels || [];
+		const activeUnmanagedTunnels = unmanagedTunnels.filter((item) => item.up === true);
 		const engineTitle = engines.current === 'passwall' ? 'PassWall' : (engines.current === 'podkop' ? 'Podkop + Zapret' : (engines.current === 'openclash' ? 'OpenClash' : 'не установлен'));
 		const engineMissing = !engines.current || engines.current === 'none';
 		const engineActionLabel = engineMissing ? 'Установить движок' : 'Заменить движок';
@@ -304,8 +305,8 @@ return view.extend({
 						E('span', {}, [ E('small', {}, 'Сейчас установлен'), E('br'), E('strong', {}, engineTitle) ]),
 						E('span', { 'class': 'oum-help' }, engineVersion || '')
 					]),
-					E('div', { 'class': 'oum-inline-warning', hidden: unmanagedTunnels.length ? null : '' }, unmanagedTunnels.length ?
-						`Найдены туннели вне OUM: ${unmanagedTunnels.map((item) => item.name).join(', ')}. Перед включением другого движка проверьте их маршруты.` : ''),
+					E('div', { 'class': 'oum-inline-warning', hidden: activeUnmanagedTunnels.length ? null : '' }, activeUnmanagedTunnels.length ?
+						`Обнаружено дополнительное VPN-подключение, созданное не через OUM: ${activeUnmanagedTunnels.map((item) => item.name).join(', ')}. Не меняйте VPN-движок, пока оно включено: два подключения могут мешать друг другу. Отключить его можно в полном интерфейсе OpenWrt.` : ''),
 					E('div', { 'class': 'oum-engine-choices' }, [
 						engineChoice('openclash', 'OpenClash', `Управляемый выпуск ${engines.openclash.target_version || ''}. Подписки, AWG и прокси.`, engines.current === 'openclash', false),
 						engineChoice('passwall', 'PassWall', `Закреплённая версия ${engines.passwall.target_version || '26.5.11-r1'}. Тонкая маршрутизация через Xray.`, engines.current === 'passwall', false),

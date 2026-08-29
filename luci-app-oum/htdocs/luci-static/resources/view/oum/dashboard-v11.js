@@ -594,9 +594,10 @@ return view.extend({
 			const tunnelWarning = root.querySelector('#unmanaged-tunnel-warning');
 			root.querySelector('#reboot-required-warning').hidden = fresh.reboot_required !== true;
 			const unmanaged = fresh.unmanaged_tunnels || [];
-			tunnelWarning.hidden = unmanaged.length === 0;
-			tunnelWarning.textContent = unmanaged.length ?
-				`Найдены сетевые туннели вне OUM: ${unmanaged.map((item) => `${item.name} (${item.up ? 'поднят' : 'выключен'})`).join(', ')}. Их маршруты могут конфликтовать с выбранным VPN-движком.` : '';
+			const activeUnmanaged = unmanaged.filter((item) => item.up === true);
+			tunnelWarning.hidden = activeUnmanaged.length === 0;
+			tunnelWarning.textContent = activeUnmanaged.length ?
+				`Обнаружено дополнительное VPN-подключение, созданное не через OUM: ${activeUnmanaged.map((item) => item.name).join(', ')}. Если оно включено одновременно с OUM, интернет может работать неправильно.` : '';
 			root.querySelector('#wan-state').textContent = fresh.wan?.up ? 'Подключён' : 'Нет соединения';
 			root.querySelector('#wan-detail').textContent = fresh.wan?.via === 'wifi' ?
 				`через Wi-Fi${fresh.wan.ssid ? ` · ${fresh.wan.ssid}` : ''}${fresh.wan.ipv4 ? ` · ${fresh.wan.ipv4}` : ''}` :
