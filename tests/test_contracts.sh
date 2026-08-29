@@ -20,6 +20,21 @@ ZAPRET_MANAGER="$ROOT/luci-app-oum/root/usr/libexec/oum-zapret-manager"
 PASSWALL_SOURCE="$ROOT/luci-app-oum/root/usr/libexec/oum-passwall-source-job"
 DASHBOARD="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v11.js"
 SETTINGS="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/settings-v4.js"
+FIRST_RUN="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/first-run-v2.js"
+PARENTAL="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/parental-v1.js"
+HELP="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/help-v1.js"
+OUM_CSS="$ROOT/luci-app-oum/htdocs/luci-static/resources/oum/oum.css"
+
+for view in "$DASHBOARD" "$SETTINGS" "$FIRST_RUN" "$PARENTAL" "$HELP"; do
+	grep -Fq "L.resource('oum/oum.css')" "$view"
+	! grep -Fq "E('style'" "$view"
+done
+grep -Fq -- '--oum-canvas: #eef0ea' "$OUM_CSS"
+grep -Fq -- '--oum-console: #172c28' "$OUM_CSS"
+grep -Fq -- '--oum-action: #2868d7' "$OUM_CSS"
+grep -Fq 'outline: 3px solid var(--oum-action-ring)' "$OUM_CSS"
+grep -Fq '.oum-vpn-switchboard' "$OUM_CSS"
+! grep -Eq '#ccd3dc|#d8dde5|#2673ec' "$OUM_CSS" "$DASHBOARD" "$SETTINGS" "$FIRST_RUN" "$PARENTAL" "$HELP"
 
 grep -Fq 'OUM_BACKUP_VERSION=2' "$BACKUP"
 grep -Fq 'ENGINE=%s' "$BACKUP"

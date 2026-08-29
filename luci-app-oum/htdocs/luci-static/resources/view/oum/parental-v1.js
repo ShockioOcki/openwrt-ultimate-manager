@@ -10,6 +10,11 @@ const callSetAdGuard = rpc.declare({ object: 'oum', method: 'setAdGuard', params
 const callSetDeviceAdGuard = rpc.declare({ object: 'oum', method: 'setDeviceAdGuard', params: [ 'mac', 'mode' ], expect: { '': {} } });
 const callSystemJobStatus = rpc.declare({ object: 'oum', method: 'systemJobStatus', expect: { '': {} } });
 
+function appSidebar(active) {
+	const item = (key, label, path) => E('a', { 'class': `oum-nav-item${active === key ? ' is-active' : ''}`, href: L.url('oum', path) }, label);
+	return E('aside', { 'class': 'oum-sidebar', 'aria-label': 'Навигация OUM' }, [ E('div', { 'class': 'oum-brand' }, [ E('span', { 'class': 'oum-brand-mark' }, 'O'), E('span', {}, [ E('strong', {}, 'OUM'), E('small', {}, 'Домашний щит') ]) ]), E('div', { 'class': 'oum-nav-caption' }, 'Меню'), E('nav', { 'class': 'oum-nav' }, [ item('dashboard', 'Панель', 'dashboard'), item('parental', 'Родительский контроль', 'parental'), item('settings', 'Настройки', 'settings'), item('help', 'Помощь', 'help') ]) ]);
+}
+
 function resultError(result, fallback) {
 	if (!result || result.ok !== true) throw new Error(result?.message || fallback);
 	return result;
@@ -32,10 +37,8 @@ return view.extend({
 
 	render(status) {
 		const days = [ [ '1', 'Пн' ], [ '2', 'Вт' ], [ '3', 'Ср' ], [ '4', 'Чт' ], [ '5', 'Пт' ], [ '6', 'Сб' ], [ '7', 'Вс' ] ];
-		const root = E('div', { 'class': 'oum-parental' }, [
-			E('style', {}, `
-				.oum-parental{max-width:1000px;margin:0 auto}.oum-parental h2{margin-bottom:4px}.oum-parental-panel{border:1px solid #ccd3dc;border-radius:8px;padding:18px;margin:16px 0}.oum-parental-head{display:flex;justify-content:space-between;align-items:center;gap:16px}.oum-parental-help{opacity:.72;line-height:1.45}.oum-parental-guide{border:1px solid #ccd3dc;border-radius:8px;padding:13px 15px;margin:16px 0}.oum-parental-guide summary{cursor:pointer;font-weight:600}.oum-parental-guide ul{margin:10px 0 2px;padding-left:20px}.oum-parental-guide li+li{margin-top:7px}.oum-parental-global{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.oum-parental-global label,.oum-parental-filter{display:grid;gap:5px}.oum-parental-global label>span,.oum-parental-filter>span{font-size:.85rem;font-weight:600}.oum-parental-global select{min-width:210px}.oum-parental-device{border:1px solid #ccd3dc;border-radius:8px;margin:10px 0;overflow:hidden}.oum-parental-summary{display:grid;grid-template-columns:minmax(150px,1fr) minmax(190px,auto) auto;align-items:end;gap:10px;padding:12px}.oum-parental-name small{display:block;opacity:.65;margin-top:3px}.oum-parental-controls{display:flex;gap:8px;align-items:center}.oum-parental-schedule{border-top:1px solid #ccd3dc;padding:12px;background:rgba(127,127,127,.05)}.oum-parental-schedule>.oum-parental-help{margin:8px 0 0}.oum-parental-days{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.oum-parental-day{display:flex;gap:5px;align-items:center;border:1px solid #ccd3dc;border-radius:999px;padding:6px 9px}.oum-parental-times{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.oum-parental-times label{display:grid;gap:5px}.oum-parental-times input{min-height:38px}.oum-parental-state{font-size:.85rem;opacity:.72}.oum-parental-empty{padding:24px;text-align:center;opacity:.7}@media(max-width:720px){.oum-parental-head{align-items:flex-start}.oum-parental-summary{grid-template-columns:1fr}.oum-parental-controls{flex-wrap:wrap}.oum-parental-filter,.oum-parental-summary select{width:100%}}
-			`),
+		const page = E('main', { 'class': 'oum-main' }, [
+			E('link', { rel: 'stylesheet', href: L.resource('oum/oum.css') }),
 			E('div', { 'class': 'oum-parental-head' }, [ E('div', {}, [ E('h2', {}, 'Родительский контроль'), E('p', { 'class': 'oum-parental-help' }, 'Ограничивайте доступ в интернет по времени и выбирайте DNS-фильтр для всей сети или отдельного устройства.') ]), E('a', { 'class': 'btn', href: L.url('oum', 'settings') }, 'Настройки') ]),
 			E('details', { 'class': 'oum-parental-guide' }, [
 				E('summary', {}, 'Как работает родительский контроль'),
@@ -83,6 +86,7 @@ return view.extend({
 				}) : [ E('div', { 'class': 'oum-parental-empty' }, 'Подключите устройство к роутеру — оно появится здесь автоматически.') ])
 			])
 		]);
+		const root = E('div', { 'class': 'oum-parental oum-app', 'data-theme': 'light' }, [ appSidebar('parental'), page ]);
 
 		const reload = () => window.setTimeout(() => window.location.reload(), 700);
 		const notifyError = (error) => ui.addNotification(null, E('p', {}, error.message), 'error');

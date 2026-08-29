@@ -21,6 +21,23 @@ const callPrepareZapretManager = rpc.declare({ object: 'oum', method: 'prepareZa
 const callSystemJobStatus = rpc.declare({ object: 'oum', method: 'systemJobStatus', expect: { '': {} } });
 const sourceNames = { none: 'Не настроено', subscription: 'Subscription', awg: 'AWG Tunnel', proxy: 'Reality / Proxy', passwall: 'PassWall', podkop: 'Podkop + Zapret' };
 
+function appSidebar(active) {
+	const item = (key, label, path) => E('a', {
+		'class': `oum-nav-item${active === key ? ' is-active' : ''}`,
+		href: L.url('oum', path)
+	}, label);
+	return E('aside', { 'class': 'oum-sidebar', 'aria-label': 'Навигация OUM' }, [
+		E('div', { 'class': 'oum-brand' }, [ E('span', { 'class': 'oum-brand-mark', 'aria-hidden': 'true' }, 'O'), E('span', {}, [ E('strong', {}, 'OUM'), E('small', {}, 'Домашний щит') ]) ]),
+		E('div', { 'class': 'oum-nav-caption' }, 'Меню'),
+		E('nav', { 'class': 'oum-nav' }, [
+			item('dashboard', 'Панель', 'dashboard'),
+			item('parental', 'Родительский контроль', 'parental'),
+			item('settings', 'Настройки', 'settings'),
+			item('help', 'Помощь', 'help')
+		])
+	]);
+}
+
 function countryKey(name) {
 	const flag = String(name).match(/[\u{1F1E6}-\u{1F1FF}]{2}/u);
 	if (flag)
@@ -195,33 +212,24 @@ return view.extend({
 				E('div', { 'class': 'oum-route-category-list' }, ids.filter((id) => catalogById[id]).map((id) => routeRow(catalogById[id])))
 			])));
 
-		const root = E('div', { 'class': 'oum-dashboard' }, [
-			E('style', {}, `
-				.oum-dashboard{max-width:1050px;margin:0 auto}.oum-page-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-page-head h2{margin:0}.oum-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
-				.oum-card,.oum-panel{border:1px solid #ccd3dc;border-radius:12px;padding:16px}.oum-card small{display:block;opacity:.7;margin-bottom:8px}.oum-card strong{font-size:1.1rem}.oum-vpn-card-row{display:flex;align-items:center;justify-content:space-between;gap:8px}.oum-vpn-card-row button{padding:4px 9px}.oum-card-message{font-size:.82em;margin-top:7px;min-height:1.2em}
-				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid #e1e5ea}.oum-clients th{opacity:.7;font-size:.9em}.oum-device-cell{min-width:180px}.oum-device-name-row,.oum-device-alias-form{display:flex;align-items:center;gap:8px;min-width:0}.oum-device-name{min-width:0;overflow-wrap:anywhere}.oum-device-rename{padding:5px 8px;min-height:32px;white-space:nowrap}.oum-device-alias-form input{min-width:120px;max-width:220px;height:36px}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:#c0392b}.oum-client-paused{opacity:.55}.oum-device-help{margin:0 0 12px}.oum-offline{margin-top:14px}.oum-offline>summary{cursor:pointer;font-weight:600;padding:8px 0}.oum-pause-button{white-space:nowrap}.oum-health{font-size:.95rem!important;line-height:1.45}.oum-health[data-temperature="warm"]{color:#b27b19}.oum-health[data-temperature="hot"]{color:#c94b4b}.oum-traffic-cell{min-width:145px;font-variant-numeric:tabular-nums}.oum-traffic-cell span{display:block;white-space:nowrap;font-size:.86em}.oum-traffic-cell svg{display:block;margin-top:4px;color:#2673ec;opacity:.8}
-				.oum-muted{opacity:.68}.oum-warning{padding:12px 14px;border:1px solid #b28a29;background:rgba(178,138,41,.16);border-radius:10px;margin-top:14px;line-height:1.45}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
-				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:rgba(127,127,127,.1);margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}.oum-node-quick,.oum-node-all-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-				.oum-node-actions,.oum-subscription-head{display:flex;align-items:center;gap:8px}.oum-subscription{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #d8dde5}.oum-subscription-head{justify-content:space-between;flex-wrap:wrap}.oum-subscription-head h3{margin:0}.oum-subscription-status{min-width:0;flex:1;font-size:.92em}.oum-qr-wrap{display:grid;justify-items:center;gap:12px}.oum-qr-wrap canvas{background:#fff;border-radius:8px}
-				.oum-node{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:start;padding:10px 12px;border:1px solid #d8dde5;border-radius:9px}.oum-node>span:first-child{min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.35}.oum-node .btn{white-space:nowrap}.oum-delay{min-width:62px;text-align:right;white-space:nowrap}
-				.oum-node-title{font-weight:600;margin:14px 0 9px}.oum-node-hint{font-size:.86em;margin:2px 0 8px}.oum-node-message{min-height:1.4em;margin:6px 0}.oum-node-message[data-state="failed"]{color:#c0392b}
-				.oum-node-all{margin-top:13px}.oum-node-all>summary{cursor:pointer;font-weight:600;padding:4px 0}.oum-node-all[open]>summary{margin-bottom:10px}
-				.oum-passwall-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.oum-passwall-state{border:1px solid #d8dde5;border-radius:9px;padding:11px}.oum-passwall-state small{display:block;opacity:.68;margin-bottom:5px}.oum-passwall-state strong[data-ok="false"],.oum-passwall-diagnostic strong[data-ok="false"]{color:#c0392b}.oum-passwall-route{background:rgba(127,127,127,.1);border-radius:9px;padding:12px;margin-top:12px}.oum-passwall-route small{display:block;margin-bottom:4px}.oum-passwall-versions{margin-top:12px}.oum-passwall-rules{margin-top:8px}.oum-passwall-diagnostics{margin-top:12px}.oum-passwall-diagnostics>summary{cursor:pointer;font-weight:600}.oum-passwall-diagnostic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.oum-passwall-diagnostic{border:1px solid #d8dde5;border-radius:9px;padding:10px}.oum-passwall-diagnostic small{display:block;opacity:.68;margin-bottom:4px}.oum-node-controls[data-engine="passwall"]{border-top:1px solid #d8dde5;margin-top:16px;padding-top:14px}
-				.oum-tabs{display:flex;gap:6px;border-bottom:1px solid #ccd3dc;margin:16px 0 13px}.oum-tab{border:0;background:transparent;padding:9px 13px;border-bottom:3px solid transparent;cursor:pointer}.oum-tab[data-active="true"]{border-color:#2673ec;color:#2673ec;font-weight:600}.oum-route-intro{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:13px;border-radius:10px;background:rgba(127,127,127,.1);margin-bottom:12px}.oum-route-intro strong{display:block;margin-bottom:4px}.oum-route-catalog{display:grid;gap:9px}.oum-route-category{border:1px solid #d8dde5;border-radius:10px;overflow:hidden}.oum-route-category>summary{display:flex;justify-content:space-between;cursor:pointer;padding:12px 14px}.oum-route-category[open]>summary{border-bottom:1px solid #d8dde5}.oum-route-category-list{display:grid}.oum-route-row{display:grid;grid-template-columns:minmax(180px,1fr) auto;align-items:center;gap:12px;padding:10px 13px;border-bottom:1px solid #e4e8ed}.oum-route-row:last-child{border-bottom:0}.oum-route-service small{display:block;opacity:.65;margin-top:3px}.oum-route-switch{display:grid;grid-template-columns:1fr 1fr;border:1px solid #ccd3dc;border-radius:8px;overflow:hidden}.oum-route-switch label{cursor:pointer}.oum-route-switch input{position:absolute;opacity:0;pointer-events:none}.oum-route-switch span{display:block;padding:7px 11px;text-align:center;min-width:105px}.oum-route-switch label:has(input:checked) span{background:#2673ec;color:white}.oum-custom-rules{border:1px solid #d8dde5;border-radius:10px;margin-top:12px;padding:0 13px}.oum-custom-rules>summary{cursor:pointer;font-weight:600;padding:12px 0}.oum-custom-rules[open]>summary{border-bottom:1px solid #d8dde5}.oum-route-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:13px 0}.oum-route-box{border:1px solid #d8dde5;border-radius:10px;padding:13px}.oum-route-box h4{margin:0 0 5px}.oum-route-box textarea{width:100%;min-height:92px;box-sizing:border-box;margin-top:6px}.oum-route-label{display:block;font-weight:600;margin-top:11px}.oum-route-actions{position:sticky;bottom:0;display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:14px;padding:11px;background:rgba(127,127,127,.1);color:inherit;border:1px solid #d8dde5;border-radius:10px}.oum-route-message{margin-right:auto}.oum-route-message[data-state="failed"]{color:#c0392b}
-				.oum-diagnostic-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(250px,1fr);gap:12px}.oum-diagnostic-run{width:100%;margin-bottom:10px}.oum-diagnostic-sections{display:grid;gap:10px}.oum-diagnostic-section{border:2px solid #2b9b68;border-radius:8px;padding:12px}.oum-diagnostic-section[data-state="warning"]{border-color:#b28a29}.oum-diagnostic-section[data-state="error"]{border-color:#c94b4b}.oum-diagnostic-title{display:flex;align-items:flex-start;gap:10px}.oum-diagnostic-icon{font-size:1.25rem;line-height:1}.oum-diagnostic-title strong{display:block}.oum-diagnostic-items{display:grid;gap:5px;margin:10px 0 0 32px}.oum-diagnostic-item{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:6px;align-items:start}.oum-diagnostic-item[data-state="success"] .oum-diagnostic-mark{color:#2b9b68}.oum-diagnostic-item[data-state="warning"] .oum-diagnostic-mark{color:#b28a29}.oum-diagnostic-item[data-state="error"] .oum-diagnostic-mark{color:#c94b4b}.oum-diagnostic-value{opacity:.72;text-align:right}.oum-diagnostic-side{display:grid;align-content:start;gap:10px}.oum-diagnostic-side-card{border:1px solid #d8dde5;border-radius:9px;padding:12px}.oum-diagnostic-side-card h4{margin:0 0 10px}.oum-diagnostic-actions{display:grid;gap:8px}.oum-system-info{display:grid;grid-template-columns:auto 1fr;gap:7px 9px;font-size:.9em}.oum-system-info strong{white-space:nowrap}.oum-expert-tools>summary{cursor:pointer;font-weight:600}.oum-expert-tools p{font-size:.86em}
-				@media(max-width:900px){.oum-cards,.oum-passwall-grid{grid-template-columns:1fr 1fr}.oum-node-quick,.oum-node-all-grid,.oum-passwall-diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.oum-route-columns,.oum-diagnostic-layout{grid-template-columns:1fr}.oum-community-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.oum-cards,.oum-node-quick,.oum-node-all-grid,.oum-passwall-grid,.oum-passwall-route,.oum-passwall-diagnostic-grid,.oum-community-grid{grid-template-columns:1fr}.oum-clients .optional{display:none}.oum-diagnostic-item{grid-template-columns:18px 1fr}.oum-diagnostic-value{grid-column:2;text-align:left}}
-			`),
+		const page = E('main', { 'class': 'oum-main' }, [
+			E('link', { rel: 'stylesheet', href: L.resource('oum/oum.css') }),
 			E('div', { 'class': 'oum-page-head' }, [
-				E('h2', {}, 'OUM'),
-				E('a', { 'class': 'btn cbi-button', href: L.url('oum', 'logout') }, 'Выйти')
+				E('div', {}, [ E('h2', {}, 'Панель OUM'), E('p', { 'class': 'oum-muted' }, 'Домашняя сеть и защищённое подключение') ]),
+				E('div', { 'class': 'oum-head-actions' }, [
+					E('span', { 'class': 'oum-status-badge', id: 'header-vpn-state' }, 'Проверяем VPN'),
+					E('a', { 'class': 'btn cbi-button', href: L.url('oum', 'logout') }, 'Выйти'),
+					E('button', { 'class': 'btn cbi-button', id: 'oum-theme-toggle', type: 'button' }, 'Тёмная')
+				])
 			]),
 			E('div', { 'class': 'oum-warning', id: 'unmanaged-tunnel-warning', hidden: '' }),
 			E('div', { 'class': 'oum-warning', id: 'reboot-required-warning', hidden: '' }, 'После замены VPN-движка рекомендуется перезагрузить роутер из раздела «Настройки».'),
 			E('div', { 'class': 'oum-cards' }, [
-				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
-				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, ''), E('button', { 'class': 'btn cbi-button', id: 'show-wifi-qr' }, 'Показать QR') ]),
-				E('div', { 'class': 'oum-card' }, [ E('small', {}, 'Состояние'), E('strong', { id: 'health-state', 'class': 'oum-health' }, '—') ]),
-				E('div', { 'class': 'oum-card' }, [
+				E('div', { 'class': 'oum-card' }, [ E('img', { 'class': 'oum-metric-icon', src: L.resource('oum/icons/ui-globe.svg'), alt: '' }), E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
+				E('div', { 'class': 'oum-card oum-client-metric' }, [ E('div', {}, [ E('img', { 'class': 'oum-metric-icon', src: L.resource('oum/icons/ui-wifi.svg'), alt: '' }), E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, '') ]), E('button', { 'class': 'oum-qr-tile', id: 'show-wifi-qr', type: 'button' }, [ E('span', { 'aria-hidden': 'true' }, '▦'), E('small', {}, 'Wi‑Fi QR') ]) ]),
+				E('div', { 'class': 'oum-card' }, [ E('span', { 'class': 'oum-metric-icon oum-temperature-icon', 'aria-hidden': 'true' }, '°'), E('small', {}, 'Температура'), E('strong', { id: 'health-state', 'class': 'oum-health' }, '—'), E('div', { id: 'health-detail', 'class': 'oum-muted' }, 'Максимум по датчикам') ]),
+				E('div', { 'class': 'oum-card oum-vpn-metric' }, [
+					E('img', { 'class': 'oum-metric-icon', src: L.resource('oum/icons/ui-vpn.svg'), alt: '' }),
 					E('small', {}, 'VPN-движок'),
 					E('div', { 'class': 'oum-vpn-card-row' }, [
 						E('strong', { id: 'active-source' }, sourceNames[dashboard.active_source] || dashboard.active_source),
@@ -366,8 +374,16 @@ return view.extend({
 						])
 					])
 				])
+			]),
+			E('section', { 'class': 'oum-panel oum-system-panel' }, [
+				E('div', { 'class': 'oum-section-head' }, [ E('h3', {}, 'Система'), E('span', { 'class': 'oum-muted', id: 'system-uptime' }, '—') ]),
+				E('div', { 'class': 'oum-system-meters' }, [
+					E('div', {}, [ E('strong', {}, 'Оперативная память'), E('div', { 'class': 'oum-meter' }, E('span', { id: 'memory-meter' })), E('small', { 'class': 'oum-muted', id: 'memory-detail' }, '—') ]),
+					E('div', {}, [ E('strong', {}, 'Нагрузка'), E('div', { 'class': 'oum-meter' }, E('span', { id: 'load-meter' })), E('small', { 'class': 'oum-muted', id: 'load-detail' }, '—') ])
+				])
 			])
 		]);
+		const root = E('div', { 'class': 'oum-dashboard oum-app', 'data-theme': 'light' }, [ appSidebar('dashboard'), page ]);
 
 		const nodePanel = root.querySelector('#node-panel');
 		const nodeControls = root.querySelector('#node-controls');
@@ -381,6 +397,7 @@ return view.extend({
 		const subscriptionRefresh = root.querySelector('#refresh-subscription');
 		const subscriptionStatus = root.querySelector('#subscription-status');
 		const wifiQrButton = root.querySelector('#show-wifi-qr');
+		const themeToggle = root.querySelector('#oum-theme-toggle');
 		const vpnToggle = root.querySelector('#vpn-toggle');
 		const vpnControlMessage = root.querySelector('#vpn-control-message');
 		const policyMessage = root.querySelector('#policy-message');
@@ -392,6 +409,13 @@ return view.extend({
 		let nodesAvailable = initialNodes.available === true;
 		let dashboardState = dashboard;
 		let editingAliasMac = null;
+		const setTheme = (theme) => {
+			root.dataset.theme = theme;
+			themeToggle.textContent = theme === 'dark' ? 'Светлая' : 'Тёмная';
+			try { window.localStorage.setItem('oum-theme', theme); } catch (_) {}
+		};
+		try { setTheme(window.localStorage.getItem('oum-theme') === 'dark' ? 'dark' : 'light'); } catch (_) { setTheme('light'); }
+		themeToggle.addEventListener('click', () => setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark'));
 		const updateVpnPanelVisibility = () => { nodePanel.hidden = !(passwallInstalled || podkopInstalled || nodesAvailable); };
 		const podkopRoutingMessage = root.querySelector('#podkop-routing-message');
 		const podkopRoutingSave = root.querySelector('#podkop-routing-save');
@@ -420,6 +444,25 @@ return view.extend({
 			if (youtubeHint) youtubeHint.textContent = selectedYoutubeMode() === 'vpn' ? 'Zapret будет остановлен' : 'будет обработан Zapret';
 		};
 		root.querySelector('#podkop-routing-tab').addEventListener('change', updateRouteSummary);
+		for (const row of root.querySelectorAll('.oum-route-row')) {
+			row.tabIndex = 0;
+			row.setAttribute('role', 'switch');
+			const toggle = () => {
+				const checked = row.querySelector('input:checked');
+				const next = row.querySelector(`input[value="${checked?.value === 'vpn' ? 'direct' : 'vpn'}"]`);
+				if (!next) return;
+				next.checked = true;
+				row.setAttribute('aria-checked', String(next.value === 'vpn'));
+				updateRouteSummary();
+			};
+			row.setAttribute('aria-checked', String(row.querySelector('input[value="vpn"]')?.checked === true));
+			row.addEventListener('click', (event) => { event.preventDefault(); toggle(); });
+			row.addEventListener('keydown', (event) => {
+				if (event.key !== 'Enter' && event.key !== ' ') return;
+				event.preventDefault();
+				toggle();
+			});
+		}
 		updateRouteSummary();
 		podkopRoutingSave.addEventListener('click', (event) => {
 			event.preventDefault();
@@ -607,10 +650,17 @@ return view.extend({
 			root.querySelector('#wifi-detail').textContent = ssids.length ? ssids.join(' · ') : 'Wi-Fi выключен';
 			wifiQrButton.hidden = !(fresh.wifi || []).length;
 			const health = fresh.health || {};
-			const temperatureText = health.temperature != null ? `${Math.round(health.temperature)}°C ${health.temperature_state === 'hot' ? 'проветрить' : (health.temperature_state === 'warm' ? 'теплее' : 'норм')}` : 'темп. —';
+			const temperatureText = health.temperature != null ? `${Math.round(health.temperature)} °C` : '—';
 			const healthNode = root.querySelector('#health-state');
 			healthNode.dataset.temperature = health.temperature_state || 'unknown';
-			healthNode.textContent = `Up ${formatUptime(health.uptime)} · CPU ${Number(health.load || 0).toFixed(2)} · RAM ${health.memory_percent || 0}% · ${temperatureText}`;
+			healthNode.textContent = temperatureText;
+			root.querySelector('#health-detail').textContent = health.temperature_state === 'hot' ? 'Нужно проветрить' : (health.temperature_state === 'warm' ? 'Выше обычного' : 'Максимум по датчикам');
+			root.querySelector('#system-uptime').textContent = `Время работы ${formatUptime(health.uptime)}`;
+			root.querySelector('#memory-meter').style.width = `${Math.min(100, Number(health.memory_percent || 0))}%`;
+			root.querySelector('#memory-detail').textContent = `${formatBytes(health.memory_used || 0)} / ${formatBytes(health.memory_total || 0)} (${health.memory_percent || 0}%)`;
+			const loadPercent = Math.min(100, Math.max(0, Number(health.load || 0) * 25));
+			root.querySelector('#load-meter').style.width = `${loadPercent}%`;
+			root.querySelector('#load-detail').textContent = `Load average: ${Number(health.load || 0).toFixed(2)}`;
 			root.querySelector('#active-source').textContent = sourceNames[vpnEngine === 'passwall' ? 'passwall' : (vpnEngine === 'podkop' ? 'podkop' : fresh.active_source)] || fresh.active_source;
 			vpnEnabled = fresh.vpn_enabled === true;
 			vpnToggle.textContent = vpnEnabled ? 'Отключить' : 'Включить';
@@ -618,6 +668,9 @@ return view.extend({
 			vpnToggle.disabled = !vpnEnabled && vpnEngine === 'openclash' && fresh.active_source === 'none';
 			vpnControlMessage.textContent = !vpnEnabled ? 'VPN выключен' :
 				(fresh.vpn_ready === true ? 'VPN работает' : 'VPN запускается или требует внимания');
+			const headerVpn = root.querySelector('#header-vpn-state');
+			headerVpn.textContent = fresh.vpn_ready === true ? 'VPN работает' : (vpnEnabled ? 'VPN требует внимания' : 'VPN выключен');
+			headerVpn.dataset.state = fresh.vpn_ready === true ? 'good' : (vpnEnabled ? 'warn' : 'off');
 			updateSubscription(fresh);
 			const body = root.querySelector('#client-list');
 			const offlineBody = root.querySelector('#offline-client-list');

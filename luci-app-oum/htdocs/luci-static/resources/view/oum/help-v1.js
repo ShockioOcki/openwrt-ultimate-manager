@@ -5,6 +5,11 @@
 
 const callDashboardStatus = rpc.declare({ object: 'oum', method: 'dashboardStatus', expect: { '': {} } });
 
+function appSidebar(active) {
+	const item = (key, label, path) => E('a', { 'class': `oum-nav-item${active === key ? ' is-active' : ''}`, href: L.url('oum', path) }, label);
+	return E('aside', { 'class': 'oum-sidebar', 'aria-label': 'Навигация OUM' }, [ E('div', { 'class': 'oum-brand' }, [ E('span', { 'class': 'oum-brand-mark' }, 'O'), E('span', {}, [ E('strong', {}, 'OUM'), E('small', {}, 'Домашний щит') ]) ]), E('div', { 'class': 'oum-nav-caption' }, 'Меню'), E('nav', { 'class': 'oum-nav' }, [ item('dashboard', 'Панель', 'dashboard'), item('parental', 'Родительский контроль', 'parental'), item('settings', 'Настройки', 'settings'), item('help', 'Помощь', 'help') ]) ]);
+}
+
 return view.extend({
 	load() { return callDashboardStatus(); },
 	render(status) {
@@ -14,8 +19,8 @@ return view.extend({
 			[ '3', 'Проверьте VPN', status.vpn_enabled ? (status.vpn_ready ? 'VPN работает. При проблеме попробуйте другую ноду или временно отключите VPN.' : 'VPN включён, но требует внимания. Откройте диагностику движка на Главной.') : 'VPN выключен. Проверьте доступ напрямую, затем включите его снова.', status.vpn_ready ],
 			[ '4', 'Не помогло?', 'Сохраните резервную копию OUM, перезагрузите роутер и повторите проверку. Сброс VPN не меняет WAN и Wi-Fi.', null ]
 		];
-		return E('div', { 'class': 'oum-help-page' }, [
-			E('style', {}, `.oum-help-page{max-width:900px;margin:0 auto}.oum-help-page>p{opacity:.72}.oum-help-grid{display:grid;gap:12px;margin:18px 0}.oum-help-step{display:grid;grid-template-columns:42px 1fr;gap:12px;border:1px solid #ccd3dc;border-radius:8px;padding:15px}.oum-help-number{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:rgba(38,115,236,.14);font-weight:700}.oum-help-step h3{margin:0 0 5px}.oum-help-step p{margin:0;line-height:1.5;opacity:.78}.oum-help-result{font-weight:600}.oum-help-result[data-ok="true"]{color:#2b9b68}.oum-help-result[data-ok="false"]{color:#c94b4b}.oum-help-extra{border:1px solid #ccd3dc;border-radius:8px;padding:15px;margin-top:14px}.oum-help-extra summary{cursor:pointer;font-weight:600}.oum-help-code{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}.oum-help-code code{padding:8px 10px;background:rgba(127,127,127,.12);border-radius:6px;overflow-wrap:anywhere}`),
+		const page = E('main', { 'class': 'oum-main' }, [
+			E('link', { rel: 'stylesheet', href: L.resource('oum/oum.css') }),
 			E('h2', {}, 'Если интернет не работает'),
 			E('p', {}, 'Идите сверху вниз: сначала обычное подключение, затем DNS и только после этого VPN.'),
 			E('div', { 'class': 'oum-help-grid' }, checks.map(([ number, title, text, ok ]) => E('section', { 'class': 'oum-help-step' }, [ E('span', { 'class': 'oum-help-number' }, number), E('div', {}, [ E('h3', {}, title), E('p', { 'class': ok == null ? '' : 'oum-help-result', 'data-ok': ok == null ? null : String(ok) }, text) ]) ]))),
@@ -27,6 +32,7 @@ return view.extend({
 			]),
 			E('p', { 'class': 'oum-help-extra' }, [ E('strong', {}, 'Безопасность: '), 'вход admin без пароля используйте только в доверенной локальной сети. Не публикуйте LuCI или OUM в интернет.' ])
 		]);
+		return E('div', { 'class': 'oum-help-page oum-app', 'data-theme': 'light' }, [ appSidebar('help'), page ]);
 	},
 	handleSaveApply: null,
 	handleSave: null,

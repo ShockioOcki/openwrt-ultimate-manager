@@ -40,6 +40,15 @@ const callResetFirstRun = rpc.declare({ object: 'oum', method: 'resetFirstRun', 
 const callUpdateProject = rpc.declare({ object: 'oum', method: 'updateProject', expect: { '': {} } });
 const callRollbackProject = rpc.declare({ object: 'oum', method: 'rollbackProject', expect: { '': {} } });
 
+function appSidebar(active) {
+	const item = (key, label, path) => E('a', { 'class': `oum-nav-item${active === key ? ' is-active' : ''}`, href: L.url('oum', path) }, label);
+	return E('aside', { 'class': 'oum-sidebar', 'aria-label': 'Навигация OUM' }, [
+		E('div', { 'class': 'oum-brand' }, [ E('span', { 'class': 'oum-brand-mark', 'aria-hidden': 'true' }, 'O'), E('span', {}, [ E('strong', {}, 'OUM'), E('small', {}, 'Домашний щит') ]) ]),
+		E('div', { 'class': 'oum-nav-caption' }, 'Меню'),
+		E('nav', { 'class': 'oum-nav' }, [ item('dashboard', 'Панель', 'dashboard'), item('parental', 'Родительский контроль', 'parental'), item('settings', 'Настройки', 'settings'), item('help', 'Помощь', 'help') ])
+	]);
+}
+
 function choice(name, value, title, description, checked) {
 	return E('label', { 'class': 'oum-setting-choice' }, [
 		E('input', { type: 'radio', name, value, checked: checked ? '' : null }),
@@ -177,21 +186,11 @@ return view.extend({
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
 		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
-		const root = E('div', { 'class': 'oum-settings' }, [
-			E('style', {}, `
-				.oum-settings{max-width:1000px;margin:0 auto}.oum-page-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-page-head h2{margin:0}.oum-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.oum-settings-panel{border:1px solid #ccd3dc;border-radius:12px;padding:18px;margin-bottom:16px}.oum-settings-panel h3{margin-top:0}
-				.oum-setting-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.oum-setting-choice{display:flex;gap:9px;padding:12px;border:1px solid #ccd3dc;border-radius:9px;cursor:pointer}.oum-setting-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-setting-choice span{display:flex;flex-direction:column;gap:4px}.oum-setting-choice small,.oum-help{opacity:.7;line-height:1.45}.oum-source-choice.is-disabled{opacity:.5;cursor:not-allowed}
-				.oum-setting-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-setting-field{margin:11px 0}.oum-setting-field label{display:block;font-weight:600;margin-bottom:6px}.oum-setting-field input,.oum-setting-field select{width:100%;min-height:42px;box-sizing:border-box}.oum-setting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.oum-job-state{padding:11px 13px;border-radius:8px;background:rgba(127,127,127,.1);margin:0 0 16px}.oum-job-state[data-state="idle"]{display:none}.oum-job-state[data-state="failed"]{background:rgba(201,75,75,.16)}.oum-job-state[data-state="success"]{background:rgba(43,155,104,.16)}
-				.oum-maintenance{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.oum-maintenance-card{border:1px solid #d8dde5;border-radius:10px;padding:14px;min-width:0}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
-				.oum-capability-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.oum-capability{border:1px solid #d8dde5;border-radius:10px;padding:14px}.oum-capability h4{margin:0 0 8px}.oum-capability-state{line-height:1.45}.oum-network-extension{border-top:1px solid #d8dde5;margin-top:16px;padding-top:16px}.oum-network-extension h4{margin:0 0 7px}.oum-wisp-results{display:grid;gap:7px;margin:10px 0}.oum-wisp-result{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left}.oum-wisp-result span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-wisp-status{padding:10px 12px;border-radius:8px;background:rgba(127,127,127,.1);margin:10px 0}
-				.oum-engine-current{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px;border-radius:9px;background:rgba(127,127,127,.1);margin-bottom:14px}.oum-engine-current small{opacity:.7}.oum-engine-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-engine-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-engine-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-engine-choice span{display:flex;flex-direction:column;gap:5px}.oum-engine-choice small{opacity:.72;line-height:1.4}.oum-engine-choice.is-disabled{opacity:.55;cursor:not-allowed}.oum-engine-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
-				.oum-dns-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.oum-dns-engine{min-width:0;border-top:1px solid #d8dde5;padding-top:12px}.oum-dns-engine h4{margin:0 0 4px}.oum-dns-engine .oum-setting-field{margin:10px 0}.oum-dns-engine .oum-help{display:block;overflow-wrap:anywhere}
-				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid #d8dde5;padding-top:14px}.oum-inline-warning{padding:11px 13px;border:1px solid #b28a29;background:rgba(178,138,41,.16);border-radius:9px;margin:12px 0;line-height:1.45}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid #ccd3dc;border-radius:10px;padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:#1677ff;background:rgba(22,119,255,.16)}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}.oum-podkop-transports{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-transport-card{border:1px solid #ccd3dc;border-radius:11px;padding:14px}.oum-transport-card[data-active="true"]{border-color:#2b9b68}.oum-transport-card h4{margin:0 0 7px}.oum-transport-card textarea{width:100%;min-height:150px;font-family:monospace;box-sizing:border-box;margin:8px 0}
-				.oum-vpn-input{margin:18px 0}.oum-vpn-input label{display:block;font-weight:600;margin-bottom:7px}.oum-vpn-input input,.oum-vpn-input textarea{width:100%;box-sizing:border-box}.oum-vpn-input textarea{min-height:180px;font-family:monospace}.oum-vpn-job{padding:12px;border-radius:8px;background:rgba(127,127,127,.1);margin:14px 0}.oum-vpn-job[data-state="failed"]{background:rgba(201,75,75,.16)}.oum-vpn-job[data-state="success"]{background:rgba(43,155,104,.16)}
-				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid,.oum-engine-choices,.oum-dns-grid,.oum-podkop-transports{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
-			`),
+		const initialVpnTab = status.pending_source !== 'none' && status.active_source === 'none' ? 'connection' : 'engine';
+		const page = E('main', { 'class': 'oum-main' }, [
+			E('link', { rel: 'stylesheet', href: L.resource('oum/oum.css') }),
 			E('div', { 'class': 'oum-page-head' }, [
-				E('h2', {}, 'Настройки OUM'),
+				E('div', {}, [ E('h2', {}, 'Настройки OUM'), E('p', { 'class': 'oum-muted' }, 'Сеть, Wi‑Fi и защищённое подключение') ]),
 				E('a', { 'class': 'btn cbi-button', href: L.url('oum', 'logout') }, 'Выйти')
 			]),
 			E('p', { 'class': 'oum-help' }, 'Пароли не показываются в браузере. Оставьте поле пароля пустым, чтобы сохранить действующий.'),
@@ -298,7 +297,12 @@ return view.extend({
 					]) ] : [])
 				])
 			]),
-			E('details', { 'class': 'oum-settings-panel oum-protected', open: '' }, [
+			E('nav', { 'class': 'oum-vpn-switchboard', 'aria-label': 'Разделы VPN' }, [
+				E('button', { 'class': 'btn', type: 'button', 'data-vpn-settings-tab': 'engine', 'data-active': String(initialVpnTab === 'engine') }, 'VPN-движок'),
+				E('button', { 'class': 'btn', type: 'button', 'data-vpn-settings-tab': 'dns', 'data-active': 'false' }, 'DNS'),
+				E('button', { 'class': 'btn', type: 'button', 'data-vpn-settings-tab': 'connection', 'data-active': String(initialVpnTab === 'connection') }, 'Защищённое подключение')
+			]),
+			E('details', { 'class': 'oum-settings-panel oum-protected oum-vpn-section', id: 'vpn-section-engine', open: '', hidden: initialVpnTab === 'engine' ? null : '' }, [
 				E('summary', {}, 'VPN-движок'),
 				E('div', { 'class': 'oum-protected-content' }, [
 					E('div', { 'class': 'oum-engine-current' }, [
@@ -319,7 +323,7 @@ return view.extend({
 					])
 				])
 			]),
-			E('details', { 'class': 'oum-settings-panel oum-protected' }, [
+			E('details', { 'class': 'oum-settings-panel oum-protected oum-vpn-section', id: 'vpn-section-dns', hidden: '' }, [
 					E('summary', {}, 'DNS для VPN'),
 					E('div', { 'class': 'oum-protected-content' }, [
 					E('p', { 'class': 'oum-help' }, engineMissing ? 'Выберите движок — настройки DNS появятся после установки.' : `DNS для активного движка (сейчас: ${engineTitle}). При смене движка его DNS останется сохранён отдельно.`),
@@ -338,7 +342,9 @@ return view.extend({
 					])
 				]),
 			E('details', {
-				'class': 'oum-settings-panel oum-protected',
+				'class': 'oum-settings-panel oum-protected oum-vpn-section',
+				id: 'vpn-section-connection',
+				hidden: initialVpnTab === 'connection' ? null : '',
 				open: status.pending_source !== 'none' && status.active_source === 'none' ? '' : null
 			}, [
 				E('summary', {}, 'Защищённое подключение'),
@@ -440,10 +446,22 @@ return view.extend({
 				])
 			])
 		]);
+		const root = E('div', { 'class': 'oum-settings oum-app', 'data-theme': 'light' }, [ appSidebar('settings'), page ]);
 
 		const value = (selector) => root.querySelector(selector).value.trim();
 		const rawValue = (selector) => root.querySelector(selector).value;
 		const selected = (name) => root.querySelector(`[name="${name}"]:checked`)?.value || '';
+		root.querySelector('.oum-vpn-switchboard').addEventListener('click', (event) => {
+			const button = event.target.closest('[data-vpn-settings-tab]');
+			if (!button) return;
+			const target = button.dataset.vpnSettingsTab;
+			root.querySelectorAll('[data-vpn-settings-tab]').forEach((item) => item.dataset.active = String(item === button));
+			root.querySelectorAll('.oum-vpn-section').forEach((section) => {
+				const active = section.id === `vpn-section-${target}`;
+				section.hidden = !active;
+				if (active) section.open = true;
+			});
+		});
 		const statusNode = root.querySelector('#system-job');
 		const vpnJobNode = root.querySelector('#vpn-job-status');
 		const importButton = root.querySelector('#import-source');
