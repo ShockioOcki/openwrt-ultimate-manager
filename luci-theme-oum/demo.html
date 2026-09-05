@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OUM TailAdmin — системная тема · демо</title>
+<link rel="stylesheet" href="htdocs/luci-static/oum/cascade.css">
+<style>
+  .demo-wrap{padding:0}
+  .oum-tail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
+  @media(max-width:1024px){.oum-tail-grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:640px){.oum-tail-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="oum-app">
+  <aside id="oum-sidebar" aria-label="Меню">
+    <div class="oum-sidebar-head">
+      <div class="oum-logo">O</div>
+      <div><div class="oum-brand">OUM</div><small>Домашний щит</small></div>
+    </div>
+    <nav>
+      <div class="oum-nav-group">Меню</div>
+      <a class="active">● Панель</a>
+      <a href="#">👨‍👩‍👧 Родительский контроль</a>
+      <a href="#">⚙ Настройки</a>
+      <a href="#">❓ Помощь</a>
+      <a href="#">🧭 Первый запуск</a>
+      <div class="oum-nav-group" style="margin-top:12px">Система</div>
+      <a href="#">◉ Обзор</a>
+      <a href="#">⇄ Интерфейсы</a>
+      <a href="#">🔒 Администрирование</a>
+    </nav>
+  </aside>
+  <div id="oum-main">
+    <header id="oum-header">
+      <button id="oum-burger" aria-label="Меню" onclick="document.getElementById('oum-sidebar').classList.toggle('is-open')">☰</button>
+      <div><h1>Панель OUM</h1><p>Xiaomi AX6S · 192.168.5.1 · Podkop активен</p></div>
+      <div class="oum-header-actions">
+        <span class="oum-badge oum-badge--vpn">● VPN работает</span>
+        <a class="oum-btn" href="#">Выйти</a>
+        <button class="oum-btn oum-btn--dark" onclick="document.documentElement.classList.toggle('dark')">Тёмная</button>
+      </div>
+    </header>
+    <div id="maincontainer">
+      <div id="maincontent">
+        <div class="breadcrumb" style="margin-bottom:16px">Демо системной темы — тот же TailAdmin что на скрине, скелет proton</div>
+
+        <!-- 4 метрики как на скрине -->
+        <div class="oum-tail-grid">
+          <div class="oum-tail-card"><div style="width:36px;height:36px;border-radius:10px;background:#f3f4f6;display:grid;place-items:center">🌐</div><div style="margin-top:14px;color:#6b7280;font-size:12px">Интернет</div><div style="font-weight:700;font-size:18px">Подключён</div><div style="color:#6b7280;font-size:12px">192.168.10.117 · DHCP</div></div>
+          <div class="oum-tail-card" style="display:flex;justify-content:space-between"><div><div style="width:36px;height:36px;border-radius:10px;background:#f3f4f6;display:grid;place-items:center">👥</div><div style="margin-top:14px;color:#6b7280;font-size:12px">Клиенты</div><div style="font-weight:800;font-size:22px">1</div><div style="color:#9ca3af;font-size:11px">устройств онлайн</div></div><div style="width:96px;height:96px;border-radius:12px;background:#fff;border:1px solid #e5e7eb;display:grid;place-items:center">QR 108px</div></div>
+          <div class="oum-tail-card"><div style="width:36px;height:36px;border-radius:10px;background:#fef3c7;display:grid;place-items:center">🌡</div><div style="margin-top:14px;color:#6b7280;font-size:12px">Температура</div><div style="font-weight:700;font-size:18px">58 °C</div><div style="color:#6b7280;font-size:12px">Максимум по датчикам</div></div>
+          <div class="oum-tail-card oum-tail-card--active"><div style="width:36px;height:36px;border-radius:10px;background:var(--oum-action);color:#fff;display:grid;place-items:center">🛡</div><div style="margin-top:14px;color:var(--oum-action-dark);font-size:12px">VPN-движок</div><div style="font-weight:700">Podkop + Zapret</div><div style="color:var(--oum-action-dark);font-size:11px;opacity:.7">Работает · Через AWG</div></div>
+        </div>
+
+        <div class="cbi-section">
+          <h3>Подключённые устройства</h3>
+          <p class="cbi-section-descr">Выключи неизвестное — пропадёт через ~10 сек</p>
+          <div class="table" style="margin-top:12px">
+            <div class="tr"><div class="th">Имя</div><div class="th">IP</div><div class="th">Подключение</div><div class="th">MAC</div><div class="th">Маршрутизация</div><div class="th">AdGuard</div></div>
+            <div class="tr"><div class="td">Устройство 84-FF-43 <button class="oum-btn" style="padding:4px 8px;font-size:11px;margin-left:6px">Переименовать</button></div><div class="td">192.168.5.2</div><div class="td"><span class="oum-badge" style="background:#f3f4f6;border-color:#e5e7eb;color:#374151">Кабель</span></div><div class="td" style="color:#6b7280">08:BF:B8:84:FF:43</div><div class="td"><select style="width:100%;padding:6px 8px;border-radius:8px"><option>По общим правилам</option></select></div><div class="td"><button class="oum-btn" style="padding:6px 10px;font-size:12px;color:var(--oum-action);border-color:var(--oum-action)">Добавить</button></div></div>
+          </div>
+        </div>
+
+        <div class="cbi-section">
+          <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">Podkop + Zapret <span style="font-weight:400;font-size:12px;color:#6b7280">0.7.22-r1 · Yv08 · через AWG</span></h3><span class="oum-badge oum-badge--vpn">VPN: 1 · Прямо: 22</span></div>
+          <div class="tabs" style="margin-top:14px"><li class="active"><a href="#">Сервисы</a></li><li><a href="#">Диагностика</a></li></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="oum-badge" style="background:var(--oum-action);color:#fff;border-color:var(--oum-action)">Россия: заблокировано внутри</span><span class="oum-badge" style="background:#fff">YouTube <span style="background:#ecfdf5;color:#065f46;padding:2px 6px;border-radius:999px;font-size:10px;margin-left:4px">Zapret</span></span><span class="oum-badge" style="background:#fff">Discord</span><span class="oum-badge" style="background:#fff">Meta</span></div>
+          <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end"><button class="oum-btn">Сбросить</button><button class="btn primary">Сохранить</button></div>
+        </div>
+
+        <div class="cbi-section"><h3>Система · 10д 64 · 6.12.85</h3><p class="cbi-section-descr">Оперативная память · 237 MiB — прогресс-бары h-2 как в скрине</p><div style="height:6px;background:#f3f4f6;border-radius:999px;overflow:hidden;margin-top:8px"><div style="width:47%;height:100%;background:var(--oum-action)"></div></div></div>
+
+        <div style="text-align:center;color:#9ca3af;font-size:11px;padding:8px">TailAdmin системная тема · cascade.css · скелет proton2025 · без роутера</div>
+      </div>
+    </div>
+  </div>
+</div>
+<footer><span>OUM · TailAdmin</span><span>seed 304ab282 · demo локально</span></footer>
+</body>
+</html>

@@ -4,7 +4,7 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 RPC="$ROOT/luci-app-oum/root/usr/share/rpcd/ucode/oum"
-DASHBOARD="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v11.js"
+DASHBOARD="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v43.js"
 ACL="$ROOT/luci-app-oum/root/usr/share/rpcd/acl.d/luci-app-oum.json"
 
 grep -Fq 'setDeviceAlias:' "$RPC"

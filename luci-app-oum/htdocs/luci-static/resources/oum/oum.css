@@ -63,6 +63,18 @@
   --oum-motion: 160ms ease;
 }
 
+.oum-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 /* Reset for OUM scope — не трогает LuCI вне .oum-* */
 .oum-dashboard, .oum-settings, .oum-shell {
   font-family: var(--oum-font);
@@ -101,7 +113,7 @@
   --oum-field-soft: #f5f7f3;
   position: relative;
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   width: min(100vw, 100%);
   max-width: none !important;
   min-height: calc(100vh - 64px);
@@ -150,7 +162,7 @@
 .oum-nav-item.is-active { border-color: #cbd9fa; background: var(--oum-action-soft); color: var(--oum-action-dark); }
 
 .oum-main {
-  width: min(100%, 1328px);
+  width: min(100%, 1180px);
   min-width: 0;
   margin: 0 auto;
   padding: 0 28px 42px;
@@ -185,8 +197,8 @@
   box-shadow: none;
 }
 .oum-dashboard .oum-card {
-  min-height: 182px;
-  padding: 20px;
+  min-height: 154px;
+  padding: 18px;
   border: 1px solid var(--oum-line) !important;
   border-radius: 15px !important;
   background: var(--oum-paper) !important;
@@ -195,7 +207,7 @@
 }
 .oum-dashboard .oum-card + .oum-card { border-left: 1px solid var(--oum-line); }
 .oum-dashboard .oum-card small {
-  margin: 18px 0 4px;
+  margin: 12px 0 4px;
   color: var(--oum-subtle) !important;
   font-size: .78rem;
   font-weight: 500;
@@ -236,6 +248,129 @@
 .oum-vpn-metric .oum-metric-icon { background: var(--oum-action); filter: brightness(0) invert(1); }
 .oum-vpn-metric .oum-vpn-card-row { align-items: start; }
 .oum-vpn-metric .btn { min-height: 34px; padding: 5px 9px; }
+.oum-openclash-empty { display: grid; gap: 10px; }
+.oum-openclash-empty[hidden] { display: none !important; }
+.oum-openclash-empty > strong { font-size: 1.22rem; }
+.oum-openclash-empty > p { max-width: 720px; margin: 0; }
+.oum-openclash-empty > .btn { justify-self: start; }
+
+/* OpenClash: subscription health and server choice share one calm operating surface. */
+.oum-dashboard.oum-app .oum-subscription {
+  padding: 18px 0;
+  margin: 0 0 16px;
+}
+.oum-dashboard.oum-app .oum-subscription-copy {
+  flex: 1 1 520px;
+  min-width: 0;
+}
+.oum-dashboard.oum-app .oum-subscription-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.oum-dashboard.oum-app .oum-subscription-status { flex: 0 1 auto; }
+.oum-dashboard.oum-app .oum-subscription-progress {
+  width: min(320px, 100%);
+  height: 8px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: var(--oum-r-segmented);
+  background: var(--oum-field-soft);
+}
+.oum-dashboard.oum-app .oum-subscription-progress > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--oum-action);
+  transition: width 180ms ease;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="openclash"] .oum-current-node {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 50px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--oum-action) 24%, var(--oum-line));
+  background: var(--oum-action-soft);
+}
+.oum-dashboard.oum-app .oum-current-badge {
+  flex: none;
+  padding: 5px 10px;
+  border-radius: var(--oum-r-segmented);
+  color: var(--oum-paper-strong);
+  background: var(--oum-good);
+  font-size: .75rem;
+  font-weight: 700;
+}
+.oum-dashboard.oum-app .oum-node-quick { margin-top: 12px; }
+.oum-dashboard.oum-app .oum-node-controls[data-engine="openclash"] .oum-node {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 62px;
+  padding: 10px 12px;
+  border-radius: var(--oum-r-inset);
+  background: var(--oum-paper-strong);
+}
+.oum-dashboard.oum-app .oum-node-copy { min-width: 0; }
+.oum-dashboard.oum-app .oum-node-name {
+  display: block;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.oum-dashboard.oum-app .oum-node-copy .oum-delay {
+  display: block;
+  min-width: 0;
+  margin-top: 3px;
+  text-align: left;
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+}
+.oum-dashboard.oum-app .oum-delay[data-delay="fast"] { color: var(--oum-good); }
+.oum-dashboard.oum-app .oum-delay[data-delay="medium"] { color: var(--oum-warn); }
+.oum-dashboard.oum-app .oum-delay[data-delay="slow"] { color: var(--oum-bad); }
+.oum-dashboard.oum-app .oum-delay[data-delay="offline"] { color: var(--oum-faint); }
+.oum-dashboard.oum-app .oum-node.is-current {
+  border: 2px solid var(--oum-action);
+  background: var(--oum-action-soft);
+}
+.oum-dashboard.oum-app .oum-node-all > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid var(--oum-line);
+  border-radius: var(--oum-r-inset);
+  background: var(--oum-field-soft);
+  list-style: none;
+  line-height: 1.25;
+}
+.oum-dashboard.oum-app .oum-node-all > summary::-webkit-details-marker { display: none; }
+.oum-dashboard.oum-app .oum-node-all > summary::before {
+  content: "";
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transform-origin: center;
+}
+.oum-dashboard.oum-app .oum-node-all[open] > summary::before { transform: rotate(45deg); }
+.oum-dashboard.oum-app .oum-node-all > summary > :first-child { margin-right: auto; }
+.oum-dashboard.oum-app .oum-node-all-grid { margin-top: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .oum-dashboard.oum-app .oum-subscription-progress > span { transition: none; }
+}
+@media (max-width: 700px) {
+  .oum-dashboard.oum-app .oum-node-all > summary { align-items: flex-start; }
+  .oum-dashboard.oum-app .oum-node-all > summary .oum-node-hint { display: none; }
+}
 
 .oum-panel,
 .oum-settings-panel,
@@ -254,36 +389,42 @@
 .oum-system-meters { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; padding-top: 16px; }
 .oum-system-meters strong { display: block; margin-bottom: 8px; }
 .oum-meter { height: 8px; overflow: hidden; margin: 8px 0; border-radius: 999px; background: #e8ece7; }
-.oum-meter span { display: block; height: 100%; border-radius: inherit; background: var(--oum-action); transition: width var(--oum-motion); }
+.oum-meter span { display: block; height: 100%; border-radius: inherit; background: var(--oum-action); }
 
 /* Podkop B v3: one chip catalog. Selected means VPN. */
-.oum-route-intro { border: 0 !important; border-radius: 10px; background: #f4f7f3 !important; }
+.oum-podkop-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 13px; border-bottom: 1px solid var(--oum-line); }
+.oum-podkop-identity { display: flex; align-items: center; min-width: 0; gap: 7px; flex-wrap: wrap; }
+.oum-podkop-signal { width: 10px; height: 10px; flex: 0 0 10px; border: 3px solid rgba(31,138,98,.18); border-radius: 50%; background: var(--oum-good); box-sizing: content-box; }
+.oum-podkop-zapret, .oum-podkop-counts { padding: 4px 8px; border: 1px solid var(--oum-line); border-radius: 999px; color: var(--oum-subtle); font-size: .72rem; font-weight: 650; white-space: nowrap; }
+.oum-podkop-zapret[data-state="good"] { border-color: #b7e7d2; background: var(--oum-good-soft); color: var(--oum-good); }
+.oum-podkop-zapret[data-state="bad"] { border-color: #efc1bd; background: var(--oum-bad-soft); color: var(--oum-bad); }
+.oum-podkop-counts { margin-left: auto; }
+.oum-dashboard #podkop-panel .oum-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 0 0 16px; }
+.oum-dashboard #podkop-panel .oum-tab { min-height: 46px; text-align: center; }
 .oum-route-catalog { display: flex !important; flex-wrap: wrap; gap: 8px !important; overflow: visible; border: 0; border-radius: 0; background: transparent; }
-.oum-route-category { display: contents; }
-.oum-route-category > summary { display: none !important; }
-.oum-route-category-list { display: contents; }
 .oum-route-row {
+  position: relative;
   display: inline-flex;
   width: auto;
-  min-height: 42px;
+  min-height: 40px;
   align-items: center;
   gap: 8px;
-  padding: 0;
-  overflow: hidden;
+  padding: 5px 12px 5px 7px;
   border: 1px solid var(--oum-line) !important;
   border-radius: 999px;
   background: var(--oum-paper);
+  color: var(--oum-ink);
+  cursor: pointer;
+  transition: background var(--oum-motion), border-color var(--oum-motion), color var(--oum-motion), box-shadow var(--oum-motion);
 }
-.oum-route-service { padding: 9px 0 9px 13px; white-space: nowrap; }
-.oum-route-service small { display: inline; margin-left: 6px; color: var(--oum-good); }
-.oum-route-switch { border: 0 !important; border-radius: 0; background: transparent; }
-.oum-route-switch span { min-width: 0; padding: 11px 12px; font-size: 0; }
-.oum-route-switch label:has(input[value="vpn"]:checked) span { background: var(--oum-action) !important; }
-.oum-route-switch label:has(input[value="vpn"]:checked) span::after { content: "VPN"; color: #fff; font-size: .72rem; font-weight: 700; }
-.oum-route-switch label:has(input[value="direct"]:checked) span { background: transparent !important; }
-.oum-route-switch label:has(input[value="direct"]:checked) span::after { content: "Прямо"; color: var(--oum-subtle); font-size: .72rem; font-weight: 650; }
-.oum-route-switch label:not(:has(input:checked)) { display: none; }
-.oum-route-switch label:has(input:checked) span::before { content: none !important; }
+.oum-route-row > input { position: absolute; width: 1px !important; min-width: 1px !important; height: 1px !important; min-height: 1px !important; opacity: 0; pointer-events: none; }
+.oum-route-row > strong { font-size: .82rem; font-weight: 600; white-space: nowrap; }
+.oum-route-icon { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border-radius: 50%; background: var(--oum-field-soft); }
+.oum-route-icon img { width: 16px; height: 16px; object-fit: contain; }
+.oum-route-row:has(input[value="vpn"]:checked) { border-color: var(--oum-action) !important; background: var(--oum-action); color: #fff; box-shadow: 0 2px 10px rgba(40,104,215,.22); }
+.oum-route-row:has(input[value="vpn"]:checked) .oum-route-icon { background: rgba(255,255,255,.2); }
+.oum-route-row:has(input[value="vpn"]:checked) .oum-route-icon img { filter: brightness(0) invert(1); }
+.oum-route-zapret { padding: 2px 6px; border: 1px solid #b7e7d2; border-radius: 999px; background: var(--oum-good-soft); color: var(--oum-good); font-size: .65rem; font-weight: 700; }
 .oum-custom-rules { border-style: dashed !important; }
 
 .oum-app[data-theme="dark"] {
@@ -313,7 +454,7 @@
 
 				.oum-dashboard{max-width:1050px;margin:0 auto}.oum-page-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-page-head h2{margin:0}.oum-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
 				.oum-card,.oum-panel{border:1px solid var(--oum-line);border-radius:12px;padding:16px}.oum-card small{display:block;opacity:.7;margin-bottom:8px}.oum-card strong{font-size:1.1rem}.oum-vpn-card-row{display:flex;align-items:center;justify-content:space-between;gap:8px}.oum-vpn-card-row button{padding:4px 9px}.oum-card-message{font-size:.82em;margin-top:7px;min-height:1.2em}
-				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid var(--oum-line)}.oum-clients th{opacity:.7;font-size:.9em}.oum-device-cell{min-width:180px}.oum-device-name-row,.oum-device-alias-form{display:flex;align-items:center;gap:8px;min-width:0}.oum-device-name{min-width:0;overflow-wrap:anywhere}.oum-device-rename{padding:5px 8px;min-height:32px;white-space:nowrap}.oum-device-alias-form input{min-width:120px;max-width:220px;height:36px}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:var(--oum-bad)}.oum-client-paused{opacity:.55}.oum-device-help{margin:0 0 12px}.oum-offline{margin-top:14px}.oum-offline>summary{cursor:pointer;font-weight:600;padding:8px 0}.oum-pause-button{white-space:nowrap}.oum-health{font-size:.95rem!important;line-height:1.45}.oum-health[data-temperature="warm"]{color:var(--oum-warn)}.oum-health[data-temperature="hot"]{color:var(--oum-bad)}.oum-traffic-cell{min-width:145px;font-variant-numeric:tabular-nums}.oum-traffic-cell span{display:block;white-space:nowrap;font-size:.86em}.oum-traffic-cell svg{display:block;margin-top:4px;color:var(--oum-action);opacity:.8}
+				.oum-clients{width:100%;border-collapse:collapse}.oum-clients th,.oum-clients td{text-align:left;padding:9px 7px;border-bottom:1px solid var(--oum-line)}.oum-clients th{opacity:.7;font-size:.9em}.oum-device-cell{min-width:180px}.oum-device-name-row{display:flex;align-items:center;gap:8px;min-width:0}.oum-device-alias-form{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);align-items:center;gap:6px;min-width:0;width:100%}.oum-device-name{min-width:0;overflow-wrap:anywhere}.oum-device-rename{padding:5px 8px;min-height:32px;white-space:nowrap}.oum-device-alias-form input{grid-column:1/-1;width:100%;min-width:0;max-width:none;height:36px;box-sizing:border-box}.oum-device-alias-form .oum-device-rename{width:100%;min-width:0;height:34px;min-height:34px;padding-inline:5px;line-height:1.2;white-space:nowrap!important}.oum-policy{min-width:180px}.oum-policy-message{min-height:1.4em;margin-top:10px}.oum-policy-message[data-state="failed"]{color:var(--oum-bad)}.oum-client-paused{opacity:.55}.oum-device-help{margin:0 0 12px}.oum-offline{margin-top:14px}.oum-offline>summary{cursor:pointer;font-weight:600;padding:8px 0}.oum-pause-button{white-space:nowrap}.oum-health{font-size:.95rem!important;line-height:1.45}.oum-health[data-temperature="warm"]{color:var(--oum-warn)}.oum-health[data-temperature="hot"]{color:var(--oum-bad)}.oum-traffic-cell{min-width:145px;font-variant-numeric:tabular-nums}.oum-traffic-cell span{display:block;white-space:nowrap;font-size:.86em}.oum-traffic-cell svg{display:block;margin-top:4px;color:var(--oum-action);opacity:.8}
 				.oum-muted{opacity:.68}.oum-warning{padding:12px 14px;border:1px solid var(--oum-warn);background:var(--oum-warn-soft);border-radius:var(--oum-r-inset);margin-top:14px;line-height:1.45}.oum-panels{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
 				.oum-node-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-current-node{padding:13px;border-radius:9px;background:var(--oum-field-soft);margin:10px 0 8px}.oum-node-list{display:grid;gap:8px}.oum-node-quick,.oum-node-all-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 				.oum-node-actions,.oum-subscription-head{display:flex;align-items:center;gap:8px}.oum-subscription{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--oum-line)}.oum-subscription-head{justify-content:space-between;flex-wrap:wrap}.oum-subscription-head h3{margin:0}.oum-subscription-status{min-width:0;flex:1;font-size:.92em}.oum-qr-wrap{display:grid;justify-items:center;gap:12px}.oum-qr-wrap canvas{background:#fff;border-radius:8px}
@@ -327,15 +468,18 @@
 
 
 				.oum-settings{max-width:1000px;margin:0 auto}.oum-page-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.oum-page-head h2{margin:0}.oum-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.oum-settings-panel{border:1px solid var(--oum-line);border-radius:12px;padding:18px;margin-bottom:16px}.oum-settings-panel h3{margin-top:0}
-				.oum-setting-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.oum-setting-choice{display:flex;gap:9px;padding:12px;border:1px solid var(--oum-line);border-radius:9px;cursor:pointer}.oum-setting-choice:has(input:checked){border-color:var(--oum-action);background:var(--oum-action-soft)}.oum-setting-choice span{display:flex;flex-direction:column;gap:4px}.oum-setting-choice small,.oum-help{opacity:.7;line-height:1.45}.oum-source-choice.is-disabled{opacity:.5;cursor:not-allowed}
+				.oum-apple-segment{display:grid !important;grid-template-columns:1fr 1fr !important;gap:4px !important;background:#f1f5f9 !important;padding:4px !important;border-radius:12px !important;margin:12px 0 !important}.oum-apple-seg{display:flex !important;align-items:center !important;justify-content:center !important;padding:10px 4px !important;border-radius:8px !important;border:none !important;background:transparent !important;font-size:12px !important;font-weight:600 !important;color:#64748b !important;cursor:pointer !important;line-height:1.1 !important;text-align:center !important}.oum-apple-seg.is-active{background:#fff !important;color:#0f172a !important;box-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06) !important}
+.oum-wifi-actions{display:grid !important;grid-template-columns:1fr auto !important;gap:8px !important}
+.oum-setting-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.oum-setting-choice{display:flex;gap:9px;padding:12px;border:1px solid var(--oum-line);border-radius:9px;cursor:pointer}.oum-setting-choice:has(input:checked){border-color:var(--oum-action);background:var(--oum-action-soft)}.oum-setting-choice span{display:flex;flex-direction:column;gap:4px}.oum-setting-choice small,.oum-help{opacity:.7;line-height:1.45}.oum-source-choice.is-disabled{opacity:.5;cursor:not-allowed}
 				.oum-setting-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-setting-field{margin:11px 0}.oum-setting-field label{display:block;font-weight:600;margin-bottom:6px}.oum-setting-field input,.oum-setting-field select{width:100%;min-height:42px;box-sizing:border-box}.oum-setting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:13px}.oum-job-state{padding:11px 13px;border-radius:8px;background:var(--oum-field-soft);margin:0 0 16px}.oum-job-state[data-state="idle"]{display:none}.oum-job-state[data-state="failed"]{background:var(--oum-bad-soft)}.oum-job-state[data-state="success"]{background:var(--oum-good-soft)}
 				.oum-maintenance{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.oum-maintenance-card{border:1px solid var(--oum-line);border-radius:var(--oum-r-inset);padding:14px;min-width:0}.oum-maintenance-card h4{margin:0 0 8px}.oum-maintenance-card button{margin-top:9px}.oum-danger{border-color:#e6b5b0}.oum-file{max-width:100%}
 				.oum-capability-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.oum-capability{border:1px solid var(--oum-line);border-radius:var(--oum-r-inset);padding:14px}.oum-capability h4{margin:0 0 8px}.oum-capability-state{line-height:1.45}.oum-network-extension{border-top:1px solid var(--oum-line);margin-top:16px;padding-top:16px}.oum-network-extension h4{margin:0 0 7px}.oum-wisp-results{display:grid;gap:7px;margin:10px 0}.oum-wisp-result{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left}.oum-wisp-result span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oum-wisp-status{padding:10px 12px;border-radius:8px;background:var(--oum-field-soft);margin:10px 0}
+				.oum-network-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.oum-network-card{min-width:0;padding:16px;border:1px solid var(--oum-line);border-radius:var(--oum-r-inset);background:var(--oum-paper)}.oum-network-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding-bottom:12px;border-bottom:1px solid var(--oum-line)}.oum-network-card-head h4{margin:0 0 3px}.oum-network-card-head .oum-help{margin:0}.oum-network-status{flex:0 0 auto;padding:5px 9px;border:1px solid var(--oum-line);border-radius:999px;background:var(--oum-field-soft);color:var(--oum-subtle);font-size:.78rem;font-weight:600}.oum-network-status[data-state="ready"],.oum-network-status[data-state="active"]{border-color:color-mix(in srgb,var(--oum-good) 35%,var(--oum-line));background:var(--oum-good-soft);color:var(--oum-good)}.oum-network-status[data-state="warning"]{border-color:color-mix(in srgb,var(--oum-warn) 40%,var(--oum-line));background:var(--oum-warn-soft);color:var(--oum-warn)}.oum-network-card-note{margin:12px 0 2px;padding:10px 12px;border-radius:8px;background:var(--oum-field-soft);color:var(--oum-subtle);line-height:1.45}.oum-network-card .oum-setting-fields{margin-top:2px}.oum-network-card-compact{grid-column:1/-1}.oum-network-card-compact .oum-network-card-head{padding-bottom:0;border-bottom:0}
 				.oum-engine-current{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px;border-radius:9px;background:var(--oum-field-soft);margin-bottom:14px}.oum-engine-current small{opacity:.7}.oum-engine-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-engine-choice{display:flex;gap:10px;border:1px solid var(--oum-line);border-radius:var(--oum-r-inset);padding:14px;cursor:pointer}.oum-engine-choice:has(input:checked){border-color:var(--oum-action);background:var(--oum-action-soft)}.oum-engine-choice span{display:flex;flex-direction:column;gap:5px}.oum-engine-choice small{opacity:.72;line-height:1.4}.oum-engine-choice.is-disabled{opacity:.55;cursor:not-allowed}.oum-engine-actions{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
 				.oum-dns-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.oum-dns-engine{min-width:0;border-top:1px solid var(--oum-line);padding-top:12px}.oum-dns-engine h4{margin:0 0 4px}.oum-dns-engine .oum-setting-field{margin:10px 0}.oum-dns-engine .oum-help{display:block;overflow-wrap:anywhere}
 				.oum-protected>summary{cursor:pointer;font-size:1.15rem;font-weight:600}.oum-protected[open]>summary{margin-bottom:14px}.oum-protected-content{border-top:1px solid var(--oum-line);padding-top:14px}.oum-inline-warning{padding:11px 13px;border:1px solid var(--oum-warn);background:var(--oum-warn-soft);border-radius:9px;margin:12px 0;line-height:1.45}.oum-sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.oum-source-choice{display:flex;gap:10px;border:1px solid var(--oum-line);border-radius:var(--oum-r-inset);padding:14px;cursor:pointer}.oum-source-choice:has(input:checked){border-color:var(--oum-action);background:var(--oum-action-soft)}.oum-source-choice span{display:flex;flex-direction:column;gap:5px}.oum-source-choice small{opacity:.72;line-height:1.4}.oum-podkop-transports{display:grid;grid-template-columns:1fr 1fr;gap:12px}.oum-transport-card{border:1px solid var(--oum-line);border-radius:11px;padding:14px}.oum-transport-card[data-active="true"]{border-color:var(--oum-good)}.oum-transport-card h4{margin:0 0 7px}.oum-transport-card textarea{width:100%;min-height:150px;font-family:monospace;box-sizing:border-box;margin:8px 0}
-				.oum-vpn-input{margin:18px 0}.oum-vpn-input label{display:block;font-weight:600;margin-bottom:7px}.oum-vpn-input input,.oum-vpn-input textarea{width:100%;box-sizing:border-box}.oum-vpn-input textarea{min-height:180px;font-family:monospace}.oum-vpn-job{padding:12px;border-radius:8px;background:var(--oum-field-soft);margin:14px 0}.oum-vpn-job[data-state="failed"]{background:var(--oum-bad-soft)}.oum-vpn-job[data-state="success"]{background:var(--oum-good-soft)}
-				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid,.oum-engine-choices,.oum-dns-grid,.oum-podkop-transports{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}}
+				.oum-vpn-input{margin:18px 0}.oum-vpn-input label{display:block;font-weight:600;margin-bottom:7px}.oum-vpn-input textarea{width:100%;min-height:112px;box-sizing:border-box;font-family:monospace}.oum-vpn-job{padding:12px;border-radius:8px;background:var(--oum-field-soft);margin:14px 0}.oum-vpn-job[data-state="failed"]{background:var(--oum-bad-soft)}.oum-vpn-job[data-state="success"]{background:var(--oum-good-soft)}
+				@media(max-width:760px){.oum-settings-grid,.oum-setting-fields,.oum-maintenance,.oum-sources,.oum-capability-grid,.oum-network-card-grid,.oum-engine-choices,.oum-dns-grid,.oum-podkop-transports{grid-template-columns:1fr}.oum-setting-choices{grid-template-columns:1fr}.oum-network-card-head{align-items:flex-start}.oum-network-status{white-space:nowrap}}
 
 
 				.oum-shell{max-width:900px;margin:0 auto}.oum-progress{display:flex;gap:8px;margin:18px 0 24px}
@@ -447,12 +591,23 @@
 .oum-shell .btn,
 .oum-parental .btn,
 .oum-help-page .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   min-height: 38px;
+  padding: 8px 14px;
   border: 1px solid var(--oum-line-strong);
   border-radius: var(--oum-r-control);
   background: transparent;
   color: var(--oum-ink);
   box-shadow: none;
+  line-height: 1.35;
+  text-align: center;
+  text-decoration: none;
+  vertical-align: middle;
+  white-space: normal;
+  word-break: normal;
   transition: background-color var(--oum-motion), border-color var(--oum-motion), color var(--oum-motion), transform var(--oum-motion);
 }
 
@@ -714,6 +869,7 @@
 }
 #reboot-required,
 #reboot-required-warning {
+  margin: -2px 0 18px;
   border: 1px solid color-mix(in srgb, var(--oum-warn) 55%, var(--oum-line));
   background: var(--oum-warn-soft) !important;
   color: var(--oum-warn);
@@ -732,6 +888,26 @@
   border: 8px solid var(--oum-paper-strong);
   border-radius: var(--oum-r-inset) !important;
 }
+.modal .oum-qr-wrap {
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 8px 24px;
+}
+.modal .oum-qr-wrap canvas {
+  grid-row: 1 / 3;
+  width: 220px !important;
+  height: 220px !important;
+}
+.modal .oum-qr-wrap > strong,
+.modal .oum-qr-wrap > span {
+  grid-column: 2;
+}
+.modal .oum-qr-wrap > strong {
+  align-self: end;
+}
+.modal .oum-qr-wrap > span {
+  align-self: start;
+  max-width: 28ch;
+}
 
 /* First run: one focused setup desk. */
 .oum-shell {
@@ -741,7 +917,7 @@
   box-shadow: var(--oum-shadow-desk);
 }
 .oum-progress span { background: var(--oum-line) !important; }
-.oum-progress span[data-active="true"] { background: var(--oum-action) !important; }
+.oum-progress span.active { background: var(--oum-action) !important; }
 .oum-choice,
 .oum-review,
 .oum-usb-box { border-color: var(--oum-line) !important; background: transparent; }
@@ -788,30 +964,6 @@ body.dark .oum-help-page {
   color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  .oum-dashboard,
-  .oum-settings,
-  .oum-shell,
-  .oum-parental,
-  .oum-help-page {
-    --oum-canvas: #0b1220;
-    --oum-paper: #131c2d;
-    --oum-paper-strong: #18243a;
-    --oum-ink: #edf2fb;
-    --oum-subtle: #aeb9ca;
-    --oum-faint: #8c99ad;
-    --oum-line: #344159;
-    --oum-line-strong: #526078;
-    --oum-action-soft: #1d3562;
-    --oum-good-soft: #14382f;
-    --oum-warn-soft: #3b2b16;
-    --oum-bad-soft: #41201f;
-    --oum-field: #0f1a30;
-    --oum-field-soft: #101a2a;
-    color-scheme: dark;
-  }
-}
-
 @media (max-width: 900px) {
   .oum-dashboard .oum-cards { grid-template-columns: 1fr 1fr; }
   .oum-dashboard .oum-card:nth-child(3) { border-left: 0; border-top: 1px solid rgba(255,255,255,.13); }
@@ -847,7 +999,7 @@ body.dark .oum-help-page {
   --oum-warn-soft: #fff0d9;
   --oum-bad-soft: #fbe8e6;
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   width: min(100vw, 100%);
   max-width: none;
   min-height: calc(100vh - 64px);
@@ -857,11 +1009,34 @@ body.dark .oum-help-page {
   border-radius: 0;
   background: var(--oum-canvas);
 }
-.oum-dashboard.oum-app .oum-page-head { min-height: 74px; margin: 0 -28px 24px; padding: 14px 28px; }
+.oum-dashboard.oum-app .oum-page-head {
+  min-height: 0;
+  margin: 0 0 18px;
+  padding: 2px 2px 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+.oum-dashboard.oum-app .oum-page-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+.oum-dashboard.oum-app .oum-page-head .oum-head-actions {
+  position: static;
+  transform: none;
+}
+@media (max-width:600px) {
+  .oum-dashboard.oum-app .oum-page-head { align-items:flex-start; gap:12px; margin-bottom:14px; }
+  .oum-dashboard.oum-app .oum-page-head h2 { font-size:1.22rem !important; }
+  .oum-dashboard.oum-app .oum-page-head p { max-width:26ch; }
+}
 .oum-dashboard.oum-app .oum-cards { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 18px; overflow: visible; margin: 0 0 22px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-.oum-dashboard.oum-app .oum-card { min-height: 182px; padding: 20px; border: 1px solid var(--oum-line); border-radius: 15px; background: var(--oum-paper); color: var(--oum-ink); box-shadow: none; }
+.oum-dashboard.oum-app .oum-card { min-height: 154px; padding: 18px; border: 1px solid var(--oum-line); border-radius: 15px; background: var(--oum-paper); color: var(--oum-ink); box-shadow: none; }
 .oum-dashboard.oum-app .oum-card + .oum-card { border-left: 1px solid var(--oum-line); }
-.oum-dashboard.oum-app .oum-card small { margin: 18px 0 4px; color: var(--oum-subtle); font-size: .78rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.oum-dashboard.oum-app .oum-card small { margin: 12px 0 4px; color: var(--oum-subtle); font-size: .78rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
 .oum-dashboard.oum-app .oum-card strong { color: var(--oum-ink); font-size: 1.48rem; }
 .oum-dashboard.oum-app .oum-card .oum-muted { color: var(--oum-subtle); }
 .oum-dashboard.oum-app .oum-card:last-child::after { content: none; }
@@ -870,19 +1045,31 @@ body.dark .oum-help-page {
 .oum-dashboard.oum-app .oum-route-category { display: contents; }
 .oum-dashboard.oum-app .oum-route-category > summary { display: none; }
 .oum-dashboard.oum-app .oum-route-category-list { display: contents; }
-.oum-dashboard.oum-app .oum-route-row { display: inline-flex; width: auto; min-height: 42px; padding: 0; border: 1px solid var(--oum-line); border-radius: 999px; background: var(--oum-paper); }
+.oum-dashboard.oum-app .oum-route-row { display: inline-flex; width: auto; min-height: 40px; padding: 5px 12px 5px 7px; border: 1px solid var(--oum-line); border-radius: 999px; background: var(--oum-paper); }
 .oum-dashboard.oum-app[data-theme="dark"] { --oum-canvas:#0b1220; --oum-paper:#131c2d; --oum-paper-strong:#18243a; --oum-ink:#edf2fb; --oum-subtle:#aeb9ca; --oum-faint:#8c99ad; --oum-line:#344159; --oum-line-strong:#526078; --oum-action-soft:#1d3562; --oum-field:#18243a; --oum-field-soft:#101a2a; }
 @media (max-width:1100px) {
-  .oum-dashboard.oum-app { grid-template-columns:200px minmax(0,1fr); }
+  .oum-dashboard.oum-app { grid-template-columns:minmax(0,1fr); }
   .oum-dashboard.oum-app .oum-cards { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 .oum-settings.oum-app {
   --oum-canvas:#eef0ea; --oum-paper:#fff; --oum-paper-strong:#fff; --oum-ink:#17231f; --oum-subtle:#627068; --oum-faint:#849087; --oum-line:#dfe4dd; --oum-line-strong:#c5cec5; --oum-field:#fff; --oum-field-soft:#f5f7f3; --oum-action-soft:#e8effd; --oum-good-soft:#e5f4ed; --oum-warn-soft:#fff0d9; --oum-bad-soft:#fbe8e6;
-  display:grid; grid-template-columns:232px minmax(0,1fr); width:min(100vw,100%); max-width:none; min-height:calc(100vh - 64px); margin:0; padding:0; overflow:visible; border-radius:0; background:var(--oum-canvas);
+  display:grid; grid-template-columns:minmax(0,1fr); width:min(100vw,100%); max-width:none; min-height:calc(100vh - 64px); margin:0; padding:0; overflow:visible; border-radius:0; background:var(--oum-canvas);
 }
-.oum-settings.oum-app .oum-page-head { min-height:74px; margin:0 -28px 24px; padding:14px 28px; }
+.oum-settings.oum-app .oum-page-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 0;
+  margin: 0 0 18px;
+  padding: 2px 2px 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+  text-align: left;
+}
 .oum-settings.oum-app .oum-settings-panel { border-radius:15px; background:var(--oum-paper); box-shadow:none; }
-@media (max-width:1100px) { .oum-settings.oum-app { grid-template-columns:200px minmax(0,1fr); } }
+@media (max-width:1100px) { .oum-settings.oum-app { grid-template-columns:minmax(0,1fr); } }
 .oum-app .oum-main { min-width:0; overflow:hidden; }
 .oum-app .oum-panel,
 .oum-app .oum-settings-panel { width:100%; min-width:0; overflow:hidden; }
@@ -899,6 +1086,218 @@ body.dark .oum-help-page {
 .oum-dashboard.oum-app .oum-clients th:nth-child(7) { width:12%; }
 .oum-dashboard.oum-app .oum-device-name-row { display:grid; justify-items:start; }
 .oum-dashboard.oum-app .oum-policy { width:100%; min-width:0; }
+.oum-dashboard.oum-app .oum-device-head { align-items:flex-start; margin-bottom:14px; }
+.oum-dashboard.oum-app .oum-device-head h3 { margin:0 0 3px; }
+.oum-dashboard.oum-app .oum-device-head .oum-device-help { margin:0; }
+.oum-dashboard.oum-app .oum-device-count { flex:0 0 auto; padding:5px 11px; border-radius:999px; background:var(--oum-field-soft); color:var(--oum-subtle); font-size:.78rem; font-weight:600; white-space:nowrap; }
+.oum-dashboard.oum-app .oum-parental-add { min-width:88px; min-height:38px; border-color:var(--oum-action)!important; color:var(--oum-action)!important; white-space:nowrap; }
+.oum-dashboard.oum-app .oum-parental-add.cbi-button-action { background:var(--oum-action-soft)!important; color:var(--oum-action-dark)!important; }
+
+/* Podkop routing workspace: compact status, service chips and one focused editor. */
+.oum-dashboard #podkop-panel .oum-podkop-summary { min-height:56px; padding:0 0 12px; }
+.oum-dashboard #podkop-panel .oum-podkop-identity { gap:6px; }
+.oum-dashboard #podkop-panel .oum-podkop-identity > strong { font-size:.96rem; }
+.oum-dashboard #podkop-panel .oum-podkop-identity > .oum-muted { font-size:.8rem; }
+.oum-dashboard #podkop-panel .oum-podkop-meta { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-left:auto; }
+.oum-dashboard #podkop-panel .oum-podkop-count,
+.oum-dashboard #podkop-panel .oum-podkop-dirty { padding:5px 11px; border:1px solid var(--oum-line); border-radius:999px; color:var(--oum-subtle); background:var(--oum-paper); font-size:.74rem; font-weight:700; white-space:nowrap; }
+.oum-dashboard #podkop-panel .oum-podkop-count-vpn { border-color:var(--oum-action); background:var(--oum-action); color:#fff; }
+.oum-dashboard #podkop-panel .oum-podkop-dirty { border-color:#f0d49e; background:var(--oum-warn-soft); color:#a25b12; }
+.oum-dashboard #podkop-panel .oum-tabs { margin:0 -20px 16px; padding:0 20px; }
+.oum-dashboard #podkop-panel .oum-tab { min-height:48px; font-weight:650; }
+.oum-dashboard #podkop-panel .oum-route-catalog { gap:8px; padding:0 0 4px; }
+.oum-dashboard #podkop-panel .oum-custom-rules { margin-top:14px; padding:0 16px 16px; }
+.oum-dashboard #podkop-panel .oum-custom-rules > summary { min-height:46px; display:flex; align-items:center; }
+.oum-dashboard #podkop-panel .oum-custom-route-tabs { display:inline-grid; grid-template-columns:1fr 1fr; gap:3px; margin-top:14px; padding:3px; border:1px solid var(--oum-line); border-radius:10px; background:var(--oum-field-soft); }
+.oum-dashboard #podkop-panel .oum-custom-route-tab { min-height:36px; padding:6px 14px; border:0; border-radius:7px; background:transparent; color:var(--oum-subtle); font:inherit; font-size:.82rem; font-weight:650; cursor:pointer; }
+.oum-dashboard #podkop-panel .oum-custom-route-tab[data-active="true"] { background:var(--oum-paper); color:var(--oum-action); box-shadow:0 1px 3px rgba(23,35,31,.12); }
+.oum-dashboard #podkop-panel .oum-custom-route-help { margin:10px 0 12px; font-size:.82rem; }
+.oum-dashboard #podkop-panel .oum-custom-route-pane { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.oum-dashboard #podkop-panel .oum-custom-route-pane[hidden] { display:none; }
+.oum-dashboard #podkop-panel .oum-route-field { display:grid; gap:7px; min-width:0; }
+.oum-dashboard #podkop-panel .oum-route-field > strong { font-size:.82rem; }
+.oum-dashboard #podkop-panel .oum-route-field textarea { width:100%; min-height:116px; margin:0; box-sizing:border-box; resize:vertical; }
+.oum-dashboard #podkop-panel .oum-route-field > small { font-size:.72rem; line-height:1.35; }
+.oum-dashboard #podkop-panel .oum-route-actions { position:static; margin-top:14px; padding:10px 0 0; border:0; border-top:1px solid var(--oum-line); border-radius:0; background:transparent; }
+@media (max-width:700px) {
+  .oum-dashboard #podkop-panel .oum-podkop-summary { align-items:flex-start; flex-direction:column; }
+  .oum-dashboard #podkop-panel .oum-podkop-meta { width:100%; margin-left:0; justify-content:flex-start; flex-wrap:wrap; }
+  .oum-dashboard #podkop-panel .oum-custom-route-pane { grid-template-columns:1fr; }
+}
+
+/* System telemetry — real router state, arranged like the TailAdmin prototype. */
+.oum-dashboard.oum-app .oum-system-panel {
+  padding: 0 !important;
+  overflow: hidden;
+}
+.oum-dashboard.oum-app .oum-system-summary {
+  display:flex;
+  min-height:58px;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  padding:0 20px;
+  cursor:pointer;
+  list-style:none;
+}
+.oum-dashboard.oum-app .oum-system-summary::-webkit-details-marker { display:none; }
+.oum-dashboard.oum-app .oum-system-title { display:flex; min-width:0; align-items:center; gap:6px; }
+.oum-dashboard.oum-app .oum-system-title h3 { margin:0; font-size:1rem; }
+.oum-dashboard.oum-app .oum-system-title > .oum-muted,
+.oum-dashboard.oum-app .oum-system-summary > .oum-muted { font-size:.75rem; white-space:nowrap; }
+.oum-dashboard.oum-app .oum-system-icon {
+  position:relative;
+  width:10px;
+  height:18px;
+  border:2px solid currentColor;
+  border-radius:2px;
+}
+.oum-dashboard.oum-app .oum-system-icon::before,
+.oum-dashboard.oum-app .oum-system-icon::after { content:""; position:absolute; left:2px; width:2px; height:2px; border-radius:50%; background:currentColor; }
+.oum-dashboard.oum-app .oum-system-icon::before { top:3px; }
+.oum-dashboard.oum-app .oum-system-icon::after { top:8px; }
+.oum-dashboard.oum-app .oum-system-body { display:grid; gap:24px; padding:20px; border-top:1px solid var(--oum-line); }
+.oum-dashboard.oum-app .oum-system-group h4 { margin:0 0 14px; font-size:.9rem; }
+.oum-dashboard.oum-app .oum-system-metric { display:grid; gap:7px; margin-top:12px; }
+.oum-dashboard.oum-app .oum-system-metric-head { display:flex; align-items:center; justify-content:space-between; gap:16px; color:var(--oum-subtle); font-size:.76rem; }
+.oum-dashboard.oum-app .oum-system-metric-head span:last-child { color:var(--oum-ink); font-variant-numeric:tabular-nums; }
+.oum-dashboard.oum-app .oum-system-metric .oum-meter { height:8px; margin:0; background:var(--oum-field-soft); }
+.oum-dashboard.oum-app .oum-system-metric .oum-meter.is-secondary span { background:#38a9e8; }
+.oum-dashboard.oum-app .oum-system-metric .oum-meter.is-muted span { background:#c9d0d8; }
+.oum-dashboard.oum-app .oum-port-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.oum-dashboard.oum-app .oum-port-card { display:grid; min-width:0; overflow:hidden; justify-items:center; border:1px solid var(--oum-line); border-radius:12px; background:var(--oum-paper); }
+.oum-dashboard.oum-app .oum-port-card[data-up="false"] { background:var(--oum-field-soft); color:var(--oum-subtle); }
+.oum-dashboard.oum-app .oum-port-name { width:100%; padding:9px 12px; border-bottom:1px solid var(--oum-line); text-align:center; font-size:.78rem; }
+.oum-dashboard.oum-app .oum-port-state { display:grid; width:40px; height:40px; margin:12px 0 7px; place-items:center; border-radius:8px; background:#dfe3e9; }
+.oum-dashboard.oum-app .oum-port-state span { width:10px; height:10px; border:2px solid #97a1ad; border-radius:50%; }
+.oum-dashboard.oum-app .oum-port-card[data-up="true"] .oum-port-state { background:#35bb87; }
+.oum-dashboard.oum-app .oum-port-card[data-up="true"] .oum-port-state span { border-color:#fff; background:#fff; }
+.oum-dashboard.oum-app .oum-port-speed { min-height:20px; font-size:.75rem; }
+.oum-dashboard.oum-app .oum-port-link { width:calc(100% - 24px); height:4px; margin:6px 12px 0; overflow:hidden; border-radius:999px; background:var(--oum-field-soft); }
+.oum-dashboard.oum-app .oum-port-link span { display:block; width:0; height:100%; background:#35bb87; }
+.oum-dashboard.oum-app .oum-port-card[data-up="true"] .oum-port-link span { width:100%; }
+.oum-dashboard.oum-app .oum-port-traffic { display:grid; width:100%; gap:3px; margin-top:8px; padding:9px 12px; box-sizing:border-box; background:var(--oum-field-soft); font-size:.68rem; font-variant-numeric:tabular-nums; }
+@media (max-width:900px) {
+  .oum-dashboard.oum-app .oum-port-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:600px) {
+  .oum-dashboard.oum-app .oum-system-summary { align-items:flex-start; flex-direction:column; padding:14px 16px; }
+  .oum-dashboard.oum-app .oum-system-title { flex-wrap:wrap; }
+  .oum-dashboard.oum-app .oum-system-summary > .oum-muted { white-space:normal; }
+  .oum-dashboard.oum-app .oum-system-body { padding:16px; }
+}
+
+/* Podkop visual shell — TailAdmin reference, with LuCI behavior left intact. */
+.oum-dashboard.oum-app #node-panel:has(#podkop-panel:not([hidden])) {
+  padding: 0 !important;
+  overflow: hidden;
+  border-color: var(--oum-line) !important;
+  background: var(--oum-paper) !important;
+}
+.oum-dashboard.oum-app #podkop-panel {
+  width: 100%;
+  overflow: hidden;
+}
+.oum-dashboard.oum-app #podkop-panel .oum-podkop-summary {
+  min-height: 58px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--oum-line);
+  background: var(--oum-paper);
+}
+.oum-dashboard.oum-app #podkop-panel .oum-podkop-signal {
+  width: 9px;
+  height: 9px;
+  flex-basis: 9px;
+  border-width: 5px;
+  border-color: var(--oum-good-soft);
+}
+.oum-dashboard.oum-app #podkop-panel .oum-podkop-zapret {
+  margin-left: 8px;
+  padding: 5px 10px;
+}
+.oum-dashboard.oum-app #podkop-panel .oum-tabs {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-bottom: 1px solid var(--oum-line);
+  background: var(--oum-paper);
+}
+.oum-dashboard.oum-app #podkop-panel .oum-tab {
+  min-height: 52px !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline-offset: -4px;
+  background: transparent !important;
+  color: var(--oum-subtle) !important;
+  box-shadow: inset 0 -2px 0 transparent !important;
+  font-size: .9rem;
+  font-weight: 650;
+}
+.oum-dashboard.oum-app #podkop-panel .oum-tab[data-active="true"] {
+  color: var(--oum-action) !important;
+  box-shadow: inset 0 -3px 0 var(--oum-action) !important;
+}
+.oum-dashboard.oum-app #podkop-routing-tab,
+.oum-dashboard.oum-app #podkop-diagnostics-tab {
+  padding: 20px;
+}
+.oum-dashboard.oum-app #podkop-panel .oum-route-catalog {
+  gap: 10px 8px !important;
+  padding: 0;
+}
+.oum-dashboard.oum-app #podkop-panel .oum-route-row {
+  min-height: 42px;
+  padding: 5px 13px 5px 7px;
+  border-color: var(--oum-line) !important;
+  background: var(--oum-paper);
+  box-shadow: none;
+}
+.oum-dashboard.oum-app #podkop-panel .oum-route-row:hover {
+  border-color: var(--oum-line-strong) !important;
+  background: var(--oum-field-soft);
+}
+.oum-dashboard.oum-app #podkop-panel .oum-route-row:has(input[value="vpn"]:checked) {
+  border-color: var(--oum-action) !important;
+  background: var(--oum-action);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(40,104,215,.22);
+}
+.oum-dashboard.oum-app #podkop-panel .oum-custom-rules {
+  margin: 20px 0 0;
+  padding: 0 16px 16px;
+  border: 1px dashed var(--oum-line-strong) !important;
+  border-radius: 14px !important;
+  background: var(--oum-paper);
+}
+.oum-dashboard.oum-app #podkop-panel .oum-custom-rules > summary {
+  min-height: 50px;
+  padding: 0;
+  border-bottom: 0 !important;
+}
+.oum-dashboard.oum-app #podkop-panel .oum-custom-rules[open] > summary {
+  border-bottom: 1px solid var(--oum-line) !important;
+}
+.oum-dashboard.oum-app #podkop-panel .oum-route-actions {
+  min-height: 62px;
+  margin-top: 16px;
+  padding: 10px 0 0;
+  gap: 10px;
+}
+.oum-dashboard.oum-app #podkop-panel .oum-route-actions .btn {
+  min-height: 42px;
+  padding-inline: 20px;
+}
+.oum-dashboard.oum-app #podkop-panel .oum-route-actions .cbi-button-action {
+  min-width: 122px;
+}
+@media (max-width:700px) {
+  .oum-dashboard.oum-app #podkop-panel .oum-podkop-summary { padding: 14px 16px; }
+  .oum-dashboard.oum-app #podkop-routing-tab,
+  .oum-dashboard.oum-app #podkop-diagnostics-tab { padding: 16px; }
+}
 .oum-dashboard.oum-app .oum-vpn-card-row { display:block; }
 .oum-dashboard.oum-app .oum-vpn-card-row .btn { margin-top:9px; }
 .oum-dashboard.oum-app .oum-node-head { flex-wrap:wrap; }
@@ -910,11 +1309,2444 @@ body.dark .oum-help-page {
 .oum-app input[type="radio"],
 .oum-app input[type="checkbox"] { width:16px; min-width:16px; height:16px; min-height:16px; padding:0; }
 .oum-dashboard.oum-app .oum-card .btn { border-color:var(--oum-line-strong); color:var(--oum-ink); }
+
+/* TailAdmin metric strip: four equal, calm operational channels. */
+.oum-dashboard.oum-app .oum-cards {
+  gap: 24px;
+}
+.oum-dashboard.oum-app .oum-card {
+  height: 192px;
+  min-height: 192px;
+  padding: 24px;
+  align-content: start;
+}
+.oum-dashboard.oum-app .oum-card small {
+  margin-top: 20px;
+}
+.oum-dashboard.oum-app .oum-metric-icon {
+  width: 48px;
+  height: 48px;
+  padding: 13px;
+}
+
+/* Settings: one calm workspace for engine, DNS and protected connection. */
+.oum-settings.oum-app .oum-vpn-workspace {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 16px;
+}
+.oum-settings.oum-app .oum-vpn-workspace-head {
+  min-height: 66px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--oum-line);
+  color: var(--oum-ink);
+  background: var(--oum-paper);
+}
+.oum-settings.oum-app .oum-vpn-workspace-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.oum-settings.oum-app .oum-vpn-workspace-title > strong {
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  letter-spacing: .01em;
+}
+.oum-settings.oum-app .oum-vpn-workspace-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--oum-action);
+  background: var(--oum-action-soft);
+}
+.oum-settings.oum-app .oum-vpn-workspace-icon::before {
+  content: "✓";
+  width: 15px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 8px 8px 10px 10px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+.oum-settings.oum-app .oum-vpn-current-pill {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--oum-good) 45%, var(--oum-line));
+  border-radius: 999px;
+  color: var(--oum-good);
+  background: var(--oum-good-soft);
+  font-size: .82rem;
+}
+.oum-settings.oum-app .oum-vpn-workspace > .oum-inline-warning,
+.oum-settings.oum-app .oum-vpn-workspace > .oum-engine-choices,
+.oum-settings.oum-app .oum-vpn-workspace > .oum-engine-explainer,
+.oum-settings.oum-app .oum-vpn-workspace > .oum-vpn-switchboard {
+  margin-left: 20px;
+  margin-right: 20px;
+}
+.oum-settings.oum-app .oum-vpn-workspace > .oum-inline-warning { margin-top: 16px; }
+.oum-settings.oum-app .oum-vpn-workspace > .oum-engine-choices { margin-top: 16px; }
+.oum-settings.oum-app .oum-vpn-workspace .oum-engine-choice {
+  min-height: 80px;
+  padding: 16px;
+  align-items: flex-start;
+  border-radius: 12px;
+}
+.oum-settings.oum-app .oum-vpn-workspace .oum-engine-choice:has(input:checked) {
+  border-width: 2px !important;
+  padding: 15px;
+}
+.oum-settings.oum-app .oum-engine-explainer {
+  margin-top: 10px;
+  margin-bottom: 0;
+  line-height: 1.45;
+}
+.oum-settings.oum-app .oum-vpn-workspace > .oum-vpn-switchboard {
+  margin-top: 14px;
+  margin-bottom: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  flex-wrap: wrap;
+}
+.oum-settings.oum-app .oum-vpn-workspace > .oum-vpn-switchboard .btn {
+  min-height: 42px;
+  padding-inline: 16px;
+}
+.oum-settings.oum-app .oum-vpn-workspace > .oum-vpn-section {
+  margin: 0;
+  padding: 0 20px 20px;
+  border: 0;
+  border-top: 1px solid var(--oum-line);
+  border-radius: 0;
+  background: transparent;
+}
+.oum-settings.oum-app .oum-vpn-workspace > .oum-vpn-section > summary {
+  min-height: 58px;
+  margin: 0 !important;
+  padding: 17px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 1rem;
+}
+.oum-settings.oum-app .oum-vpn-workspace > .oum-vpn-section > summary::after {
+  content: "Свернуть";
+  padding: 5px 10px;
+  border: 1px solid var(--oum-line);
+  border-radius: 999px;
+  color: var(--oum-muted);
+  font-size: .78rem;
+  font-weight: 500;
+}
+.oum-settings.oum-app .oum-vpn-workspace > .oum-vpn-section .oum-protected-content {
+  padding-top: 0;
+  border-top: 0;
+}
+.oum-settings.oum-app .oum-vpn-workspace .oum-podkop-transports { gap: 16px; }
+.oum-settings.oum-app .oum-vpn-workspace .oum-transport-card {
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--oum-paper);
+}
+.oum-settings.oum-app .oum-vpn-workspace .oum-transport-card textarea { min-height: 112px; }
+
+@media (max-width: 760px) {
+  .oum-settings.oum-app .oum-vpn-workspace-head { align-items: flex-start; flex-direction: column; }
+  .oum-settings.oum-app .oum-vpn-workspace-title { flex-wrap: wrap; }
+  .oum-settings.oum-app .oum-vpn-current-pill { max-width: 100%; }
+  .oum-settings.oum-app .oum-vpn-workspace > .oum-vpn-switchboard .btn { flex: 1 1 auto; }
+}
+.oum-dashboard.oum-app .oum-temperature-icon {
+  filter: none;
+  background: #fff8e6;
+}
+.oum-dashboard.oum-app .oum-client-metric {
+  align-items: stretch;
+}
+.oum-dashboard.oum-app .oum-qr-tile {
+  flex-basis: 108px;
+  width: 108px;
+  height: 108px;
+  align-self: center;
+  padding: 8px 8px 6px;
+  gap: 3px;
+}
+.oum-dashboard.oum-app .oum-qr-preview {
+  display: block;
+  width: 72px !important;
+  height: 72px !important;
+  image-rendering: pixelated;
+}
+.oum-dashboard.oum-app .oum-qr-tile small {
+  margin: 0 !important;
+  line-height: 1.15;
+}
+.oum-dashboard.oum-app .oum-qr-placeholder {
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  color: var(--oum-faint);
+  letter-spacing: .18em;
+}
+.oum-dashboard.oum-app .oum-qr-placeholder[hidden] {
+  display: none !important;
+}
+.oum-dashboard.oum-app .oum-vpn-metric {
+  border: 2px solid var(--oum-action) !important;
+  background: var(--oum-action-soft) !important;
+}
+.oum-dashboard.oum-app .oum-vpn-metric .oum-metric-icon {
+  filter: none;
+}
+.oum-dashboard.oum-app .oum-vpn-toggle[hidden] {
+  display: none !important;
+}
 .oum-parental.oum-app,
 .oum-help-page.oum-app {
   --oum-canvas:#eef0ea; --oum-paper:#fff; --oum-paper-strong:#fff; --oum-ink:#17231f; --oum-subtle:#627068; --oum-faint:#849087; --oum-line:#dfe4dd; --oum-line-strong:#c5cec5; --oum-field:#fff; --oum-field-soft:#f5f7f3; --oum-action-soft:#e8effd;
-  display:grid; grid-template-columns:232px minmax(0,1fr); width:min(100vw,100%); max-width:none; min-height:calc(100vh - 64px); margin:0; padding:0; overflow:visible; border-radius:0; background:var(--oum-canvas);
+  display:grid; grid-template-columns:minmax(0,1fr); width:min(100vw,100%); max-width:none; min-height:calc(100vh - 64px); margin:0; padding:0; overflow:visible; border-radius:0; background:var(--oum-canvas);
 }
 .oum-parental.oum-app .oum-parental-head,
 .oum-help-page.oum-app > .oum-main > h2 { margin-top:24px; }
-@media (max-width:1100px) { .oum-parental.oum-app,.oum-help-page.oum-app { grid-template-columns:200px minmax(0,1fr); } }
+@media (max-width:1100px) { .oum-parental.oum-app,.oum-help-page.oum-app { grid-template-columns:minmax(0,1fr); } }
+
+/* First-use dashboard: one onboarding surface, based on TailAdmin's restrained blank-state composition. */
+.oum-empty-setup {
+  width: min(100%, 860px);
+  margin: 46px auto 0;
+  padding: 32px;
+  border: 1px solid var(--oum-line);
+  border-radius: var(--oum-r-surface);
+  background: var(--oum-paper);
+  box-shadow: var(--oum-shadow-surface);
+}
+.oum-empty-head { max-width: 650px; padding-bottom: 24px; border-bottom: 1px solid var(--oum-line); }
+.oum-dashboard.oum-app .oum-empty-head h3 { margin: 0 0 8px; color: var(--oum-ink); font-size: 1.55rem; }
+.oum-empty-head p { margin: 0; color: var(--oum-subtle); }
+.oum-empty-plan ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 28px 0 0; padding: 0; list-style: none; }
+.oum-empty-plan li { display: grid; grid-template-columns: 38px minmax(0,1fr); gap: 12px; padding: 0 24px; border-right: 1px solid var(--oum-line); }
+.oum-empty-plan li:first-child { padding-left: 0; }
+.oum-empty-plan li:last-child { padding-right: 0; border-right: 0; }
+.oum-empty-plan li > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: var(--oum-r-control);
+  background: var(--oum-action-soft);
+  color: var(--oum-action-dark);
+  font-weight: 700;
+}
+.oum-empty-plan li div { display: grid; gap: 4px; }
+.oum-empty-plan li strong { color: var(--oum-ink); }
+.oum-empty-plan li small { color: var(--oum-subtle); line-height: 1.45; }
+.oum-empty-action { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--oum-line); }
+.oum-empty-action .btn {
+  display: inline-flex;
+  min-width: 176px;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* First run follows the active OUM theme; OS preference never overrides an explicit choice. */
+.oum-first-run { min-height: 570px; }
+.oum-setup-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.oum-setup-head h2 { margin: 0 0 8px; }
+.oum-setup-head p { margin: 0; }
+.oum-setup-counter {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid var(--oum-line);
+  border-radius: var(--oum-r-control);
+  background: var(--oum-field-soft);
+  color: var(--oum-subtle);
+  font-size: .75rem;
+  font-weight: 700;
+}
+.oum-first-run .oum-progress { margin: 24px 0 28px; }
+.oum-first-run .oum-step { padding-top: 24px; border-top: 1px solid var(--oum-line); }
+.oum-first-run .oum-step h3 { margin-top: 0; }
+.oum-first-run input[type="radio"],
+.oum-first-run input[type="checkbox"] {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px;
+  padding: 0;
+}
+
+@media (max-width: 760px) {
+  .oum-empty-setup { margin-top: 22px; padding: 26px; }
+  .oum-empty-plan ol { grid-template-columns: 1fr; }
+  .oum-empty-plan li { padding: 18px 0; border-right: 0; border-bottom: 1px solid var(--oum-line); }
+  .oum-empty-plan li:first-child { padding-top: 0; }
+  .oum-empty-plan li:last-child { padding-bottom: 0; border-bottom: 0; }
+}
+
+@media (max-width: 650px) {
+  .oum-empty-setup { padding: 22px; }
+  .oum-empty-action { align-items: stretch; flex-direction: column; }
+  .oum-empty-action .btn { width: 100%; text-align: center; }
+  .oum-setup-head { align-items: flex-start; flex-direction: column; gap: 12px; }
+}
+
+/* PassWall: operational summary and node choice are two distinct surfaces. */
+.oum-dashboard.oum-app #node-panel:has(#passwall-panel:not([hidden])) {
+  display: grid;
+  gap: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.oum-dashboard.oum-app #passwall-panel,
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] {
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--oum-line);
+  border-radius: var(--oum-r-surface);
+  background: var(--oum-paper);
+}
+.oum-dashboard.oum-app .oum-passwall-overview .oum-node-head h3,
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-head h3 {
+  margin: 0;
+}
+.oum-dashboard.oum-app .oum-passwall-badge {
+  max-width: min(68%, 560px);
+  padding: 5px 10px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--oum-good) 28%, var(--oum-line));
+  border-radius: var(--oum-r-segmented);
+  color: var(--oum-good);
+  background: var(--oum-good-soft);
+  font-size: .78rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oum-dashboard.oum-app .oum-passwall-badge[data-ok="false"] {
+  border-color: color-mix(in srgb, var(--oum-warn) 34%, var(--oum-line));
+  color: var(--oum-warn);
+  background: var(--oum-warn-soft);
+}
+.oum-dashboard.oum-app .oum-passwall-grid {
+  gap: 12px;
+  margin: 16px 0;
+}
+.oum-dashboard.oum-app .oum-passwall-state {
+  min-height: 62px;
+  padding: 12px;
+  border-radius: var(--oum-r-inset);
+  background: var(--oum-field-soft);
+}
+.oum-dashboard.oum-app .oum-passwall-state[data-ok="true"] {
+  border-color: color-mix(in srgb, var(--oum-good) 30%, var(--oum-line));
+  color: var(--oum-good);
+  background: color-mix(in srgb, var(--oum-good-soft) 74%, var(--oum-paper));
+}
+.oum-dashboard.oum-app .oum-passwall-state[data-ok="false"] {
+  border-color: color-mix(in srgb, var(--oum-warn) 34%, var(--oum-line));
+  background: color-mix(in srgb, var(--oum-warn-soft) 72%, var(--oum-paper));
+}
+.oum-dashboard.oum-app .oum-passwall-state small {
+  color: currentColor;
+  opacity: .82;
+}
+.oum-dashboard.oum-app .oum-passwall-active {
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, var(--oum-action) 24%, var(--oum-line));
+  border-radius: var(--oum-r-inset);
+  background: var(--oum-action-soft);
+}
+.oum-dashboard.oum-app .oum-passwall-active small {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--oum-action-dark);
+}
+.oum-dashboard.oum-app .oum-passwall-active strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.oum-dashboard.oum-app .oum-passwall-active-meta {
+  margin-top: 4px;
+  color: var(--oum-subtle);
+  font-size: .78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.oum-dashboard.oum-app .oum-passwall-diagnostics {
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid var(--oum-line);
+  border-radius: var(--oum-r-inset);
+}
+.oum-dashboard.oum-app .oum-passwall-diagnostics > summary {
+  padding: 11px 13px;
+  background: var(--oum-field-soft);
+}
+.oum-dashboard.oum-app .oum-passwall-diagnostics[open] > summary {
+  border-bottom: 1px solid var(--oum-line);
+}
+.oum-dashboard.oum-app .oum-passwall-diagnostic-grid {
+  padding: 12px;
+  margin-top: 0;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] {
+  border-top: 1px solid var(--oum-line);
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-current-node {
+  display: none;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-panel-hint {
+  margin: 3px 0 0;
+  font-size: .78rem;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick {
+  margin-top: 13px;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 52px;
+  padding: 9px 11px;
+  border-radius: var(--oum-r-inset);
+  background: var(--oum-paper-strong);
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-delay {
+  min-width: 0;
+  color: var(--oum-subtle);
+  font-size: .78rem;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node:first-child {
+  border-color: var(--oum-action);
+  background: var(--oum-action-soft);
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node:first-child .btn {
+  border-color: var(--oum-action);
+  color: var(--oum-paper-strong);
+  background: var(--oum-action);
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-all {
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid var(--oum-line);
+  border-radius: var(--oum-r-inset);
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-all > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+  padding: 11px 13px;
+  border: 0;
+  border-radius: 0;
+  background: var(--oum-field-soft);
+  list-style: none;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-all[open] > summary {
+  border-bottom: 1px solid var(--oum-line);
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-all > summary::before {
+  display: block;
+  width: 0;
+  height: 0;
+  flex: 0 0 auto;
+  border-top: 5px solid transparent;
+  border-right: 0;
+  border-bottom: 5px solid transparent;
+  border-left: 7px solid currentColor;
+  transform: none;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-all[open] > summary::before {
+  transform: rotate(90deg);
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-all-grid {
+  margin-top: 0;
+  padding: 12px;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-hint {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .oum-dashboard.oum-app #passwall-panel,
+  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] { padding: 16px; }
+  .oum-dashboard.oum-app .oum-passwall-grid { grid-template-columns: 1fr; }
+  .oum-dashboard.oum-app .oum-passwall-badge { max-width: 100%; }
+  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-copy {
+    display: block;
+  }
+}
+
+/* Internet connection modes: cable and WISP share one clear workflow. */
+.oum-internet-choices {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.oum-wisp-inline {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--oum-line);
+  border-radius: var(--oum-r-inset);
+  background: var(--oum-field-soft);
+}
+.oum-wisp-intro {
+  display: grid;
+  gap: 3px;
+  margin: 0 0 12px;
+}
+.oum-wisp-intro span {
+  color: var(--oum-subtle);
+  line-height: 1.45;
+}
+.oum-wisp-inline .oum-wisp-status {
+  margin: 0 0 12px;
+  border: 1px solid var(--oum-line);
+  background: var(--oum-paper);
+}
+.oum-wisp-scan-row {
+  display: grid;
+  grid-template-columns: minmax(120px, .65fr) minmax(220px, 1.8fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+.oum-wisp-scan-row .oum-setting-field {
+  margin: 0;
+}
+.oum-wisp-scan {
+  height: 42px;
+  min-height: 42px;
+  padding-top: 0;
+  padding-bottom: 0;
+  white-space: nowrap;
+}
+.oum-wisp-actions {
+  margin-top: 12px;
+}
+.oum-internet-panel #wan-wired-actions[hidden],
+.oum-internet-panel #wisp-settings[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 760px) {
+  .oum-internet-choices,
+  .oum-wisp-scan-row {
+    grid-template-columns: 1fr;
+  }
+  .oum-wisp-scan {
+    width: 100%;
+  }
+}
+
+/* Real engine-switch stages, driven by the router job instead of a demo timer. */
+.oum-engine-progress {
+  display: grid;
+  gap: var(--oum-md);
+  width: min(100%, 460px);
+  color: var(--oum-ink);
+}
+.oum-engine-progress-message {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--oum-subtle);
+}
+.oum-engine-step-list {
+  display: grid;
+  gap: 10px;
+}
+.oum-engine-step {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 28px;
+  align-items: center;
+  color: var(--oum-faint);
+  transition: color var(--oum-motion), opacity var(--oum-motion);
+}
+.oum-engine-step-mark {
+  position: relative;
+  display: block;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--oum-line);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.oum-engine-step-label {
+  line-height: 1.35;
+}
+.oum-engine-step-state {
+  color: inherit;
+  font-size: .75rem;
+  white-space: nowrap;
+}
+.oum-engine-step[data-state="active"] {
+  color: var(--oum-ink);
+  font-weight: 600;
+}
+.oum-engine-step[data-state="active"] .oum-engine-step-mark {
+  border-color: var(--oum-line);
+  border-top-color: var(--oum-action);
+  animation: oum-engine-spin .8s linear infinite;
+}
+.oum-engine-step[data-state="active"] .oum-engine-step-state {
+  padding: 4px 8px;
+  border-radius: var(--oum-r-segmented);
+  background: var(--oum-warn-soft);
+  color: var(--oum-warn);
+  font-weight: 600;
+}
+.oum-engine-step[data-state="done"] {
+  color: var(--oum-ink);
+}
+.oum-engine-step[data-state="done"] .oum-engine-step-mark {
+  border-color: var(--oum-good);
+  background: var(--oum-good);
+}
+.oum-engine-step[data-state="done"] .oum-engine-step-mark::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 4px;
+  top: 6px;
+  left: 5px;
+  border-left: 2px solid var(--oum-paper-strong);
+  border-bottom: 2px solid var(--oum-paper-strong);
+  transform: rotate(-45deg);
+}
+.oum-engine-step[data-state="done"] .oum-engine-step-state {
+  color: var(--oum-good);
+}
+.oum-engine-step[data-state="failed"] {
+  color: var(--oum-bad);
+  font-weight: 600;
+}
+.oum-engine-step[data-state="failed"] .oum-engine-step-mark {
+  border-color: var(--oum-bad);
+  background: var(--oum-bad-soft);
+}
+.oum-engine-step[data-state="failed"] .oum-engine-step-mark::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 2px;
+  top: 8px;
+  left: 5px;
+  background: var(--oum-bad);
+}
+.oum-engine-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--oum-sm);
+  color: var(--oum-subtle);
+}
+.oum-engine-progress-percent { color: var(--oum-ink); font-variant-numeric: tabular-nums; }
+.oum-engine-progress-stage { overflow-wrap: anywhere; }
+.oum-engine-progress-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--oum-r-segmented);
+  background: var(--oum-line);
+}
+.oum-engine-progress-fill {
+  display: block;
+  width: 4%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--oum-action);
+  transition: width 520ms cubic-bezier(.16,1,.3,1), background var(--oum-motion);
+}
+.oum-engine-progress[data-state="success"] .oum-engine-progress-fill { background: var(--oum-good); }
+.oum-engine-progress[data-state="failed"] .oum-engine-progress-fill { background: var(--oum-bad); }
+.oum-engine-progress-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  min-height: 38px;
+}
+
+@keyframes oum-engine-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oum-engine-step[data-state="active"] .oum-engine-step-mark {
+    animation: none;
+    border-color: var(--oum-action);
+  }
+  .oum-engine-progress-fill { transition-duration: 80ms; }
+}
+
+@media (max-width: 650px) {
+  .oum-engine-progress {
+    gap: var(--oum-sm);
+  }
+  .oum-engine-step {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .oum-engine-step-state {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .oum-engine-progress-actions {
+    flex-direction: column-reverse;
+  }
+  .oum-engine-progress-actions .btn {
+    width: 100%;
+  }
+}
+
+/* Stage 2: responsive OUM views. Desktop rules above stay authoritative. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page^="oum-"] .oum-app,
+  body.theme-oum[data-page^="oum-"] .oum-shell,
+  body.theme-oum[data-page^="oum-"] .oum-main,
+  body.theme-oum[data-page^="oum-"] .oum-settings,
+  body.theme-oum[data-page^="oum-"] .oum-parental,
+  body.theme-oum[data-page^="oum-"] .oum-help-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  body.theme-oum[data-page^="oum-"] .oum-app { grid-template-columns: minmax(0, 1fr) !important; }
+  .oum-dashboard.oum-app .oum-cards { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 14px !important; }
+  .oum-dashboard.oum-app .oum-card { height: auto !important; min-height: 156px !important; padding: 20px !important; }
+  .oum-settings-grid, .oum-network-card-grid, .oum-help-grid, .oum-maintenance, .oum-dns-grid { gap: 14px !important; }
+  .oum-engine-choices, .oum-setting-choices, .oum-source-choice, .oum-podkop-transports { grid-template-columns: 1fr !important; }
+  .oum-actions, .oum-setting-actions, .oum-wisp-actions, .oum-parental-controls, .oum-engine-progress-actions { flex-wrap: wrap; }
+  .oum-actions > .btn, .oum-setting-actions > .btn, .oum-wisp-actions > .btn, .oum-parental-controls > .btn { min-height: 42px; }
+  #modal_overlay .modal, #modal_overlay .modal-dialog {
+    width: min(560px, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    margin: 12px !important;
+    overflow: auto !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .oum-dashboard.oum-app .oum-cards { grid-template-columns: minmax(0, 1fr) !important; gap: 12px !important; }
+  .oum-dashboard.oum-app .oum-card { min-height: 132px !important; padding: 18px !important; }
+  .oum-dashboard.oum-app .oum-client-metric {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 96px !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+  .oum-dashboard.oum-app .oum-client-metric > div { min-width: 0; }
+  .oum-dashboard.oum-app .oum-qr-tile { width: 96px !important; min-width: 96px !important; height: 108px !important; justify-self: end; }
+  .oum-dashboard.oum-app .oum-qr-preview { max-width: 76px; max-height: 76px; }
+  .oum-dashboard.oum-app .oum-vpn-card-row { align-items: flex-start; flex-wrap: wrap; }
+  .oum-dashboard.oum-app .oum-card strong, .oum-dashboard.oum-app .oum-vpn-card-row strong { overflow-wrap: anywhere; }
+  .oum-section-head, .oum-node-head, .oum-subscription-head, .oum-system-head, .oum-page-head {
+    align-items: flex-start !important;
+    gap: 10px !important;
+    flex-wrap: wrap !important;
+  }
+  .oum-page-head h2 { font-size: 22px !important; }
+  .oum-head-actions { margin-left: 0 !important; }
+
+  .oum-clients, .oum-clients tbody, .oum-clients tr, .oum-clients td {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .oum-clients thead { display: none !important; }
+  .oum-clients tr { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--oum-line); }
+  .oum-clients tr:last-child { border-bottom: 0; }
+  .oum-clients td {
+    display: grid !important;
+    grid-template-columns: minmax(96px, .38fr) minmax(0, 1fr) !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 6px 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    overflow-wrap: anywhere;
+  }
+  .oum-clients td::before {
+    color: var(--oum-faint);
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: .045em;
+    text-transform: uppercase;
+  }
+  #client-list td:nth-child(1)::before { content: "Имя"; }
+  #client-list td:nth-child(2)::before { content: "IP-адрес"; }
+  #client-list td:nth-child(3)::before { content: "Подключение"; }
+  #client-list td:nth-child(4)::before { content: "MAC"; }
+  #client-list td:nth-child(5)::before { content: "Трафик"; }
+  #client-list td:nth-child(6)::before { content: "Маршрутизация"; }
+  #client-list td:nth-child(7)::before { content: "Контроль"; }
+  #offline-client-list td:nth-child(1)::before { content: "Имя"; }
+  #offline-client-list td:nth-child(2)::before { content: "Последний IP"; }
+  #offline-client-list td:nth-child(3)::before { content: "MAC"; }
+  #offline-client-list td:nth-child(4)::before { content: "Маршрутизация"; }
+  #offline-client-list td:nth-child(5)::before { content: "Контроль"; }
+  #client-list td:nth-child(1),
+  #client-list td:nth-child(6),
+  #client-list td:nth-child(7),
+  #offline-client-list td:nth-child(1),
+  #offline-client-list td:nth-child(4),
+  #offline-client-list td:nth-child(5) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .oum-clients td[colspan] { display: block !important; padding: 12px 0 !important; }
+  .oum-clients td[colspan]::before { content: none !important; }
+  .oum-clients select, .oum-clients .btn, .oum-device-name-row, .oum-device-alias-form { width: 100% !important; min-width: 0 !important; }
+  .oum-device-name-row { display: grid !important; grid-template-columns: minmax(0, 1fr) auto !important; gap: 8px !important; }
+  .oum-device-alias-form { grid-template-columns: 1fr 1fr !important; }
+  .oum-device-alias-form > input { grid-column: 1 / -1 !important; }
+
+  .oum-node-grid, .oum-node-quick, .oum-passwall-grid, .oum-route-custom-grid, .oum-system-grid,
+  .oum-settings-grid, .oum-network-card-grid, .oum-maintenance, .oum-help-grid, .oum-dns-grid,
+  .oum-parental-grid, .oum-parental-times { grid-template-columns: minmax(0, 1fr) !important; }
+  .oum-port-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .oum-route-catalog, .oum-route-chips { gap: 8px !important; }
+  .oum-first-run .oum-step, .oum-first-run .oum-setup-head, .oum-help-page, .oum-parental, .oum-settings { min-width: 0 !important; }
+  .oum-shell { padding: 16px 12px 28px !important; }
+  .oum-first-run .oum-actions, .oum-engine-progress-actions { display: grid !important; grid-template-columns: 1fr !important; }
+  .oum-first-run .oum-actions .btn, .oum-engine-progress-actions .btn { width: 100% !important; }
+  #modal_overlay .modal-footer, #modal_overlay .modal-actions { display: grid !important; grid-template-columns: 1fr !important; gap: 8px !important; }
+  #modal_overlay .modal-footer .btn, #modal_overlay .modal-actions .btn { width: 100% !important; }
+}
+
+@media (max-width: 480px) {
+  .oum-port-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .oum-actions, .oum-setting-actions, .oum-wisp-actions, .oum-parental-controls {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100%;
+  }
+  .oum-actions > .btn, .oum-setting-actions > .btn, .oum-wisp-actions > .btn, .oum-parental-controls > .btn { width: 100% !important; }
+  .oum-wifi-actions, .oum-settings-sheet-content .oum-wifi-actions { display: grid !important; grid-template-columns: 1fr auto !important; width: 100% !important; }
+  .oum-wifi-actions > .btn, .oum-settings-sheet-content .oum-wifi-actions > .btn { width: auto !important; }
+  .oum-wifi-actions > .btn.cbi-button-action, .oum-settings-sheet-content .oum-wifi-actions > .btn.cbi-button-action { width: 100% !important; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  body.theme-oum[data-page^="oum-"] .btn,
+  body.theme-oum[data-page^="oum-"] button,
+  body.theme-oum[data-page^="oum-"] input,
+  body.theme-oum[data-page^="oum-"] select,
+  body.theme-oum[data-page^="oum-"] summary { min-height: 42px; }
+}
+
+/* Mobile OUM: compact bento overview, task sheets and thumb-friendly controls. */
+.oum-mobile-device-action { display: none; }
+.oum-mobile-settings-summary { display: none; }
+.oum-mobile-client-list,
+.oum-mobile-client-more,
+.oum-mobile-podkop-actions { display: none; }
+
+@media (max-width: 700px) {
+  body.theme-oum[data-page^="oum-"] { background: var(--oum-canvas); }
+  body.theme-oum[data-page^="oum-"] .main-right > main,
+  body.theme-oum[data-page^="oum-"] #maincontent { padding-inline: 0 !important; }
+  .oum-shell { padding: 10px 10px calc(28px + env(safe-area-inset-bottom)) !important; }
+  .oum-main { gap: 10px; padding-inline: 10px !important; }
+  .oum-dashboard.oum-app .oum-page-head { display: none !important; }
+  .oum-settings.oum-app .oum-page-head,
+  .oum-parental.oum-app .oum-parental-head {
+    min-height: 48px;
+    margin: 0 0 8px;
+    padding: 4px 2px;
+    align-items: center !important;
+  }
+  .oum-page-head h2, .oum-parental-head h2 { margin: 0; font-size: 1.08rem !important; letter-spacing: -.02em; }
+  .oum-page-head p, .oum-parental-head p { margin: 2px 0 0; font-size: .72rem; line-height: 1.3; }
+  .oum-status-badge { padding: 5px 9px; font-size: .68rem; white-space: nowrap; }
+  .oum-warning { margin: 0 0 2px; padding: 9px 11px; border-radius: 11px; font-size: .7rem; line-height: 1.35; }
+
+  .oum-dashboard.oum-app .oum-cards {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    margin: 0 0 2px !important;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .oum-dashboard.oum-app .oum-card {
+    display: flex !important;
+    min-width: 0;
+    height: 108px !important;
+    min-height: 108px !important;
+    padding: 11px !important;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--oum-line) !important;
+    border-radius: 12px !important;
+    background: var(--oum-paper-strong) !important;
+    box-shadow: none !important;
+  }
+  .oum-dashboard.oum-app .oum-card + .oum-card { border-left: 1px solid var(--oum-line) !important; }
+  .oum-dashboard.oum-app .oum-vpn-metric {
+    border: 2px solid var(--oum-action) !important;
+    background: var(--oum-action-soft) !important;
+  }
+  .oum-dashboard.oum-app .oum-metric-icon {
+    width: 28px !important;
+    height: 28px !important;
+    padding: 7px !important;
+    border-radius: 8px !important;
+  }
+  .oum-dashboard.oum-app .oum-temperature-icon { padding: 0 !important; }
+  .oum-dashboard.oum-app .oum-card small { margin: 7px 0 2px !important; font-size: .67rem !important; line-height: 1.15; }
+  .oum-dashboard.oum-app .oum-card strong { font-size: .84rem !important; line-height: 1.12 !important; letter-spacing: -.012em; }
+  .oum-dashboard.oum-app #wan-state[data-state="good"] { color: var(--oum-good) !important; }
+  .oum-dashboard.oum-app #wan-state[data-state="bad"] { color: var(--oum-bad) !important; }
+  .oum-dashboard.oum-app .oum-card .oum-muted,
+  .oum-dashboard.oum-app .oum-card-message { margin-top: 3px; font-size: .66rem !important; line-height: 1.25 !important; }
+  .oum-dashboard.oum-app .oum-client-metric {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 48px !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+  }
+  .oum-dashboard.oum-app .oum-client-metric > div { min-width: 0; }
+  .oum-dashboard.oum-app .oum-qr-tile {
+    display: grid !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    height: 62px !important;
+    min-height: 62px !important;
+    margin-top: 1px;
+    padding: 4px !important;
+    place-items: center;
+    gap: 2px !important;
+    border-radius: 11px !important;
+  }
+  .oum-dashboard.oum-app .oum-qr-preview { width: 38px !important; height: 38px !important; }
+  .oum-dashboard.oum-app .oum-qr-tile small { margin: 0 !important; font-size: .58rem !important; }
+  .oum-dashboard.oum-app .oum-qr-placeholder { display: grid; width: 38px; min-height: 38px; place-items: center; overflow: hidden; letter-spacing: .08em; }
+  .oum-dashboard.oum-app .oum-qr-placeholder[hidden] { display: none !important; }
+  .oum-dashboard.oum-app .oum-vpn-card-row { display: contents !important; }
+  .oum-dashboard.oum-app .oum-vpn-card-row .btn { display: none !important; }
+
+  .oum-dashboard.oum-app .oum-panel,
+  .oum-dashboard.oum-app .oum-system-panel,
+  .oum-settings.oum-app .oum-settings-panel,
+  .oum-parental.oum-app .oum-parental-panel,
+  .oum-help-page.oum-app .oum-panel {
+    margin: 0 0 2px;
+    padding: 12px !important;
+    border-radius: 13px !important;
+    box-shadow: none !important;
+  }
+  .oum-section-head { margin-bottom: 10px; align-items: center !important; }
+  .oum-section-head h3, .oum-node-head h3 { margin: 0; font-size: .94rem; }
+  .oum-device-help { display: none; }
+  .oum-device-count { padding: 4px 8px !important; font-size: .66rem !important; }
+
+  #devices-panel > .oum-clients,
+  #devices-panel > .oum-offline { display: none !important; }
+  .oum-mobile-client-list { display: grid; gap: 6px; }
+  .oum-mobile-client-row {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr) 30px;
+    width: 100%;
+    min-height: 48px;
+    padding: 7px 8px;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--oum-line);
+    border-radius: 10px;
+    background: var(--oum-field-soft);
+    color: var(--oum-ink);
+    text-align: left;
+  }
+  .oum-mobile-client-state { width: 8px; height: 8px; border-radius: 50%; background: var(--oum-good); box-shadow: 0 0 0 4px var(--oum-good-soft); }
+  .oum-mobile-client-copy { display: grid; min-width: 0; gap: 2px; }
+  .oum-mobile-client-copy strong { overflow: hidden; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+  .oum-mobile-client-copy small { overflow: hidden; color: var(--oum-subtle); font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
+  .oum-mobile-client-tune { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid var(--oum-line); border-radius: 9px; background: var(--oum-paper-strong); color: var(--oum-subtle); }
+  .oum-mobile-client-tune img { width: 17px; height: 17px; opacity: .82; }
+  .oum-mobile-client-more {
+    width: 100%;
+    min-height: 38px;
+    margin-top: 6px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px dashed var(--oum-line-strong);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--oum-action-dark);
+    font-size: .72rem;
+    font-weight: 700;
+  }
+  .oum-mobile-client-more:not([hidden]) { display: flex; }
+  .oum-mobile-client-more[data-expanded="true"] svg { transform: rotate(180deg); }
+  .oum-policy-message { display: none; }
+
+  .oum-dashboard.oum-app #node-panel { border-radius: 15px !important; }
+  .oum-dashboard.oum-app #podkop-panel .oum-podkop-summary { min-height: 44px; padding: 9px 0 10px !important; align-items: center; flex-direction: row; }
+  .oum-dashboard #podkop-panel .oum-podkop-identity { gap: 5px; flex: 1 1 auto; }
+  .oum-dashboard #podkop-panel .oum-podkop-identity > strong { font-size: .78rem; }
+  .oum-dashboard #podkop-panel .oum-podkop-identity > .oum-muted { max-width: 118px; overflow: hidden; font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
+  .oum-dashboard #podkop-panel .oum-podkop-zapret { margin-left: 0 !important; padding: 3px 6px !important; font-size: .62rem; }
+  .oum-dashboard #podkop-panel .oum-podkop-meta { gap: 5px; width: auto; margin-left: auto; justify-content: flex-end; }
+  .oum-dashboard #podkop-panel .oum-podkop-count,
+  .oum-dashboard #podkop-panel .oum-podkop-dirty { padding: 3px 6px; font-size: .61rem; }
+  .oum-mobile-podkop-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .oum-mobile-podkop-actions button {
+    display: grid;
+    min-width: 0;
+    min-height: 56px;
+    padding: 7px 5px;
+    place-items: center;
+    gap: 4px;
+    border: 1px dashed var(--oum-line-strong);
+    border-radius: 10px;
+    background: var(--oum-paper-strong);
+    color: var(--oum-ink);
+    font-size: .66rem;
+  }
+  .oum-mobile-podkop-actions button[data-active="true"] { border-style: solid; border-color: var(--oum-action); background: var(--oum-action-soft); color: var(--oum-action-dark); }
+  .oum-mobile-podkop-icon { display: grid; width: 18px; height: 18px; place-items: center; color: var(--oum-subtle); }
+  .oum-mobile-podkop-icon img { width: 16px; height: 16px; opacity: .78; }
+  .oum-dashboard #podkop-panel .oum-tabs { display: none !important; }
+  .oum-dashboard #podkop-panel:not([data-mobile-expanded="routing"]):not([data-mobile-expanded="domains"]) #podkop-routing-tab,
+  .oum-dashboard #podkop-panel:not([data-mobile-expanded="diagnostics"]) #podkop-diagnostics-tab { display: none !important; }
+  .oum-dashboard #podkop-panel[data-mobile-expanded] .oum-mobile-podkop-actions { margin-bottom: 10px; }
+  .oum-dashboard #podkop-panel[data-mobile-expanded="routing"] [data-mobile-podkop="routing"],
+  .oum-dashboard #podkop-panel[data-mobile-expanded="domains"] [data-mobile-podkop="domains"],
+  .oum-dashboard #podkop-panel[data-mobile-expanded="diagnostics"] [data-mobile-podkop="diagnostics"] { border-style: solid; border-color: var(--oum-action); background: var(--oum-action-soft); color: var(--oum-action-dark); }
+  .oum-dashboard #podkop-panel .oum-tab { min-height: 44px !important; font-size: .76rem; }
+  .oum-dashboard.oum-app #podkop-routing-tab,
+  .oum-dashboard.oum-app #podkop-diagnostics-tab { padding: 13px !important; }
+  .oum-dashboard.oum-app #podkop-panel .oum-route-catalog { gap: 6px !important; }
+  .oum-dashboard.oum-app #podkop-panel .oum-route-row { min-height: 36px; padding: 4px 9px 4px 5px; font-size: .69rem; }
+  .oum-dashboard.oum-app #podkop-panel .oum-route-icon { width: 26px; height: 26px; }
+  .oum-dashboard.oum-app #podkop-panel .oum-custom-rules { margin-top: 12px; padding: 0 11px 11px; border-radius: 11px !important; }
+  .oum-dashboard.oum-app #podkop-panel .oum-custom-rules > summary { min-height: 42px; font-size: .76rem; }
+  .oum-dashboard.oum-app #podkop-panel .oum-route-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .oum-dashboard.oum-app #podkop-panel .oum-route-message { grid-column: 1 / -1; }
+  .oum-dashboard.oum-app #podkop-panel .oum-route-actions .btn { width: 100%; min-width: 0; }
+
+  .oum-dashboard.oum-app #passwall-panel,
+  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] { padding: 14px; border-radius: 15px; }
+  .oum-dashboard.oum-app .oum-passwall-grid { display: flex !important; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .oum-dashboard.oum-app .oum-passwall-state { min-width: 118px; min-height: 54px; padding: 9px; }
+  .oum-node-actions { width: 100%; display: grid !important; grid-template-columns: 1fr 1fr; }
+  .oum-node-actions .btn { width: 100%; min-width: 0; }
+  .oum-node-actions #zashboard-link { display: none; }
+  .oum-node-quick { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 6px !important; }
+  .oum-node { min-width: 0; padding: 8px !important; font-size: .7rem; }
+  .oum-node .btn { min-height: 34px !important; padding-inline: 7px !important; font-size: .65rem !important; }
+  .oum-node-all > summary { min-height: 42px; font-size: .76rem; }
+  .oum-node-hint { display: none; }
+
+  .oum-dashboard.oum-app .oum-system-summary { min-height: 48px; padding: 0 !important; flex-direction: row; align-items: center; }
+  .oum-dashboard.oum-app .oum-system-body { gap: 16px; padding: 14px 0 0; }
+  .oum-dashboard.oum-app .oum-port-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px; }
+
+  .oum-settings-grid { gap: 10px !important; }
+	.oum-settings-grid > .oum-mobile-collapsible {
+		padding: 0 !important;
+		overflow: hidden;
+	}
+	.oum-mobile-settings-summary {
+		display: flex;
+		width: 100%;
+		min-height: 68px;
+		padding: 13px;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		border: 0 !important;
+		border-radius: 0 !important;
+		background: transparent;
+		color: var(--oum-ink);
+		text-align: left;
+		cursor: pointer;
+	}
+	.oum-mobile-settings-summary > span:first-child { display: grid; min-width: 0; gap: 3px; }
+	.oum-mobile-settings-summary strong { font-size: .84rem; }
+	.oum-mobile-settings-summary small { overflow: hidden; color: var(--oum-subtle); font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
+	.oum-mobile-settings-action { flex: none; color: var(--oum-action); font-size: .7rem; font-weight: 700; }
+	.oum-mobile-collapsible:not([data-mobile-open="true"]) > :not(.oum-mobile-settings-summary) { display: none !important; }
+	.oum-mobile-collapsible[data-mobile-open="true"] > :not(.oum-mobile-settings-summary) { margin-inline: 13px; }
+	.oum-mobile-collapsible[data-mobile-open="true"] > :last-child { margin-bottom: 13px; }
+	.oum-mobile-collapsible[data-mobile-open="true"] > h3 { display: none; }
+  .oum-setting-card, .oum-network-card, .oum-maintenance-card { padding: 13px !important; border-radius: 13px !important; }
+  .oum-setting-card > h3, .oum-network-card h3 { font-size: .92rem; }
+  .oum-setting-choices { grid-template-columns: repeat(2, minmax(0,1fr)) !important; gap: 7px; }
+  .oum-setting-choice { min-height: 62px; padding: 10px !important; }
+  .oum-settings.oum-app .oum-vpn-workspace-head { min-height: 54px; padding: 13px; }
+  .oum-settings.oum-app .oum-vpn-workspace-title > strong { font-size: .85rem; }
+  .oum-settings.oum-app .oum-vpn-workspace > .oum-engine-choices,
+  .oum-settings.oum-app .oum-vpn-workspace > .oum-vpn-switchboard { margin-inline: 13px; }
+  .oum-settings.oum-app .oum-vpn-workspace .oum-engine-choice { min-height: 66px; padding: 11px; }
+  .oum-settings.oum-app .oum-vpn-workspace > .oum-vpn-section { padding-inline: 13px; }
+  .oum-maintenance { grid-template-columns: minmax(0, 1fr) !important; }
+
+  .oum-parental-global { display: grid; grid-template-columns: minmax(0,1fr); align-items: stretch; }
+  .oum-parental-device { border-radius: 13px; }
+  .oum-parental-summary { padding: 11px; gap: 8px; }
+  .oum-help-grid { grid-template-columns: minmax(0,1fr) !important; }
+
+  #modal_overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+    background: rgba(10, 18, 16, .44) !important;
+  }
+  #modal_overlay .modal, #modal_overlay .modal-dialog {
+    position: relative !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: min(86dvh, 720px) !important;
+    margin: 0 !important;
+    padding: 22px 16px max(16px, env(safe-area-inset-bottom)) !important;
+    overflow: auto !important;
+    border: 0 !important;
+    border-radius: 20px 20px 0 0 !important;
+    box-shadow: 0 -18px 48px rgba(23,35,31,.18) !important;
+    animation: oum-sheet-in 240ms cubic-bezier(.16,1,.3,1);
+  }
+  #modal_overlay .modal::before, #modal_overlay .modal-dialog::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--oum-line-strong);
+    transform: translateX(-50%);
+  }
+  #modal_overlay .modal h4, #modal_overlay .modal-dialog h4 { margin-top: 6px; font-size: 1rem; }
+  .oum-mobile-device-sheet { display: grid; gap: 13px; }
+  .oum-mobile-device-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .oum-mobile-device-facts > div { display: grid; gap: 2px; min-width: 0; padding: 9px; border-radius: 10px; background: var(--oum-field-soft); }
+  .oum-mobile-device-facts small { color: var(--oum-faint); font-size: .62rem; text-transform: uppercase; letter-spacing: .045em; }
+  .oum-mobile-device-facts strong { overflow-wrap: anywhere; font-size: .75rem; }
+  .oum-mobile-device-field { display: grid; gap: 6px; }
+  .oum-mobile-device-field > strong { font-size: .76rem; }
+  .oum-mobile-device-message { min-height: 1.2em; margin: 0; font-size: .72rem; }
+}
+
+@keyframes oum-sheet-in {
+  from { transform: translateY(22px); opacity: .72; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 360px) {
+  .oum-dashboard.oum-app .oum-card { height: 118px !important; min-height: 118px !important; padding: 11px !important; }
+  .oum-mobile-device-facts { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #modal_overlay .modal, #modal_overlay .modal-dialog { animation: none !important; }
+}
+/* FIX mobile: hide desktop podkop tabs (higher specificity than grid !important) */
+@media (max-width: 700px) {
+  .oum-dashboard.oum-app #podkop-panel .oum-tabs { display: none !important; }
+  #podkop-panel .oum-tabs { display: none !important; }
+}
+/* FIX mobile: hide desktop podkop tabs */
+@media (max-width: 900px) {
+  .oum-dashboard.oum-app #podkop-panel .oum-tabs { display: none !important; }
+  #podkop-panel .oum-tabs { display: none !important; }
+}
+@media (max-width: 900px){
+  [role="banner"], .oum-page-head { position:relative !important; display:flex !important; align-items:center !important; justify-content:space-between !important; padding:12px 16px !important; background:#f4f6f4 !important; border-bottom:1px solid #e5e7eb !important; }
+  [role="banner"] strong, .oum-page-head h2 { position:absolute !important; left:50% !important; transform:translateX(-50%) !important; font-size:16px !important; font-weight:700 !important; }
+  .oum-cards { gap:8px !important; }
+  .oum-bottom-nav { position:fixed !important; bottom:0 !important; left:0 !important; right:0 !important; height:56px !important; background:#fff !important; border-top:1px solid #e5e7eb !important; display:flex !important; z-index:40 !important; padding:4px 0 !important; }
+  .oum-bottom-nav button { flex:1 !important; background:none !important; border:none !important; font-size:9px !important; color:#6b7280 !important; display:flex !important; flex-direction:column !important; align-items:center !important; justify-content:center !important; gap:2px !important; line-height:1 !important; }
+  .oum-bottom-nav button.active { color:#2563eb !important; font-weight:600 !important; }
+  .oum-bottom-nav button svg { width:18px; height:18px; }
+  .oum-main { padding-bottom:64px !important; }
+  .oum-system-panel .oum-system-body { display:none !important; }
+  .oum-system-panel[data-mobile-open="true"] .oum-system-body { display:grid !important; }
+  .oum-system-pills { display:flex !important; gap:6px !important; flex-wrap:wrap !important; margin-top:8px !important; }
+  .oum-system-pill { font-size:11px !important; background:#f1f5f9 !important; border:1px solid #e5e7eb !important; padding:4px 8px !important; border-radius:20px !important; }
+  .oum-system-pill.good { background:#ecfdf5 !important; border-color:#a7f3d0 !important; color:#059669 !important; }
+  .oum-modal { position:fixed !important; inset:0 !important; background:rgba(15,23,42,.52) !important; backdrop-filter:blur(2px) !important; display:none !important; justify-content:flex-end !important; flex-direction:column !important; z-index:100 !important; }
+  .oum-modal.active { display:flex !important; }
+  .oum-bottom-sheet { background:#fff !important; border-top-left-radius:22px !important; border-top-right-radius:22px !important; padding:9px 14px max(14px, env(safe-area-inset-bottom)) !important; display:flex !important; flex-direction:column !important; gap:10px !important; max-height:82vh !important; overflow:auto !important; }
+  .sheet-handle { width:36px !important; height:4px !important; background:#e5e7eb !important; border-radius:99px !important; margin:0 auto 8px !important; flex-shrink:0 !important; }
+}
+@media (max-width: 900px){
+  .oum-modal .pills { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .oum-modal .pill { font-size:12px; font-weight:500; padding:6px 12px; border-radius:20px; border:1px solid #e5e7eb; background:#f8fafc; color:#475569; display:inline-flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap; }
+  .oum-modal .pill.active { background:#eef2ff; border-color:#c7d2fe; color:#3730a3; }
+}
+@media (max-width: 900px){
+  dialog { position:fixed !important; inset:0 !important; background:rgba(0,0,0,.45) !important; display:none !important; align-items:flex-end !important; justify-content:center !important; padding:0 !important; border:none !important; max-width:100% !important; max-height:100% !important; margin:0 !important; width:100% !important; height:100% !important; z-index:100 !important; }
+  dialog[open] { display:flex !important; }
+  dialog::backdrop { background:rgba(0,0,0,.45) !important; }
+  dialog > div, dialog > form { background:#fff !important; border-radius:20px 20px 0 0 !important; padding:16px !important; max-height:82vh !important; overflow:auto !important; width:100% !important; display:flex !important; flex-direction:column !important; gap:12px !important; margin:0 !important; }
+  dialog .sheet-handle { width:36px !important; height:4px !important; background:#e5e7eb !important; border-radius:99px !important; margin:0 auto 8px !important; }
+  #modal_overlay { align-items:flex-end !important; padding:0 !important; background:rgba(10,18,16,.44) !important; }
+  #modal_overlay .modal { position:relative !important; width:100% !important; max-width:100% !important; max-height:min(86dvh,720px) !important; margin:0 !important; border-radius:20px 20px 0 0 !important; padding:22px 16px max(16px, env(safe-area-inset-bottom)) !important; }
+  #modal_overlay .modal::before { content:""; position:absolute; top:7px; left:50%; width:36px; height:4px; border-radius:999px; background:var(--oum-line-strong); transform:translateX(-50%); }
+}
+@media (max-width: 900px){
+  #modal_overlay .modal, #modal_overlay .modal-dialog { background:#fff !important; }
+}
+html body[data-page^="oum-"] #modal_overlay { align-items:flex-end !important; justify-content:flex-end !important; }
+html body[data-page^="oum-"] #modal_overlay .modal,
+html body[data-page^="oum-"] #modal_overlay .modal-dialog {
+  background:var(--oum-paper, #fff) !important;
+  color:var(--oum-ink, #1f2937) !important;
+}
+/* force modal bottom even more specific, with dark bg fix */
+html[data-theme="dark"] body[data-page^="oum-"] #modal_overlay .modal { background:#fff !important; color:#1f2937 !important; }
+html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper, #fff) !important; }
+# hide duplicate Готово inside device custom sheet
+#oum-device-custom-content .right { display:none !important; }
+#oum-device-custom-content .oum-mobile-device-sheet .right { display:none !important; }
+/* remove empty gap below System on mobile */
+@media (max-width: 900px){
+  .oum-main { padding-bottom:16px !important; gap:8px !important; }
+  #oum-system-shell + * { margin-top:0 !important; }
+  contentinfo, .oum-footer { margin-top:8px !important; padding-top:8px !important; }
+}
+/* fix Podkop widget margins from edges like demo */
+@media (max-width: 900px){
+  .oum-dashboard #podkop-panel { margin:0 8px !important; padding:14px !important; border-radius:13px !important; }
+  .oum-dashboard #podkop-panel .oum-podkop-summary { padding:0 0 12px !important; margin:0 !important; }
+  .oum-mobile-podkop-actions { gap:6px !important; margin:12px 0 0 !important; padding:0 !important; }
+  .oum-mobile-podkop-actions button { padding:10px 5px !important; min-height:56px !important; }
+}
+/* fix inner header padding from edges */
+@media (max-width: 900px){
+  .oum-dashboard #podkop-panel .oum-podkop-summary { padding:0 0 12px !important; }
+  .oum-dashboard #podkop-panel .oum-podkop-identity { gap:8px !important; padding-left:0 !important; }
+  .oum-dashboard #podkop-panel .oum-podkop-meta { gap:8px !important; padding-right:0 !important; }
+  .oum-mobile-podkop-actions { padding:0 !important; box-sizing:border-box !important; width:100% !important; margin:12px 0 0 !important; gap:6px !important; justify-items:stretch !important; }
+}
+@media (max-width: 900px){
+  .oum-dashboard.oum-app .oum-card small { font-size:.67rem !important; line-height:1.15 !important; margin:7px 0 2px !important; }
+  .oum-dashboard.oum-app .oum-card strong { font-size:.84rem !important; line-height:1.12 !important; letter-spacing:-.012em !important; }
+  .oum-dashboard.oum-app .oum-card { padding:11px !important; gap:0 !important; }
+  .oum-dashboard.oum-app .oum-card .oum-muted { font-size:.66rem !important; line-height:1.25 !important; margin-top:3px !important; }
+  .oum-dashboard.oum-app .oum-metric-icon { width:28px !important; height:28px !important; padding:7px !important; border-radius:8px !important; }
+}
+
+/* Desktop client metric: keep the Wi-Fi QR control inside its card. */
+@media (min-width: 901px) {
+  .oum-dashboard.oum-app .oum-client-metric {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 88px;
+    align-items: center;
+    gap: 12px;
+  }
+  .oum-dashboard.oum-app .oum-client-metric > div {
+    min-width: 0;
+  }
+  .oum-dashboard.oum-app .oum-qr-tile {
+    width: 88px;
+    min-width: 88px;
+    height: 108px;
+    justify-self: end;
+  }
+  .oum-dashboard.oum-app .oum-qr-preview {
+    width: 68px !important;
+    height: 68px !important;
+  }
+  .oum-dashboard.oum-app .oum-qr-placeholder {
+    min-height: 68px;
+  }
+}
+
+/* Mobile dashboard bento: exact compact hierarchy from the approved 390 px source. */
+@media (max-width: 900px) {
+  .oum-dashboard.oum-app .oum-cards {
+    gap: 8px !important;
+  }
+  .oum-dashboard.oum-app .oum-card {
+    position: relative !important;
+    display: flex !important;
+    height: 94px !important;
+    min-height: 94px !important;
+    padding: 11px 12px !important;
+    gap: 0 !important;
+    border: 1px solid var(--oum-line) !important;
+    background: var(--oum-paper-strong) !important;
+  }
+  .oum-dashboard.oum-app .oum-vpn-metric {
+    border: 1px solid var(--oum-line) !important;
+    background: var(--oum-paper-strong) !important;
+  }
+  .oum-dashboard.oum-app .oum-card .oum-metric-icon {
+    position: absolute !important;
+    top: 11px !important;
+    right: 12px !important;
+    width: 17px !important;
+    height: 17px !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  .oum-dashboard.oum-app .oum-vpn-metric .oum-metric-icon {
+    filter: brightness(0) saturate(100%) invert(55%) sepia(15%) saturate(792%) hue-rotate(139deg) brightness(92%) contrast(88%) !important;
+  }
+  .oum-dashboard.oum-app .oum-temperature-icon {
+    width: 15px !important;
+    height: 15px !important;
+  }
+  .oum-dashboard.oum-app .oum-card small {
+    order: 1;
+    margin: 0 24px 6px 0 !important;
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+  }
+  .oum-dashboard.oum-app .oum-card strong {
+    order: 2;
+    display: block;
+    max-width: 100%;
+    font-size: 13px !important;
+    line-height: 1.14 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .oum-dashboard.oum-app .oum-card .oum-muted,
+  .oum-dashboard.oum-app .oum-card-message {
+    order: 3;
+    margin: 5px 0 0 !important;
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .oum-dashboard.oum-app .oum-client-metric,
+  .oum-dashboard.oum-app .oum-client-metric > div {
+    display: flex !important;
+    min-width: 0 !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .oum-dashboard.oum-app .oum-client-metric > div {
+    display: contents !important;
+  }
+  .oum-dashboard.oum-app .oum-qr-tile {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 2;
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .oum-dashboard.oum-app .oum-vpn-card-row {
+    order: 2;
+    display: block !important;
+    min-width: 0;
+  }
+  .oum-dashboard.oum-app .oum-vpn-card-row strong {
+    font-size: 12px !important;
+  }
+  .oum-dashboard.oum-app .oum-vpn-card-row .btn {
+    display: none !important;
+  }
+}
+
+/* Wi-Fi QR sheet: one calm, centered connection task. */
+@media (max-width: 900px) {
+  #oum-qr-custom {
+    background: rgba(15, 23, 42, .52) !important;
+  }
+  #oum-qr-custom .oum-bottom-sheet {
+    width: 100% !important;
+    max-height: 88dvh !important;
+    padding: 10px 20px max(18px, env(safe-area-inset-bottom)) !important;
+    gap: 0 !important;
+    overflow: auto !important;
+    border-radius: 22px 22px 0 0 !important;
+    background: #fff !important;
+    color: #17211f !important;
+    box-shadow: 0 -20px 56px rgba(15, 23, 42, .2) !important;
+  }
+  #oum-qr-custom .sheet-handle {
+    width: 36px !important;
+    height: 4px !important;
+    margin: 0 auto 17px !important;
+    background: #d9dee4 !important;
+  }
+  #oum-qr-custom-content {
+    display: grid;
+    justify-items: center;
+    min-width: 0;
+  }
+  #oum-qr-custom .oum-sheet-title {
+    width: 100%;
+    margin: 0;
+    color: #17211f;
+    font-size: 17px;
+    font-weight: 720;
+    line-height: 1.25;
+    letter-spacing: -.02em;
+    text-align: center;
+  }
+  #oum-qr-custom .oum-qr-network {
+    display: inline-flex;
+    min-height: 32px;
+    margin-top: 9px;
+    padding: 0 11px;
+    align-items: center;
+    gap: 7px;
+    border-radius: 10px;
+    background: #f2f5f3;
+    color: #5f6f69;
+    font-size: 12px;
+  }
+  #oum-qr-custom .oum-qr-network strong {
+    max-width: 25ch;
+    overflow: hidden;
+    color: #17211f;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #oum-qr-custom .oum-qr-wrap {
+    display: flex !important;
+    width: 100%;
+    grid-template-columns: none !important;
+    flex-direction: column;
+    align-items: center !important;
+    gap: 0 !important;
+    text-align: center !important;
+  }
+  #oum-qr-custom .oum-qr-wrap canvas {
+    display: block;
+    width: 184px !important;
+    height: 184px !important;
+    margin: 18px auto 14px;
+    padding: 10px;
+    border: 1px solid #e1e6e2 !important;
+    border-radius: 16px !important;
+    background: #fff !important;
+    box-shadow: 0 8px 24px rgba(23, 33, 31, .07);
+  }
+  #oum-qr-custom .oum-qr-wrap > strong,
+  #oum-qr-custom .oum-qr-wrap > span {
+    grid-column: auto !important;
+    max-width: 30ch;
+    text-align: center;
+  }
+  #oum-qr-custom .oum-qr-wrap > strong {
+    color: #17211f;
+    font-size: 15px;
+    line-height: 1.3;
+  }
+  #oum-qr-custom .oum-qr-wrap > span {
+    margin-top: 6px;
+    color: #6d7c76 !important;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  #oum-qr-custom .oum-sheet-done {
+    width: 100% !important;
+    min-height: 48px !important;
+    margin: 19px 0 0 !important;
+    padding: 0 18px !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: var(--oum-action) !important;
+    color: #fff !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    box-shadow: none !important;
+  }
+  #oum-qr-custom .oum-sheet-done:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--oum-action) 30%, transparent) !important;
+    outline-offset: 2px !important;
+  }
+  #oum-qr-custom .oum-sheet-done:active {
+    transform: scale(.985);
+  }
+}
+
+/* Device sheet: compact identity, quiet details and one clear completion action. */
+@media (max-width: 900px) {
+  #oum-device-custom {
+    background: rgba(15, 23, 42, .52) !important;
+  }
+  #oum-device-custom .oum-bottom-sheet {
+    width: 100% !important;
+    max-height: 88dvh !important;
+    padding: 10px 16px max(18px, env(safe-area-inset-bottom)) !important;
+    gap: 0 !important;
+    overflow: auto !important;
+    border-radius: 22px 22px 0 0 !important;
+    background: #fff !important;
+    color: #17211f !important;
+    box-shadow: 0 -20px 56px rgba(15, 23, 42, .2) !important;
+  }
+  #oum-device-custom .sheet-handle {
+    width: 36px !important;
+    height: 4px !important;
+    margin: 0 auto 17px !important;
+    background: #d9dee4 !important;
+  }
+  #oum-device-custom-content {
+    min-width: 0;
+  }
+  #oum-device-custom .oum-sheet-title {
+    margin: 0;
+    color: #17211f;
+    font-size: 17px;
+    font-weight: 720;
+    line-height: 1.25;
+    letter-spacing: -.02em;
+    text-align: center;
+  }
+  #oum-device-custom .oum-mobile-device-sheet {
+    display: grid;
+    gap: 14px;
+    margin-top: 15px;
+  }
+  #oum-device-custom .oum-mobile-device-identity {
+    display: flex;
+    min-width: 0;
+    padding: 13px 14px;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #e1e6e2;
+    border-radius: 14px;
+    background: #f7f9f7;
+  }
+  #oum-device-custom .oum-mobile-device-state {
+    flex: 0 0 auto;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #38b98a;
+    box-shadow: 0 0 0 4px rgba(56, 185, 138, .12);
+  }
+  #oum-device-custom .oum-mobile-device-copy {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+  }
+  #oum-device-custom .oum-mobile-device-copy strong {
+    display: -webkit-box;
+    overflow: hidden;
+    color: #17211f;
+    font-size: 14px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  #oum-device-custom .oum-mobile-device-copy small {
+    color: #6d7c76;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+  #oum-device-custom .oum-mobile-device-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    border: 1px solid #e1e6e2;
+    border-radius: 14px;
+    background: #e1e6e2;
+  }
+  #oum-device-custom .oum-mobile-device-facts > div {
+    display: grid;
+    min-width: 0;
+    padding: 11px 12px;
+    gap: 4px;
+    border-radius: 0;
+    background: #fff;
+  }
+  #oum-device-custom .oum-mobile-device-facts small {
+    color: #89958f;
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 1.1;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  #oum-device-custom .oum-mobile-device-facts strong {
+    overflow: hidden;
+    color: #26322f;
+    font-size: 12px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #oum-device-custom .oum-mobile-device-field {
+    display: grid;
+    min-width: 0;
+    gap: 7px;
+  }
+  #oum-device-custom .oum-mobile-device-field > strong {
+    color: #26322f;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+  #oum-device-custom .oum-mobile-device-field input,
+  #oum-device-custom .oum-mobile-device-field select {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    border: 1px solid #cdd5d0 !important;
+    border-radius: 11px !important;
+    background: #fff !important;
+    color: #17211f !important;
+    font-size: 14px !important;
+  }
+  #oum-device-custom .oum-mobile-device-input-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  #oum-device-custom .oum-mobile-alias-save,
+  #oum-device-custom .oum-mobile-parental-toggle {
+    min-width: 0 !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    padding: 0 14px !important;
+    border: 1px solid #cdd5d0 !important;
+    border-radius: 11px !important;
+    background: #fff !important;
+    color: #2868d7 !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+  }
+  #oum-device-custom .oum-mobile-parental-row {
+    display: flex;
+    min-width: 0;
+    padding: 11px 12px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid #e1e6e2;
+    border-radius: 14px;
+    background: #f7f9f7;
+  }
+  #oum-device-custom .oum-mobile-parental-row > span {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+  }
+  #oum-device-custom .oum-mobile-parental-row strong {
+    color: #26322f;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+  #oum-device-custom .oum-mobile-parental-row small {
+    color: #6d7c76;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+  #oum-device-custom .oum-mobile-device-message:empty {
+    display: none;
+  }
+  #oum-device-custom .oum-mobile-device-message {
+    min-height: 0;
+    margin: -3px 0 0;
+    color: #6d7c76;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  #oum-device-custom .oum-sheet-done {
+    width: 100% !important;
+    min-height: 48px !important;
+    margin: 18px 0 0 !important;
+    padding: 0 18px !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: var(--oum-action) !important;
+    color: #fff !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    box-shadow: none !important;
+  }
+  #oum-device-custom .oum-sheet-done:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--oum-action) 30%, transparent) !important;
+    outline-offset: 2px !important;
+  }
+#oum-device-custom .oum-sheet-done:active {
+    transform: scale(.985);
+  }
+}
+
+/* Mobile settings: compact overview with original, fully functional forms in sheets. */
+.oum-mobile-settings-hub,
+.oum-settings-sheet { display: none; }
+
+@media (max-width: 900px) {
+  html.oum-settings-sheet-open,
+  html.oum-settings-sheet-open body { overflow: hidden !important; }
+  html.oum-settings-sheet-open .oum-mobile-settings-hub { visibility: hidden; }
+
+  .oum-settings > .oum-main > .oum-page-head,
+  .oum-settings > .oum-main > .oum-help,
+  .oum-settings .oum-mobile-sheet-source:not(.oum-mobile-sheet-active) { display: none !important; }
+
+  .oum-mobile-settings-hub {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+  }
+  .oum-mobile-settings-intro {
+    display: grid;
+    gap: 2px;
+    padding: 2px 2px 0;
+  }
+  .oum-mobile-settings-intro h2,
+  .oum-mobile-settings-intro p,
+  .oum-mobile-settings-intro small { margin: 0; }
+  .oum-mobile-settings-intro h2 {
+    color: var(--oum-ink);
+    font-size: 18px;
+    line-height: 1.25;
+    letter-spacing: -.02em;
+  }
+  .oum-mobile-settings-intro p {
+    color: var(--oum-subtle);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .oum-mobile-settings-intro small {
+    color: var(--oum-subtle);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+  .oum-mobile-settings-launchers,
+  .oum-mobile-maintenance-hub {
+    display: grid;
+    gap: 8px;
+  }
+  .oum-mobile-settings-launcher {
+    display: flex !important;
+    width: 100% !important;
+    min-height: 58px !important;
+    margin: 0 !important;
+    padding: 10px 12px !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid var(--oum-line) !important;
+    border-radius: 14px !important;
+    background: var(--oum-paper) !important;
+    color: var(--oum-ink) !important;
+    box-shadow: none !important;
+    text-align: left;
+  }
+  .oum-mobile-settings-launcher > span:first-child {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+  }
+  .oum-mobile-settings-launcher strong {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 720;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .oum-mobile-settings-launcher small {
+    overflow: hidden;
+    color: var(--oum-subtle);
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .oum-mobile-settings-launcher-action {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    color: var(--oum-action);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .oum-mobile-settings-launcher-action b {
+    font-size: 20px;
+    font-weight: 400;
+    line-height: 1;
+  }
+  .oum-mobile-settings-launcher.is-danger {
+    border-color: color-mix(in srgb, var(--oum-bad) 22%, var(--oum-line)) !important;
+    background: color-mix(in srgb, var(--oum-bad) 5%, var(--oum-paper)) !important;
+  }
+  .oum-mobile-settings-launcher.is-danger strong,
+  .oum-mobile-settings-launcher.is-danger .oum-mobile-settings-launcher-action { color: var(--oum-bad) !important; }
+
+  .oum-mobile-vpn-card,
+  .oum-mobile-maintenance-hub {
+    padding: 12px;
+    border: 1px solid var(--oum-line);
+    border-radius: 16px;
+    background: var(--oum-paper);
+  }
+  .oum-mobile-vpn-card {
+    display: grid;
+    gap: 10px;
+  }
+  .oum-mobile-vpn-card > header {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 !important;
+    background: none !important;
+    color: var(--oum-ink) !important;
+    box-shadow: none !important;
+  }
+  .oum-mobile-vpn-card > header strong,
+  .oum-mobile-maintenance-hub h3 {
+    margin: 0;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 750;
+  }
+  .oum-mobile-vpn-card > header span {
+    overflow: hidden;
+    padding: 3px 7px;
+    border: 1px solid color-mix(in srgb, var(--oum-action) 24%, var(--oum-line));
+    border-radius: 999px;
+    color: var(--oum-action);
+    font-size: 9.5px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .oum-mobile-vpn-current {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: 36px;
+    padding: 8px 10px;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid color-mix(in srgb, var(--oum-action) 45%, var(--oum-line));
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--oum-action) 5%, var(--oum-paper));
+  }
+  .oum-mobile-vpn-current > span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--oum-action);
+  }
+  .oum-mobile-vpn-current strong { font-size: 11.5px; }
+  .oum-mobile-vpn-current small { color: var(--oum-subtle); font-size: 9.5px; }
+  .oum-mobile-vpn-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .oum-mobile-vpn-actions button {
+    min-width: 0 !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    padding: 0 8px !important;
+    border: 1px solid var(--oum-line) !important;
+    border-radius: 12px !important;
+    background: var(--oum-paper) !important;
+    color: var(--oum-ink) !important;
+    font-size: 10.5px !important;
+    font-weight: 650 !important;
+    line-height: 1.2 !important;
+    white-space: normal !important;
+  }
+  .oum-mobile-vpn-actions button:disabled { opacity: .42; }
+  .oum-mobile-maintenance-hub h3 { margin: 1px 2px 2px; }
+
+  .oum-settings-sheet[hidden] { display: none !important; }
+  .oum-settings-sheet {
+    position: fixed;
+    z-index: 140;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    background: rgba(15, 23, 42, .52);
+    backdrop-filter: blur(2px);
+  }
+  .oum-settings-sheet-panel {
+    display: flex;
+    width: min(100%, 560px);
+    max-height: 91dvh;
+    padding: 9px 14px max(14px, env(safe-area-inset-bottom));
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 22px 22px 0 0;
+    background: var(--oum-paper) !important;
+    color: var(--oum-ink);
+    box-shadow: 0 -20px 56px rgba(15, 23, 42, .2);
+  }
+  .oum-settings-sheet-handle {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 4px;
+    margin: 0 auto 8px;
+    border-radius: 99px;
+    background: var(--oum-line);
+  }
+  .oum-settings-sheet-head {
+    display: flex;
+    flex: 0 0 auto;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 !important;
+    background: none !important;
+    color: var(--oum-ink) !important;
+    box-shadow: none !important;
+  }
+  .oum-settings-sheet-head h3 {
+    margin: 0;
+    color: var(--oum-ink);
+    font-size: 16px;
+    font-weight: 750;
+    letter-spacing: -.015em;
+  }
+  .oum-settings-sheet-close {
+    display: inline-grid !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    place-items: center;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 10px !important;
+    background: #f8fafc !important;
+    color: #64748b !important;
+    font-size: 16px !important;
+    font-weight: 400 !important;
+    line-height: 1 !important;
+  }
+  .oum-settings-sheet-content {
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 4px 0 2px;
+  }
+  .oum-settings-sheet-content > .oum-mobile-sheet-active {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  .oum-settings-sheet-content > .oum-mobile-sheet-active > h3:first-child,
+  .oum-settings-sheet-content > details.oum-mobile-sheet-active > summary:first-child,
+  .oum-settings-sheet-content > .oum-vpn-workspace > .oum-vpn-workspace-head,
+  .oum-settings-sheet-content > .oum-maintenance-card > h4:first-child { display: none !important; }
+  .oum-settings-sheet-content .oum-protected-content { padding: 0 !important; }
+  .oum-settings-sheet-content .oum-setting-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .oum-settings-sheet-content .oum-wifi-actions { display:grid !important; grid-template-columns: 1fr auto !important; }
+  .oum-settings-sheet-content .oum-setting-actions > .btn,
+  .oum-settings-sheet-content > .oum-maintenance-card > .btn {
+    min-height: 44px !important;
+    margin: 0 !important;
+    white-space: normal !important;
+  }
+  .oum-settings-sheet-content .oum-setting-actions > .cbi-button-action:first-child,
+  .oum-settings-sheet-content > .oum-maintenance-card > .btn:only-of-type { grid-column: 1 / -1; }
+  .oum-settings-sheet-content .oum-settings-panel,
+  .oum-settings-sheet-content .oum-maintenance-card { min-width: 0; }
+  .oum-settings-sheet-content .oum-vpn-switchboard { display: none !important; }
+  .oum-settings-sheet-content .oum-engine-choices { grid-template-columns: 1fr !important; }
+  .oum-settings-sheet-content .oum-podkop-transports,
+  .oum-settings-sheet-content .oum-setting-fields,
+  .oum-settings-sheet-content .oum-network-card-grid { grid-template-columns: 1fr !important; }
+  .oum-settings-sheet-content textarea { min-height: 92px; }
+}
+
+/* etalon15: demo 1:1 wifi modal as in demo.html:316-343 */
+.oum-settings-sheet-content .oum-wifi-panel { padding: 0 !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-apple-segment { margin: 0 0 2px !important; background: #f1f5f9 !important; padding: 3px !important; border-radius: 12px !important; gap: 4px !important; display: grid !important; grid-template-columns: 1fr 1fr !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-apple-seg { padding: 7px !important; font-size: 12px !important; font-weight: 600 !important; border-radius: 8px !important; border: none !important; background: transparent !important; color: #64748b !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-apple-seg.is-active { background: #fff !important; color: #0f172a !important; box-shadow: 0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06) !important; font-weight: 600 !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-setting-fields { gap: 8px !important; display: flex !important; flex-direction: column !important; grid-template-columns: none !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-setting-field { margin: 0 !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-setting-field label { font-size: 11px !important; font-weight: 600 !important; color: #1f2937 !important; display: block !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-setting-field input { width: 100% !important; margin-top: 4px !important; border: 1px solid #e5e7eb !important; border-radius: 10px !important; padding: 10px 12px !important; font-size: 13px !important; background: #fff !important; min-height: 42px !important; outline: none !important; box-sizing: border-box !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-setting-field input::placeholder { color: #9ca3af !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-wifi-actions { margin-top: 4px !important; display: flex !important; flex-direction: row !important; gap: 8px !important; align-items: center !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-wifi-actions > .btn { height: 42px !important; border-radius: 12px !important; font-size: 13px !important; font-weight: 600 !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-wifi-actions > .btn.cbi-button-action { background: #2563eb !important; color: #fff !important; border: none !important; box-shadow: 0 1px 2px rgba(37,99,235,.2) !important; }
+.oum-settings-sheet-content .oum-wifi-panel .oum-wifi-actions > #cancel-wifi { background: #fff !important; border: 1px solid #e5e7eb !important; color: #1f2937 !important; font-weight: 500 !important; padding: 0 16px !important; min-width: auto !important; flex: none !important; }
+/* wifi13: force horizontal actions on mobile, override 480 grid */
+@media (max-width: 480px) {
+  .oum-wifi-actions,
+  .oum-settings-sheet-content .oum-wifi-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    grid-template-columns: none !important;
+  }
+  .oum-wifi-actions > .btn,
+  .oum-settings-sheet-content .oum-wifi-actions > .btn {
+    width: auto !important;
+    min-width: 0 !important;
+  }
+  .oum-wifi-actions > .btn.cbi-button-action,
+  .oum-settings-sheet-content .oum-wifi-actions > .btn.cbi-button-action {
+    flex: 1 1 auto !important;
+    width: auto !important;
+  }
+  .oum-wifi-actions > #cancel-wifi,
+  .oum-settings-sheet-content .oum-wifi-actions > #cancel-wifi {
+    flex: 0 0 auto !important;
+    min-width: 86px !important;
+    width: auto !important;
+  }
+}
+@media (min-width: 481px) {
+  .oum-wifi-actions,
+  .oum-settings-sheet-content .oum-wifi-actions {
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+  }
+}
+
+@media (max-width: 480px) { .oum-settings-sheet-content .oum-wifi-panel .oum-wifi-actions { display: flex !important; flex-direction: row !important; } }
+
+/* domains etalon: fix overlapping, hide summary, make 2-col segment, single save blue, no reset */
+#oum-domains-clone .oum-custom-rules { border: none !important; padding: 0 !important; background: transparent !important; margin: 0 !important; }
+#oum-domains-clone .oum-custom-rules > summary { display: none !important; }
+#oum-domains-clone .oum-custom-route-tabs { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 4px !important; background: #f1f5f9 !important; padding: 3px !important; border-radius: 12px !important; margin: 0 0 12px !important; border: none !important; }
+#oum-domains-clone .oum-custom-route-tab { padding: 7px !important; font-size: 12px !important; font-weight: 600 !important; border-radius: 8px !important; border: none !important; background: transparent !important; color: #64748b !important; }
+#oum-domains-clone .oum-custom-route-tab[data-active="true"] { background: #fff !important; color: #0f172a !important; box-shadow: 0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06) !important; }
+#oum-domains-clone .oum-custom-route-pane { display: grid !important; grid-template-columns: 1fr !important; gap: 12px !important; }
+#oum-domains-clone .oum-custom-route-pane[hidden] { display: none !important; }
+#oum-domains-clone .oum-route-field { gap: 6px !important; }
+#oum-domains-clone .oum-route-field > strong { font-size: 12px !important; color: #1f2937 !important; margin-bottom: 2px !important; }
+#oum-domains-clone .oum-route-field textarea { min-height: 96px !important; width: 100% !important; border: 1px solid #e5e7eb !important; border-radius: 12px !important; padding: 12px 14px !important; font-size: 14px !important; line-height: 1.45 !important; background: #fff !important; margin-top: 6px !important; margin-bottom: 4px !important; display: block !important; }
+#oum-domains-clone .oum-custom-route-help { font-size: 11px !important; color: #6b7280 !important; margin: 0 !important; }
+#oum-podkop-sheet-domains .oum-bottom-sheet > button:last-child { background: #2563eb !important; color: #fff !important; border: none !important; border-radius: 12px !important; height: 42px !important; font-weight: 600 !important; }
+#oum-domains-clone .oum-custom-route-pane { padding: 2px 0 4px !important; }
+#oum-domains-clone .oum-route-field { padding: 0 2px !important; }
+#oum-podkop-sheet-domains .oum-bottom-sheet { padding: 16px 16px 20px !important; gap: 14px !important; }
+
+#oum-domains-clone .oum-route-field textarea:focus { outline: 2px solid #2563eb !important; outline-offset: 0 !important; border-color: #2563eb !important; }
+
+/* diag etalon: blue run, centered helper, card rows with arrow/toggle, no save */
+#oum-diag-clone .oum-diagnostic-run { background: #2563eb !important; color: #fff !important; border: none !important; border-radius: 12px !important; height: 44px !important; font-weight: 600 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 6px !important; width: 100% !important; }
+#oum-diag-clone .oum-diagnostic-run::before { content: "⚡"; font-size: 14px; }
+#oum-diag-clone #podkop-diagnostic-summary { text-align: center !important; font-size: 11px !important; color: #6b7280 !important; margin: 8px 0 12px !important; }
+#oum-diag-clone .oum-diagnostic-side-card { border: 1px solid #e5e7eb !important; border-radius: 12px !important; padding: 12px !important; background: #fff !important; }
+#oum-diag-clone .oum-diagnostic-side-card h4 { font-size: 13px !important; margin: 0 0 8px !important; }
+#oum-podkop-sheet-diag .oum-bottom-sheet > button:last-child { display: none !important; }
+#oum-diag-clone .oum-expert-tools > summary { display: flex !important; justify-content: space-between !important; align-items: center !important; }
+#oum-diag-clone .oum-expert-tools > summary::after { content: "только SSH"; font-size: 11px; color: #9ca3af; font-weight: 500; }
+
+/* center fix for podkop widget */
+.oum-dashboard #podkop-panel { padding:14px !important; }
+.oum-dashboard #podkop-panel .oum-mobile-podkop-actions { margin-left:0 !important; margin-right:0 !important; padding-left:0 !important; padding-right:0 !important; box-sizing:border-box !important; }
+
+/* fix for connection sheet apple seg */
+.oum-settings-sheet-content .oum-apple-seg { border: none !important; background: transparent !important; color: #64748b !important; }
+.oum-settings-sheet-content .oum-apple-seg.is-active { background: #fff !important; color: #0f172a !important; box-shadow: 0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06) !important; }
+.oum-settings-sheet-content [data-conn-tab],
+.oum-settings-sheet-content [data-youtube] { border: none !important; }
+
+/* update modal bottom-sheet fix */
+@media (max-width: 900px) {
+  #modal_overlay { display:flex !important; align-items:flex-end !important; justify-content:center !important; padding:0 !important; background:rgba(10,18,16,.44) !important; }
+  #modal_overlay .modal { position:fixed !important; bottom:0 !important; left:0 !important; right:0 !important; top:auto !important; margin:0 !important; width:100% !important; max-width:100% !important; border-radius:20px 20px 0 0 !important; max-height:86dvh !important; padding:22px 16px max(16px, env(safe-area-inset-bottom)) !important; }
+  #modal_overlay .modal::before { content:""; position:absolute; top:7px; left:50%; width:36px; height:4px; border-radius:999px; background:var(--oum-line-strong); transform:translateX(-50%); }
+  #modal_overlay .modal .right { display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important; margin-top:16px !important; }
+  #modal_overlay .modal .right .btn { width:100% !important; min-height:42px !important; }
+  #modal_overlay .modal .right { display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important; }
+  #modal_overlay .modal .right .btn.cbi-button-negative { background:#fef2f2 !important; border:1px solid #fca5a5 !important; color:#dc2626 !important; }
+  #modal_overlay .modal .right .btn.cbi-button-action { background:#2563eb !important; color:#fff !important; border:none !important; }
+}
+
+/* Optimize WISP sheet (mobile): compact one-screen layout, scan row in one line. */
+@media (max-width: 900px) {
+  #wisp-settings.oum-wisp-inline { margin: 10px 0 0 !important; padding: 12px !important; border-radius: 12px !important; }
+  #wisp-settings .oum-wisp-intro { margin: 0 0 8px !important; gap: 2px !important; }
+  #wisp-settings .oum-wisp-intro strong { font-size: 12.5px !important; }
+  #wisp-settings .oum-wisp-intro span { font-size: 11px !important; line-height: 1.35 !important; }
+  #wisp-settings .oum-wisp-status { margin: 0 0 8px !important; padding: 8px 10px !important; font-size: 11.5px !important; line-height: 1.35 !important; }
+  #wisp-settings .oum-wisp-scan-row { grid-template-columns: 96px minmax(0, 1fr) auto !important; gap: 8px !important; align-items: end !important; }
+  #wisp-settings .oum-wisp-scan-row .oum-setting-field { margin: 0 !important; min-width: 0 !important; }
+  #wisp-settings .oum-wisp-scan-row .oum-setting-field > label { font-size: 10.5px !important; margin: 0 0 2px !important; }
+  #wisp-settings .oum-wisp-scan-row input,
+  #wisp-settings .oum-wisp-scan-row select { height: 42px !important; min-height: 42px !important; font-size: 12.5px !important; padding: 0 10px !important; }
+  #wisp-settings #scan-wisp { width: auto !important; height: 42px !important; min-height: 42px !important; padding: 0 10px !important; font-size: 12px !important; white-space: nowrap !important; }
+  #wisp-settings > .oum-setting-field { margin: 8px 0 0 !important; }
+  #wisp-settings > .oum-setting-field > label { font-size: 10.5px !important; margin: 0 0 2px !important; }
+  #wisp-settings .oum-wisp-results { margin: 8px 0 0 !important; }
+  #wisp-settings .oum-wisp-actions { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; margin-top: 10px !important; }
+  #wisp-settings .oum-wisp-actions .btn { width: 100% !important; min-height: 44px !important; margin: 0 !important; }
+  #wisp-settings #enable-wisp { grid-column: 1 / -1 !important; }
+  #wisp-settings .oum-mobile-sheet-cancel { grid-column: 1 / -1 !important; }
+}
+
+/* Optimize internet type selector + PPPoE (mobile): 3 compact cards in one row, tight fields. */
+@media (max-width: 900px) {
+  .oum-internet-panel .oum-internet-choices { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 8px !important; margin: 0 0 2px !important; }
+  .oum-internet-panel .oum-setting-choice { min-height: 70px !important; padding: 8px 6px !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; text-align: center !important; gap: 2px !important; }
+  .oum-internet-panel .oum-setting-choice input { position: absolute !important; opacity: 0 !important; pointer-events: none !important; }
+  .oum-internet-panel .oum-setting-choice > span { display: grid !important; gap: 2px !important; justify-items: center !important; }
+  .oum-internet-panel .oum-setting-choice strong { font-size: 12px !important; line-height: 1.2 !important; }
+  .oum-internet-panel .oum-setting-choice small { font-size: 10px !important; line-height: 1.3 !important; opacity: .65 !important; }
+  .oum-internet-panel .oum-setting-choice:has(input:checked) { border-color: #2563eb !important; background: #eff6ff !important; box-shadow: 0 0 0 1px #2563eb !important; }
+  .oum-internet-panel .oum-setting-choice:has(input:focus-visible) { box-shadow: 0 0 0 2px rgba(37, 99, 235, .4) !important; }
+  #pppoe-settings { display: grid !important; gap: 8px !important; margin-top: 10px !important; }
+  #pppoe-settings .oum-setting-field { margin: 0 !important; }
+  #pppoe-settings .oum-setting-field > label { font-size: 11px !important; margin: 0 0 2px !important; }
+  #pppoe-settings .oum-setting-field input { height: 42px !important; min-height: 42px !important; font-size: 13px !important; }
+  #wan-wired-actions { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; margin-top: 10px !important; }
+  #wan-wired-actions .btn { width: 100% !important; min-height: 44px !important; margin: 0 !important; }
+  #wan-wired-actions #apply-wan { grid-column: 1 / -1 !important; }
+}
+@media (max-width: 900px) {
+  #pppoe-settings[hidden] { display: none !important; }
+}
+
+/* audit23: hide desktop footer gap, podkop meta ellipsis, wifi cards/actions like internet. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page^="oum-"] .oum-system-footer,
+  body.theme-oum[data-page^="oum-"] contentinfo { display: none !important; }
+  .oum-dashboard #podkop-panel .oum-podkop-identity > .oum-muted { max-width: none !important; font-size: .62rem !important; }
+  .oum-setting-choices:has(> label > input[name="wifi_mode"]) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; margin: 0 0 2px !important; }
+  .oum-setting-choices:has(> label > input[name="wifi_mode"]) .oum-setting-choice { min-height: 70px !important; padding: 8px 6px !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; text-align: center !important; gap: 2px !important; }
+  .oum-setting-choices:has(> label > input[name="wifi_mode"]) .oum-setting-choice input { position: absolute !important; opacity: 0 !important; pointer-events: none !important; }
+  .oum-setting-choices:has(> label > input[name="wifi_mode"]) .oum-setting-choice > span { display: grid !important; gap: 2px !important; justify-items: center !important; }
+  .oum-setting-choices:has(> label > input[name="wifi_mode"]) .oum-setting-choice strong { font-size: 12px !important; line-height: 1.2 !important; }
+  .oum-setting-choices:has(> label > input[name="wifi_mode"]) .oum-setting-choice small { font-size: 10px !important; line-height: 1.3 !important; opacity: .65 !important; }
+  .oum-setting-actions:has(> #apply-wifi) { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  .oum-setting-actions:has(> #apply-wifi) .btn { width: 100% !important; min-height: 44px !important; margin: 0 !important; }
+  .oum-setting-actions:has(> #apply-wifi) #apply-wifi { grid-column: 1 / -1 !important; }
+}
+
+/* engine24: show engine switch action in sheet, keep tab/update buttons hidden. */
+@media (max-width: 900px) {
+  .oum-settings-sheet-content .oum-vpn-switchboard { display: grid !important; grid-template-columns: 1fr !important; gap: 8px !important; margin-top: 12px !important; }
+  .oum-settings-sheet-content .oum-vpn-switchboard [data-vpn-settings-tab],
+  .oum-settings-sheet-content .oum-vpn-switchboard #update-engine { display: none !important; }
+  .oum-settings-sheet-content .oum-vpn-switchboard #switch-engine { width: 100% !important; min-height: 44px !important; margin: 0 !important; }
+}
+/* 3-tab apple segment inside sheets (beats global 1fr 1fr) */
+.oum-settings-sheet-content .oum-apple-segment-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; margin: 0 0 12px !important; padding: 3px !important; }
+.oum-settings-sheet-content .oum-apple-segment-3 .oum-apple-seg { font-size: 11px !important; padding: 7px 4px !important; }
+
+/* nodes30: all-nodes list lives in bottom-sheet on mobile (openclash); inline accordion stays for desktop + passwall. */
+@media (max-width: 900px){
+  .oum-node-controls[data-engine="openclash"] #node-picker { display: none !important; }
+  #oum-nodes-sheet-title { font-size: 15px !important; }
+  #oum-nodes-sheet-list .oum-node-all-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+}
+
+/* nodes31: node block 1:1 to demo openclash card (mobile, openclash only; desktop untouched). */
+.oum-all-nodes-btn { display: none; }
+@media (max-width: 900px){
+  .oum-subscription-title { display: flex !important; align-items: baseline !important; gap: 6px !important; }
+  .oum-subscription-title h3 { font-size: 12px !important; margin: 0 !important; white-space: nowrap !important; }
+  .oum-subscription-status { font-size: 10px !important; }
+  .oum-subscription-progress { display: none !important; }
+  .oum-subscription-head { flex-wrap: nowrap !important; align-items: center !important; }
+  .oum-subscription-copy { min-width: 0 !important; flex: 1 !important; }
+  #refresh-subscription { height: 26px !important; min-height: 26px !important; font-size: 10px !important; padding: 0 8px !important; white-space: nowrap !important; flex: none !important; }
+  .oum-node-controls[data-engine="openclash"] .oum-node-head { flex-wrap: nowrap !important; }
+  .oum-node-controls[data-engine="openclash"] .oum-node-head h3 { font-size: 15px !important; white-space: nowrap !important; margin: 0 !important; }
+  .oum-node-controls[data-engine="openclash"] #measure-nodes { height: 28px !important; min-height: 28px !important; font-size: 11px !important; padding: 0 10px !important; white-space: nowrap !important; }
+  .oum-node-controls[data-engine="openclash"] #show-node-picker,
+  .oum-node-controls[data-engine="openclash"] #zashboard-link { display: none !important; }
+  .oum-node-controls[data-engine="openclash"] .oum-node-quick .oum-node { grid-template-columns: 1fr !important; justify-items: stretch !important; align-items: stretch !important; text-align: center !important; cursor: pointer !important; }
+  .oum-node-controls[data-engine="openclash"] .oum-node-quick .oum-node .btn { display: none !important; }
+  .oum-node-controls[data-engine="openclash"] .oum-node-quick .oum-node-copy { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: flex-start !important; height: 100% !important; text-align: center !important; }
+  .oum-node-controls[data-engine="openclash"] .oum-node-quick .oum-delay { margin-top: auto !important; padding-top: 4px !important; min-width: 0 !important; text-align: center !important; font-size: 10px !important; background: none !important; border: none !important; padding-left: 0 !important; padding-right: 0 !important; border-radius: 0 !important; white-space: nowrap !important; }
+  .oum-node-controls[data-engine="openclash"] .oum-all-nodes-btn { display: flex !important; width: 100% !important; margin-top: 6px !important; background: #f8fafc !important; border: 1px solid #e5e7eb !important; border-radius: 10px !important; padding: 7px 10px !important; justify-content: space-between !important; align-items: center !important; font-size: 11px !important; font-weight: 600 !important; color: #0f172a !important; }
+  .oum-node-controls[data-engine="openclash"] .oum-all-nodes-hint { font-size: 10px !important; color: #6b7280 !important; font-weight: 400 !important; }
+}
+
+/* nodes32: pick-cells in sheet — 2 columns, tap = highlight, ping right, sticky confirm. */
+.oum-node.oum-pick { display: flex !important; justify-content: space-between !important; align-items: center !important; gap: 8px !important; cursor: pointer !important; min-height: 56px !important; }
+.oum-node.oum-pick .oum-node-copy { min-width: 0 !important; }
+.oum-node.oum-pick .oum-node-name { font-size: 12px !important; }
+.oum-node.oum-pick .oum-delay { flex: none !important; }
+.oum-node.oum-pick.is-selected { border-color: #2563eb !important; background: #eef2ff !important; box-shadow: 0 0 0 1px #2563eb !important; }
+.oum-node.oum-pick.is-current { border-color: #a7f3d0 !important; background: #ecfdf5 !important; }
+.oum-pick-active { display: block !important; font-size: 10px !important; font-weight: 600 !important; color: #059669 !important; }
+#oum-nodes-sheet-list.is-locked { pointer-events: none !important; opacity: .7 !important; }
+#oum-pick-confirm { display: none !important; position: sticky !important; bottom: 12px !important; margin-left: auto !important; width: auto !important; max-width: 100% !important; min-height: 44px !important; background: #2563eb !important; color: #fff !important; border: none !important; border-radius: 12px !important; font-weight: 600 !important; font-size: 13px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; padding: 0 20px !important; }
+#oum-pick-confirm.show { display: block !important; }
+#oum-pick-confirm:disabled { background: #e5e7eb !important; color: #9ca3af !important; }
+#oum-pick-message { font-size: 11px !important; color: #dc2626 !important; text-align: center !important; }
+#oum-pick-message:empty { display: none !important; }
+
+/* wifi37: single SSID in smart mode + compact wifi panel (UA [hidden] loses to .oum-setting-fields grid). */
+#ssid-single-wrap[hidden], #ssid-split-wrap[hidden] { display: none !important; }
+.oum-settings-panel:has(#ssid-single-wrap) .oum-setting-field { margin: 8px 0; }
+.oum-settings-panel:has(#ssid-single-wrap) .oum-setting-choices { margin: 0 0 4px; gap: 8px; }
+.oum-settings-panel:has(#ssid-single-wrap) .oum-setting-actions { margin-top: 10px; }
+
+/* devred41: device sheet — no-table specs + premium type (from isolated demo). */
+#oum-device-custom .oum-bottom-sheet { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, "Segoe UI", Roboto, sans-serif; }
+#oum-device-custom .oum-sheet-title { font-size: 19px !important; font-weight: 750 !important; letter-spacing: -0.025em !important; }
+#oum-device-custom .oum-mobile-device-copy strong { font-size: 15px !important; font-weight: 700 !important; letter-spacing: -0.015em !important; }
+#oum-device-custom .oum-mobile-device-facts { display: block !important; border: none !important; border-radius: 0 !important; background: none !important; overflow: visible !important; }
+#oum-device-custom .oum-mobile-device-facts > div { display: flex !important; align-items: baseline !important; justify-content: space-between !important; gap: 12px !important; padding: 10px 2px !important; background: none !important; border-bottom: 1px solid #edf0ee !important; }
+#oum-device-custom .oum-mobile-device-facts > div:last-child { border-bottom: none !important; }
+#oum-device-custom .oum-mobile-device-facts small { font-size: 11px !important; font-weight: 500 !important; letter-spacing: 0 !important; text-transform: none !important; color: #8a948f !important; }
+#oum-device-custom .oum-mobile-device-facts strong { font-size: 13px !important; font-weight: 650 !important; letter-spacing: -0.01em !important; color: #17211f !important; font-variant-numeric: tabular-nums !important; font-family: ui-monospace, "SF Mono", Menlo, monospace !important; white-space: normal !important; text-align: right !important; }
+#oum-device-custom .oum-mobile-device-facts > div:nth-child(2) strong { font-family: inherit !important; }
+
+/* wifipad42: preview split-имён вплотную к полю. */
+#ssid-split-wrap { display: flex !important; flex-direction: column !important; gap: 4px !important; }
+#ssid-split-preview { margin: 0 !important; }
+
+/* wifiseg46: Wi-Fi сегмент вплотную к титулу шторки. */
+.oum-settings-sheet-content .oum-wifi-mode-segment { margin-top: 0 !important; margin-bottom: 8px !important; }
+
+/* wifiseg47: Wi-Fi шторка компактно — титул вплотную к сегменту. */
+.oum-settings-sheet-panel:has(.oum-wifi-mode-segment) .oum-settings-sheet-head { margin-bottom: 4px !important; }
+.oum-settings-sheet-panel:has(.oum-wifi-mode-segment) .oum-settings-sheet-content { padding-top: 0 !important; gap: 0 !important; }
+
+/* wifiseg48: подсказка split-имён вплотную к полю ввода. */
+#ssid-split-wrap .oum-setting-field { margin-bottom: 0 !important; }
+
+/* vpnicons49: единый набор stroke-иконок в кнопках VPN-хаба. */
+.oum-mobile-vpn-actions button { display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 7px !important; }
+.oum-mobile-vpn-actions button svg { width: 17px !important; height: 17px !important; flex: 0 0 auto !important; fill: none !important; stroke: currentColor !important; stroke-width: 2 !important; stroke-linecap: round !important; stroke-linejoin: round !important; }
+
+/* upstream51: строка «на GitHub вышла новее» в карточках движков. */
+.oum-engine-choice .oum-upstream-note { color: var(--oum-action) !important; opacity: 1 !important; font-size: 11px !important; line-height: 1.4 !important; }
+
+/* pills52: пилюля версии движка рядом с названием (версия OUM-пина, не latest). */
+.oum-engine-choice span.oum-engine-top { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 8px !important; flex-wrap: wrap !important; }
+.oum-engine-choice .oum-ver { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important; font-size: 10.5px !important; font-weight: 600 !important; line-height: 1 !important; padding: 4px 9px !important; border-radius: 999px !important; background: rgba(100,116,139,.14) !important; color: #475569 !important; white-space: nowrap !important; }
+
+/* adapt53: низ страниц не уходит под навбар; текущая нода в одну строку; квик-ноды списком на телефонах. */
+@media (max-width: 900px) {
+  .oum-dashboard.oum-app, .oum-settings.oum-app, .oum-parental.oum-app, .oum-help-page.oum-app { padding-bottom: 76px !important; }
+  .oum-dashboard.oum-app .oum-node-controls[data-engine="openclash"] .oum-current-node > strong { min-width: 0 !important; flex: 1 1 auto !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+}
+@media (max-width: 320px) {
+  .oum-dashboard.oum-app .oum-node-quick { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* nodes54: TCP-кнопка не режется; пинг текущей ноды цел; 3-в-ряд с 321px (старое 360-правило убрано). */
+@media (max-width: 900px) {
+  .oum-node-controls[data-engine="openclash"] .oum-node-actions { grid-template-columns: 1fr auto !important; }
+  .oum-node-controls[data-engine="openclash"] #measure-nodes { width: auto !important; }
+  .oum-dashboard.oum-app .oum-node-controls[data-engine="openclash"] .oum-current-node > .oum-current-delay { flex: none !important; white-space: nowrap !important; }
+  .oum-dashboard.oum-app .oum-node-quick .oum-node-name { display: block !important; width: 100% !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+}
+
+/* quick56: квик-компакт «флаг / страна / пинг» в 3 строки. */
+.oum-node.is-quick { padding: 8px 6px !important; }
+.oum-node.is-quick .oum-node-flag { font-size: 18px !important; line-height: 1.25 !important; }
+.oum-node.is-quick .oum-node-name { font-size: 10px !important; font-weight: 600 !important; }
+
+/* inetseg58: интернет-сегмент вплотную к титулу, как Wi-Fi. */
+.oum-settings-sheet-panel:has(.oum-internet-segment) .oum-settings-sheet-head { margin-bottom: 4px !important; }
+.oum-settings-sheet-panel:has(.oum-internet-segment) .oum-settings-sheet-content { padding-top: 0 !important; gap: 0 !important; }
+.oum-settings-sheet-content .oum-internet-segment { margin-top: 0 !important; margin-bottom: 8px !important; }
+
+/* nodetune59: компактная кнопка TCP. */
+.oum-node-controls[data-engine="openclash"] #measure-nodes { height: 24px !important; min-height: 24px !important; font-size: 10px !important; padding: 0 8px !important; border-radius: 8px !important; }
+
+/* nodetune59b: [hidden] сильнее flex-кнопки «Все ноды» (урок PPPoE). */
+#show-all-nodes[hidden], #node-picker[hidden] { display: none !important; }
+
+/* pad61: виджет устройств ровно посередине между соседями (16/16). */
+@media (max-width: 900px) {
+  .oum-dashboard.oum-app .oum-panels { margin-top: 14px !important; }
+}
+
+/* swipeptr64: pull-to-refresh страницы не крадёт свайп закрытия шторок. */
+.oum-modal,
+.oum-bottom-sheet,
+.oum-settings-sheet,
+.oum-settings-sheet-panel,
+#oum-mobile-menu,
+.oum-mobile-menu-panel { overscroll-behavior-y: contain !important; }
+
+/* plainx67: крестики-плейн без пилюли (тач-зона та же). */
+.oum-sheet-x,
+.oum-settings-sheet-close,
+.oum-mobile-menu-close { background: transparent !important; border-color: transparent !important; box-shadow: none !important; color: #94a3b8 !important; font-size: 20px !important; font-weight: 400 !important; }
+
+/* pw70: мобильный PassWall — 2x2 статусы, компакт, тап-выбор, шторка. */
+@media (max-width: 900px) {
+  .oum-dashboard.oum-app .oum-passwall-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; overflow: visible !important; gap: 8px !important; margin: 12px 0 !important; }
+  .oum-dashboard.oum-app .oum-passwall-state { min-width: 0 !important; min-height: 0 !important; padding: 9px 10px !important; }
+  .oum-dashboard.oum-app .oum-passwall-active strong { font-size: .9rem !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+  .oum-dashboard.oum-app .oum-passwall-active-meta { white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+  .oum-node-controls[data-engine="passwall"] .oum-node-actions { grid-template-columns: 1fr auto !important; }
+  .oum-node-controls[data-engine="passwall"] #measure-nodes { height: 24px !important; min-height: 24px !important; font-size: 10px !important; padding: 0 8px !important; border-radius: 8px !important; width: auto !important; }
+  .oum-node-controls[data-engine="passwall"] #node-picker { display: none !important; }
+  #oum-nodes-sheet[data-engine="passwall"] #oum-nodes-sheet-hint { display: none !important; }
+}
+
+/* pw70b: кнопка Все ноды для passwall как в openclash. */
+.oum-node-controls[data-engine="passwall"] .oum-all-nodes-btn { display: flex !important; width: 100% !important; margin-top: 6px !important; background: #f8fafc !important; border: 1px solid #e5e7eb !important; border-radius: 10px !important; padding: 7px 10px !important; justify-content: space-between !important; align-items: center !important; font-size: 11px !important; font-weight: 600 !important; color: #0f172a !important; }
+.oum-node-controls[data-engine="passwall"] .oum-all-nodes-hint { display: none !important; }
+
+/* pw70c: overview не распирает панель; копия квиков колонкой на мобайле. */
+@media (max-width: 900px) {
+  #passwall-panel { min-width: 0 !important; }
+  .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node-copy { flex-direction: column !important; align-items: center !important; justify-content: flex-start !important; text-align: center !important; height: 100% !important; }
+}
+
+/* pw70d: TCP-кнопка в auto-колонку (компакт справа). */
+@media (max-width: 900px) {
+  .oum-node-controls[data-engine="openclash"] #measure-nodes,
+  .oum-node-controls[data-engine="passwall"] #measure-nodes { grid-column: 2 !important; }
+}
+
+/* pwhead72: заголовок нод PassWall в одну строку как в openclash. */
+.oum-node-controls[data-engine="passwall"] .oum-node-head { flex-wrap: nowrap !important; justify-content: flex-start !important; gap: 8px !important; }
+.oum-node-controls[data-engine="passwall"] .oum-node-actions { width: auto !important; flex: none !important; }
+.oum-node-controls[data-engine="passwall"] .oum-node-head h3 { font-size: 15px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; min-width: 0 !important; flex: 0 1 auto !important; margin: 0 !important; }
+
+/* pwnodes74: десктоп — квик-ноды PassWall крупнее; шторка нод только ≤900px (2-col pick как в openclash). */
+@media (min-width: 901px) {
+  .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node-name { font-size: .95rem !important; }
+  .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-delay { font-size: .82rem !important; }
+}
+
+/* cards75: порядок в 4 карточках, особенно Клиенты (текст залезал под QR). */
+.oum-dashboard .oum-card { min-width: 0 !important; }
+.oum-client-metric > div:first-child { min-width: 0 !important; flex: 1 1 auto !important; }
+
+/* cards76: с сайдбаром 4-в-ряд тесно уже при 1100-1350px — там 2 колонки; значение компактно и без разрывов пополам. */
+@media (max-width: 1350px) {
+  .oum-dashboard.oum-app .oum-cards { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+/* clientnum77: в карточке только цифра (слово — в подписи), размер базовый 1.48rem как у соседей. */
+.oum-client-metric #client-count { line-height: 1.08 !important; }
+.oum-client-metric #wifi-detail { overflow-wrap: normal !important; word-break: normal !important; }
+.oum-qr-tile { flex-basis: 84px !important; width: 84px !important; }
+
+/* clientsub79: подпись «N онлайн» синим как в эталоне. */
+.oum-client-metric #wifi-detail { color: var(--oum-action) !important; }
+
+/* clientqr78: на мобайле QR снова видимый справа как в десктопе (был невидимый оверлей). */
+@media (max-width: 900px) {
+  .oum-dashboard.oum-app .oum-qr-tile {
+    inset: auto !important;
+    top: 50% !important;
+    right: 10px !important;
+    transform: translateY(-50%) !important;
+    width: 58px !important;
+    min-width: 58px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    display: grid !important;
+    place-items: center !important;
+    justify-items: center !important;
+    align-content: center !important;
+    gap: 4px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+  }
+  .oum-dashboard.oum-app .oum-qr-tile[hidden] { display: none !important; }
+  .oum-dashboard.oum-app .oum-qr-preview { width: 44px !important; height: 44px !important; }
+  .oum-dashboard.oum-app .oum-qr-placeholder { min-height: 44px !important; font-size: 14px !important; letter-spacing: .1em !important; transform: none !important; }
+  .oum-dashboard.oum-app .oum-qr-tile small { font-size: .55rem !important; white-space: nowrap !important; }
+  /* cardtune80: строки клиентской карточки плотнее (контент короткий). */
+  .oum-dashboard.oum-app .oum-client-metric small { margin-bottom: 2px !important; }
+  .oum-dashboard.oum-app .oum-client-metric .oum-muted { margin-top: 2px !important; }
+}
+
+/* cardfix81: V2 — «N Онлайн» в одну строку, QR крупнее без подписи; фикс space-between (строки были размазаны). */
+@media (max-width: 900px) {
+  .oum-dashboard.oum-app .oum-client-metric {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+  }
+  .oum-dashboard.oum-app .oum-client-metric small { flex: 0 0 100% !important; }
+  .oum-dashboard.oum-app .oum-client-metric strong { display: inline !important; margin: 0 !important; }
+  .oum-dashboard.oum-app .oum-client-metric .oum-muted { display: inline !important; margin: 0 0 0 6px !important; }
+  .oum-dashboard.oum-app .oum-qr-tile { width: 64px !important; min-width: 64px !important; }
+  .oum-dashboard.oum-app .oum-qr-preview { width: 52px !important; height: 52px !important; }
+  .oum-dashboard.oum-app .oum-qr-placeholder { min-height: 52px !important; }
+  .oum-dashboard.oum-app .oum-qr-tile small { display: none !important; }
+}
+
+/* cardfix82: три строки обратно (плотно) + QR больше и левее от иконки. */
+@media (max-width: 900px) {
+  .oum-dashboard.oum-app .oum-client-metric {
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+  }
+  .oum-dashboard.oum-app .oum-client-metric small { flex: none !important; }
+  .oum-dashboard.oum-app .oum-client-metric strong { display: block !important; margin: 0 !important; }
+  .oum-dashboard.oum-app .oum-client-metric .oum-muted { display: block !important; margin: 2px 0 0 !important; }
+  .oum-dashboard.oum-app .oum-qr-tile { width: 72px !important; min-width: 72px !important; right: 36px !important; }
+  .oum-dashboard.oum-app .oum-qr-preview { width: 60px !important; height: 60px !important; }
+  .oum-dashboard.oum-app .oum-qr-placeholder { min-height: 60px !important; }
+}
+
+/* cardfix83: строки влево как у остальных (убрать center от V2-строчки). */
+@media (max-width: 900px) {
+  .oum-dashboard.oum-app .oum-client-metric { align-items: stretch !important; }
+}
+
+/* quickping84: пинг в быстрых нодах по центру (был влево). */
+.oum-node.is-quick .oum-delay { text-align: center !important; }

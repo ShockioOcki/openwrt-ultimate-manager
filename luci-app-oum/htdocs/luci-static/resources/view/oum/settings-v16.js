@@ -25,6 +25,7 @@ const callScanWifi = rpc.declare({ object: 'oum', method: 'scanWifi', params: [ 
 const callSetWisp = rpc.declare({ object: 'oum', method: 'setWisp', params: [ 'enabled', 'ssid', 'password', 'band' ], expect: { '': {} } });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
 const callSwitchEngine = rpc.declare({ object: 'oum', method: 'switchVpnEngine', params: [ 'engine' ], expect: { '': {} } });
+const callUpdateEngine = rpc.declare({ object: 'oum', method: 'updateVpnEngine', params: [ 'engine' ], expect: { '': {} } });
 const callSetEngineDnsPreferences = rpc.declare({ object: 'oum', method: 'setEngineDnsPreferences', params: [ 'engine', 'server', 'bootstrap' ], expect: { '': {} } });
 const callRebootRouter = rpc.declare({ object: 'oum', method: 'rebootRouter', expect: { '': {} } });
 const callConfigurePodkop = rpc.declare({ object: 'oum', method: 'configurePodkop', params: [ 'interface' ], expect: { '': {} } });
@@ -188,10 +189,9 @@ return view.extend({
 		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
 		const initialVpnTab = status.pending_source !== 'none' && status.active_source === 'none' ? 'connection' : 'engine';
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: L.resource('oum/oum.css') }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260903-mobile-settings17` }),
 			E('div', { 'class': 'oum-page-head' }, [
-				E('div', {}, [ E('h2', {}, 'Настройки OUM'), E('p', { 'class': 'oum-muted' }, 'Сеть, Wi‑Fi и защищённое подключение') ]),
-				E('a', { 'class': 'btn cbi-button', href: L.url('oum', 'logout') }, 'Выйти')
+				E('div', {}, [ E('h2', {}, 'Настройки OUM'), E('p', { 'class': 'oum-muted' }, 'Сеть, Wi‑Fi и защищённое подключение') ])
 			]),
 			E('p', { 'class': 'oum-help' }, 'Пароли не показываются в браузере. Оставьте поле пароля пустым, чтобы сохранить действующий.'),
 			E('div', { id: 'system-job', 'class': 'oum-job-state', role: 'status', 'aria-live': 'polite', 'data-state': initialJob.state || 'idle' }, initialJob.message || ''),
@@ -220,44 +220,73 @@ return view.extend({
 						E('button', { 'class': 'btn', id: 'rollback-wifi', disabled: settings.rollback_wifi ? null : '', 'data-system-action': '' }, 'Вернуть предыдущие')
 					])
 				]),
-				E('section', { 'class': 'oum-settings-panel' }, [
+				E('section', { 'class': 'oum-settings-panel oum-internet-panel' }, [
 					E('h3', {}, 'Подключение к интернету'),
-					E('div', { 'class': 'oum-setting-choices' }, [
-						choice('wan_type', 'dhcp', 'DHCP', 'Без логина и пароля', wan.proto !== 'pppoe'),
-						choice('wan_type', 'pppoe', 'PPPoE', 'Логин и пароль провайдера', wan.proto === 'pppoe')
+					E('div', { 'class': 'oum-setting-choices oum-internet-choices' }, [
+						choice('wan_type', 'dhcp', 'DHCP', 'Без логина и пароля', !wisp.enabled && wan.proto !== 'pppoe'),
+						choice('wan_type', 'pppoe', 'PPPoE', 'Логин и пароль провайдера', !wisp.enabled && wan.proto === 'pppoe'),
+						...(capabilities.wisp_supported ? [ choice('wan_type', 'wisp', 'Wi-Fi', 'Повторитель', wisp.enabled) ] : [])
 					]),
 					E('div', { id: 'pppoe-settings' }, [
 						field('Логин PPPoE', E('input', { id: 'pppoe-user', maxlength: 128, autocomplete: 'username', value: wan.username || '' })),
 						field('Новый пароль PPPoE', E('input', { id: 'pppoe-password', type: 'password', maxlength: 256, autocomplete: 'new-password', placeholder: wan.password_set ? 'Не изменять' : '' }))
 					]),
+					...(capabilities.wisp_supported ? [ E('div', { id: 'wisp-settings', 'class': 'oum-wisp-inline', hidden: wisp.enabled ? null : '' }, [
+						E('p', { 'class': 'oum-wisp-intro' }, [
+							E('strong', {}, 'Wi-Fi как интернет (WISP)'),
+							E('span', {}, 'Роутер подключится к чужой точке и раздаст интернет своим клиентам. Кабельный WAN останется сохранён.')
+						]),
+						E('div', { id: 'wisp-status', 'class': 'oum-wisp-status' }, wisp.connected ? `Подключено: ${wisp.ssid}${wisp.ip ? ` · ${wisp.ip}` : ''}${wisp.signal != null ? ` · ${wisp.signal} dBm` : ''}` : (wisp.enabled ? 'Настройка включена, но соединения нет.' : 'Выберите сеть и введите её пароль.')),
+						E('div', { 'class': 'oum-wisp-scan-row', style: 'grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:end' }, [
+							field('Диапазон', E('select', { id: 'wisp-band' }, [
+								E('option', { value: '2g', selected: wisp.band !== '5g' ? '' : null }, '2,4 ГГц'),
+								E('option', { value: '5g', selected: wisp.band === '5g' ? '' : null }, '5 ГГц')
+							])),
+							field('Исходная сеть', E('input', { id: 'wisp-ssid', maxlength: 32, value: wisp.ssid || '', placeholder: 'Выберите после поиска или введите имя' })),
+							E('button', { 'class': 'btn oum-wisp-scan', id: 'scan-wisp', type: 'button' }, 'Найти сети')
+						]),
+						field('Пароль исходной сети', E('input', { id: 'wisp-password', type: 'password', minlength: 8, maxlength: 63, autocomplete: 'new-password', placeholder: wisp.enabled ? 'Введите для переподключения' : 'Пусто — если сеть открытая' })),
+						E('div', { id: 'wisp-results', 'class': 'oum-wisp-results', hidden: '' }),
+						E('div', { 'class': 'oum-setting-actions oum-wisp-actions' }, [
+							E('button', { 'class': 'btn cbi-button-action', id: 'enable-wisp', 'data-system-action': '' }, 'Применить подключение'),
+							E('button', { 'class': 'btn oum-internet-secondary', id: 'disable-wisp', 'data-system-action': '', disabled: wisp.enabled ? null : '' }, 'Отключить'),
+							E('button', { 'class': 'btn oum-internet-secondary', id: 'rollback-wisp', 'data-system-action': '', disabled: wisp.rollback ? null : '' }, 'Вернуть'),
+							E('button', { type: 'button', 'class': 'btn oum-mobile-sheet-cancel' }, 'Отмена')
+						])
+					]) ] : []),
 					E('p', { 'class': 'oum-help' }, [ 'Сейчас: ', E('strong', {}, wan.up ? 'подключено' : 'нет соединения'), wan.ipv4 ? ` · ${wan.ipv4}` : '' ]),
-					E('div', { 'class': 'oum-setting-actions' }, [
+					E('div', { 'class': 'oum-setting-actions', id: 'wan-wired-actions', hidden: wisp.enabled ? '' : null }, [
 						E('button', { 'class': 'btn cbi-button-action', id: 'apply-wan', 'data-system-action': '' }, 'Применить подключение'),
-						E('button', { 'class': 'btn', id: 'rollback-wan', disabled: settings.rollback_wan ? null : '', 'data-system-action': '' }, 'Вернуть предыдущие')
+						E('button', { 'class': 'btn oum-internet-secondary', id: 'rollback-wan', disabled: settings.rollback_wan ? null : '', 'data-system-action': '' }, 'Вернуть предыдущие'),
+						E('button', { type: 'button', 'class': 'btn oum-mobile-sheet-cancel' }, 'Отмена')
 					])
 				])
 			]),
 			E('details', { 'class': 'oum-settings-panel oum-protected' }, [
 				E('summary', {}, 'Расширение сети'),
 				E('div', { 'class': 'oum-protected-content' }, [
-					E('h4', {}, 'Локальный адрес роутера'),
-					E('p', { 'class': 'oum-help' }, 'Используется частная подсеть /24. Она не должна совпадать с WAN-подсетью вышестоящего роутера.'),
-					E('div', { 'class': 'oum-setting-fields' }, [
-						field('LAN IPv4', E('input', { id: 'lan-address', inputmode: 'decimal', maxlength: 15, value: lan.address || '192.168.5.1', placeholder: '192.168.5.1' })),
-						field('Маска', E('input', { value: '/24 — 255.255.255.0', disabled: '' }))
-					]),
-					E('div', { 'class': 'oum-setting-actions' }, [
-						E('button', { 'class': 'btn cbi-button-action', id: 'apply-lan', 'data-system-action': '' }, 'Изменить LAN-адрес'),
-						E('button', { 'class': 'btn', id: 'rollback-lan', 'data-system-action': '', disabled: lan.rollback ? null : '' }, lan.rollback_address ? `Вернуть ${lan.rollback_address}` : 'Вернуть предыдущий')
-					]),
-					...((capabilities.mesh_driver || capabilities.wisp_supported || capabilities.usb_host) ? [ E('div', { 'class': 'oum-capability-grid oum-network-extension' }, [
-						...(capabilities.mesh_driver ? [ E('div', { 'class': 'oum-capability' }, [ E('h4', {}, 'Mesh'), E('div', { 'class': 'oum-capability-state' }, meshState) ]) ] : []),
-						...(capabilities.wisp_supported ? [ E('div', { 'class': 'oum-capability' }, [ E('h4', {}, 'Wi-Fi как интернет'), E('div', { 'class': 'oum-capability-state' }, wisp.connected ? `Подключено к ${wisp.ssid}${wisp.ip ? ` · ${wisp.ip}` : ''}` : (wisp.enabled ? 'Подключение не установлено' : 'Выключено')) ]) ] : []),
-						...(capabilities.usb_host ? [ E('div', { 'class': 'oum-capability' }, [ E('h4', {}, 'USB и 4G'), E('div', { 'class': 'oum-capability-state' }, usbState) ]) ] : [])
-					]) ] : []),
-					...(capabilities.mesh_driver ? [ E('section', { 'class': 'oum-network-extension' }, [
-						E('h4', {}, 'Mesh между роутерами OUM'),
-						E('p', { 'class': 'oum-help' }, meshReady ? 'Объединяет два или больше совместимых роутеров OUM в бесшовную сеть. На каждом узле укажите одинаковые Mesh ID и пароль; обычные точки Wi-Fi останутся включены.' : 'Для Mesh нужен совместимый wpad-mesh той же ревизии, что и hostapd-common.'),
+					E('div', { 'class': 'oum-network-card-grid' }, [
+						E('section', { 'class': 'oum-network-card' }, [
+							E('div', { 'class': 'oum-network-card-head' }, [
+								E('div', {}, [ E('h4', {}, 'Локальная сеть'), E('p', { 'class': 'oum-help' }, 'Адрес панели управления и домашней сети.') ]),
+								E('span', { 'class': 'oum-network-status' }, '/24')
+							]),
+							E('p', { 'class': 'oum-network-card-note' }, 'Подсеть не должна совпадать с сетью вышестоящего роутера.'),
+							E('div', { 'class': 'oum-setting-fields' }, [
+								field('LAN IPv4', E('input', { id: 'lan-address', inputmode: 'decimal', maxlength: 15, value: lan.address || '192.168.5.1', placeholder: '192.168.5.1' })),
+								field('Маска', E('input', { value: '255.255.255.0', disabled: '' }))
+							]),
+							E('div', { 'class': 'oum-setting-actions' }, [
+								E('button', { 'class': 'btn cbi-button-action', id: 'apply-lan', 'data-system-action': '' }, 'Изменить LAN-адрес'),
+								E('button', { 'class': 'btn', id: 'rollback-lan', 'data-system-action': '', disabled: lan.rollback ? null : '' }, lan.rollback_address ? `Вернуть ${lan.rollback_address}` : 'Вернуть предыдущий')
+							])
+						]),
+						...(capabilities.mesh_driver ? [ E('section', { 'class': 'oum-network-card oum-mesh-card' }, [
+							E('div', { 'class': 'oum-network-card-head' }, [
+								E('div', {}, [ E('h4', {}, 'Mesh-сеть'), E('p', { 'class': 'oum-help' }, 'Бесшовное покрытие между роутерами OUM.') ]),
+								E('span', { 'class': 'oum-network-status', 'data-state': mesh.enabled ? 'active' : (meshReady ? 'ready' : 'warning') }, mesh.enabled ? 'Включена' : (meshReady ? 'Готова' : 'Нужен компонент'))
+							]),
+							E('p', { 'class': 'oum-network-card-note' }, meshReady ? 'На каждом роутере укажите одинаковые Mesh ID и пароль. Обычные точки Wi-Fi останутся включены.' : meshState),
 						...(!meshReady && capabilities.mesh_runtime_bundle ? [ E('div', { 'class': 'oum-setting-actions' }, [
 							E('button', { 'class': 'btn cbi-button-action', id: 'install-mesh-runtime', 'data-system-action': '' }, 'Установить поддержку Mesh'),
 							E('span', { 'class': 'oum-help' }, 'Wi-Fi перезапустится на несколько секунд; при ошибке OUM вернёт исходный компонент.')
@@ -274,41 +303,22 @@ return view.extend({
 							E('button', { 'class': 'btn cbi-button-action', id: 'enable-mesh', 'data-system-action': '', disabled: meshReady ? null : '' }, mesh.enabled ? 'Обновить Mesh' : 'Включить Mesh'),
 							E('button', { 'class': 'btn', id: 'disable-mesh', 'data-system-action': '', disabled: mesh.enabled ? null : '' }, 'Отключить Mesh')
 						])
-					]) ] : []),
-					...(capabilities.wisp_supported ? [ E('section', { 'class': 'oum-network-extension' }, [
-						E('h4', {}, 'Интернет от другой Wi-Fi сети (WISP)'),
-						E('p', { 'class': 'oum-help' }, 'Роутер подключится к обычной точке Wi-Fi как клиент, а ваши LAN и Wi-Fi останутся отдельной защищённой сетью. Кабельный WAN не удаляется.'),
-						E('div', { id: 'wisp-status', 'class': 'oum-wisp-status' }, wisp.connected ? `Подключено: ${wisp.ssid}${wisp.ip ? ` · ${wisp.ip}` : ''}${wisp.signal != null ? ` · ${wisp.signal} dBm` : ''}` : (wisp.enabled ? 'Настройка включена, но соединения нет.' : 'WISP выключен.')),
-						E('div', { 'class': 'oum-setting-fields' }, [
-							field('Диапазон', E('select', { id: 'wisp-band' }, [
-								E('option', { value: '2g', selected: wisp.band !== '5g' ? '' : null }, '2,4 ГГц'),
-								E('option', { value: '5g', selected: wisp.band === '5g' ? '' : null }, '5 ГГц')
-							])),
-							field('Исходная сеть', E('input', { id: 'wisp-ssid', maxlength: 32, value: wisp.ssid || '', placeholder: 'Выберите после сканирования или введите имя' })),
-							field('Пароль исходной сети', E('input', { id: 'wisp-password', type: 'password', minlength: 8, maxlength: 63, autocomplete: 'new-password', placeholder: wisp.enabled ? 'Введите для переподключения' : 'Для открытой сети оставьте пустым' }))
-						]),
-						E('div', { 'class': 'oum-setting-actions' }, [
-							E('button', { 'class': 'btn', id: 'scan-wisp' }, 'Найти сети'),
-							E('button', { 'class': 'btn cbi-button-action', id: 'enable-wisp', 'data-system-action': '' }, wisp.enabled ? 'Переподключить' : 'Подключить'),
-							E('button', { 'class': 'btn', id: 'disable-wisp', 'data-system-action': '', disabled: wisp.enabled ? null : '' }, 'Отключить'),
-							E('button', { 'class': 'btn', id: 'rollback-wisp', 'data-system-action': '', disabled: wisp.rollback ? null : '' }, 'Вернуть предыдущие')
-						]),
-						E('div', { id: 'wisp-results', 'class': 'oum-wisp-results', hidden: '' })
-					]) ] : [])
+						]) ] : []),
+						...(capabilities.usb_host ? [ E('section', { 'class': 'oum-network-card oum-network-card-compact' }, [
+							E('div', { 'class': 'oum-network-card-head' }, [ E('div', {}, [ E('h4', {}, 'USB и 4G'), E('p', { 'class': 'oum-help' }, usbState) ]) ])
+						]) ] : [])
+					])
 				])
 			]),
-			E('nav', { 'class': 'oum-vpn-switchboard', 'aria-label': 'Разделы VPN' }, [
-				E('button', { 'class': 'btn', type: 'button', 'data-vpn-settings-tab': 'engine', 'data-active': String(initialVpnTab === 'engine') }, 'VPN-движок'),
-				E('button', { 'class': 'btn', type: 'button', 'data-vpn-settings-tab': 'dns', 'data-active': 'false' }, 'DNS'),
-				E('button', { 'class': 'btn', type: 'button', 'data-vpn-settings-tab': 'connection', 'data-active': String(initialVpnTab === 'connection') }, 'Защищённое подключение')
-			]),
-			E('details', { 'class': 'oum-settings-panel oum-protected oum-vpn-section', id: 'vpn-section-engine', open: '', hidden: initialVpnTab === 'engine' ? null : '' }, [
-				E('summary', {}, 'VPN-движок'),
-				E('div', { 'class': 'oum-protected-content' }, [
-					E('div', { 'class': 'oum-engine-current' }, [
-						E('span', {}, [ E('small', {}, 'Сейчас установлен'), E('br'), E('strong', {}, engineTitle) ]),
-						E('span', { 'class': 'oum-help' }, engineVersion || '')
+			E('section', { 'class': 'oum-settings-panel oum-vpn-workspace' }, [
+				E('header', { 'class': 'oum-vpn-workspace-head' }, [
+					E('div', { 'class': 'oum-vpn-workspace-title' }, [
+						E('span', { 'class': 'oum-vpn-workspace-icon', 'aria-hidden': 'true' }),
+						E('strong', {}, 'VPN-движок'),
+						E('span', { 'class': 'oum-vpn-current-pill' }, `${engineTitle}${engineVersion ? ` · ${engineVersion}` : ''}`)
 					]),
+					E('span', { 'class': 'oum-help' }, 'Настройки старого движка не переносятся.')
+				]),
 					E('div', { 'class': 'oum-inline-warning', hidden: activeUnmanagedTunnels.length ? null : '' }, activeUnmanagedTunnels.length ?
 						`Обнаружено дополнительное VPN-подключение, созданное не через OUM: ${activeUnmanagedTunnels.map((item) => item.name).join(', ')}. Не меняйте VPN-движок, пока оно включено: два подключения могут мешать друг другу. Отключить его можно в полном интерфейсе OpenWrt.` : ''),
 					E('div', { 'class': 'oum-engine-choices' }, [
@@ -316,13 +326,16 @@ return view.extend({
 						engineChoice('passwall', 'PassWall', `Закреплённая версия ${engines.passwall.target_version || '26.5.11-r1'}. Тонкая маршрутизация через Xray.`, engines.current === 'passwall', false),
 						engineChoice('podkop', 'Podkop + Zapret', `Podkop ${engines.podkop?.target_version || 'с AWG-туннелем'}. YouTube напрямую через Zapret.`, engines.current === 'podkop', false)
 					]),
-					E('p', { 'class': 'oum-help' }, `OUM временно остановит VPN и проверит прямой доступ к GitHub. Затем старый движок и его настройки будут полностью удалены, а выбранный движок установлен заново.${engines.passwall.cache_ready ? ' Локальный комплект PassWall готов.' : ''}`),
-					E('div', { 'class': 'oum-engine-actions' }, [
-						E('button', { 'class': 'btn cbi-button-action', id: 'switch-engine', 'data-system-action': '', disabled: engines.supported ? null : '' }, engineActionLabel),
-						E('span', { 'class': 'oum-help' }, engines.supported ? (engineMissing ? 'Выберите и установите движок для работы VPN.' : 'Настройки старого движка не переносятся.') : 'Для этой платформы нет проверенного пакета.')
-					])
-				])
-			]),
+					E('p', { 'class': 'oum-help oum-engine-explainer' }, `OUM временно остановит VPN и проверит прямой доступ к GitHub. Затем старый движок и его настройки будут полностью удалены, а выбранный движок установлен заново.${engines.passwall.cache_ready ? ' Локальный комплект PassWall готов.' : ''}`),
+					E('nav', { 'class': 'oum-vpn-switchboard', 'aria-label': 'Настройки VPN' }, [
+						E('button', { 'class': 'btn cbi-button-action', id: 'switch-engine', 'data-system-action': '', disabled: engines.supported ? null : '' }, engineMissing ? 'Установить' : 'Заменить'),
+						E('button', { 'class': 'btn oum-mobile-only oum-mobile-sheet-cancel', type: 'button' }, 'Отмена'),
+						E('button', { 'class': 'btn', type: 'button', 'data-vpn-settings-tab': 'dns', 'data-active': 'false' }, 'DNS для VPN'),
+						E('button', { 'class': 'btn', type: 'button', 'data-vpn-settings-tab': 'connection', 'data-active': String(initialVpnTab === 'connection') }, 'Защищённое подключение'),
+						...((engines.current === 'openclash' || engines.current === 'podkop') ? [
+							E('button', { 'class': 'btn oum-engine-update', type: 'button', id: 'update-engine', 'data-system-action': '' }, 'Проверить обновление')
+						] : [])
+					]),
 			E('details', { 'class': 'oum-settings-panel oum-protected oum-vpn-section', id: 'vpn-section-dns', hidden: '' }, [
 					E('summary', {}, 'DNS для VPN'),
 					E('div', { 'class': 'oum-protected-content' }, [
@@ -340,7 +353,7 @@ return view.extend({
 							E('span', { 'class': 'oum-help' }, engineMissing ? 'Сначала установите VPN-движок.' : `${engineTitle} будет кратковременно перезапущен.`)
 						])
 					])
-				]),
+			]),
 			E('details', {
 				'class': 'oum-settings-panel oum-protected oum-vpn-section',
 				id: 'vpn-section-connection',
@@ -403,13 +416,13 @@ return view.extend({
 						]),
 						E('div', { 'class': 'oum-vpn-input' }, [
 							E('label', { id: 'source-label' }, ''),
-							E('input', { id: 'subscription-input', type: 'url', autocomplete: 'off', spellcheck: 'false' }),
-							E('textarea', { id: 'config-input', autocomplete: 'off', spellcheck: 'false', hidden: '' })
+							E('textarea', { id: 'config-input', autocomplete: 'off', spellcheck: 'false' })
 						]),
 						E('div', { 'class': 'oum-vpn-job', id: 'vpn-job-status', 'data-state': initialVpnJob.state || 'idle' }, initialVpnJob.message || 'Готово к добавлению подключения.'),
 						E('button', { 'class': 'btn cbi-button-action', id: 'import-source' }, 'Проверить и активировать')
 					])
 				])
+			])
 			]),
 			E('section', { 'class': 'oum-settings-panel' }, [
 				E('h3', {}, 'Обслуживание OUM'),
@@ -446,7 +459,7 @@ return view.extend({
 				])
 			])
 		]);
-		const root = E('div', { 'class': 'oum-settings oum-app', 'data-theme': 'light' }, [ appSidebar('settings'), page ]);
+		const root = E('div', { 'class': 'oum-settings oum-app', 'data-theme': document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light' }, [ page ]);
 
 		const value = (selector) => root.querySelector(selector).value.trim();
 		const rawValue = (selector) => root.querySelector(selector).value;
@@ -455,9 +468,11 @@ return view.extend({
 			const button = event.target.closest('[data-vpn-settings-tab]');
 			if (!button) return;
 			const target = button.dataset.vpnSettingsTab;
-			root.querySelectorAll('[data-vpn-settings-tab]').forEach((item) => item.dataset.active = String(item === button));
+			const section = root.querySelector(`#vpn-section-${target}`);
+			const closing = button.dataset.active === 'true' && section && !section.hidden;
+			root.querySelectorAll('[data-vpn-settings-tab]').forEach((item) => item.dataset.active = String(!closing && item === button));
 			root.querySelectorAll('.oum-vpn-section').forEach((section) => {
-				const active = section.id === `vpn-section-${target}`;
+				const active = !closing && section.id === `vpn-section-${target}`;
 				section.hidden = !active;
 				if (active) section.open = true;
 			});
@@ -465,12 +480,15 @@ return view.extend({
 		const statusNode = root.querySelector('#system-job');
 		const vpnJobNode = root.querySelector('#vpn-job-status');
 		const importButton = root.querySelector('#import-source');
-		const urlInput = root.querySelector('#subscription-input');
 		const configInput = root.querySelector('#config-input');
 		const sourceLabel = root.querySelector('#source-label');
 		const engineButton = root.querySelector('#switch-engine');
 		let watching = false;
-		let pendingEngineTitle = '';
+		let pendingEngineTitle = window.sessionStorage.getItem('oum-engine-switch-title') || '';
+		let engineModal = null;
+		let engineModalDismissed = false;
+		let lastEngineStage = 0;
+		let lastEngineProgress = 4;
 
 		const setBusy = (busy) => root.querySelectorAll('[data-system-action]').forEach((button) => {
 			if (busy && button.dataset.wasDisabled == null)
@@ -490,25 +508,102 @@ return view.extend({
 			ui.showModal('Перезагрузка роутера', [ E('p', {}, 'Соединение прервётся примерно на минуту. Подождите и снова откройте панель OUM.') ]);
 			callRebootRouter().catch((error) => ui.addNotification(null, E('p', {}, error.message), 'error'));
 		};
+		const engineStepPlan = () => [
+			{ codes: [ 'queued', 'preparing', 'runtime' ], label: 'Подготовка компонентов OUM' },
+			{ codes: [ 'vpn_access' ], label: 'Проверка доступа к загрузкам' },
+			...(!engineMissing ? [ { codes: [ 'stopping' ], label: 'Проверка прямого интернета' } ] : []),
+			{ codes: [ 'removing' ], label: 'Удаление прежних VPN-движков' },
+			{ codes: [ 'package_index' ], label: 'Обновление каталога OpenWrt' },
+			{ codes: [ 'downloading' ], label: 'Загрузка и проверка нового движка' },
+			{ codes: [ 'installing', 'reconnecting' ], label: 'Чистая установка нового движка' }
+		];
+		const engineStageInfo = (status, plan) => {
+			const progressByCode = {
+				queued: 4, preparing: 8, runtime: 14, vpn_access: 28, stopping: 40,
+				removing: 52, package_index: 62, downloading: 76, installing: 90, reconnecting: 96
+			};
+			if (status.state === 'success') return { stage: plan.length, progress: 100 };
+			if (status.state === 'failed') return { stage: lastEngineStage, progress: lastEngineProgress };
+			const found = plan.findIndex((step) => step.codes.includes(status.code));
+			const stage = found >= 0 ? found : lastEngineStage;
+			const progress = progressByCode[status.code] ?? lastEngineProgress;
+			lastEngineStage = stage;
+			lastEngineProgress = progress;
+			return { stage, progress };
+		};
+		const buildEngineModal = (title) => {
+			const plan = engineStepPlan();
+			const steps = plan.map((item, index) => E('div', { 'class': 'oum-engine-step', 'data-step': index, 'data-state': 'pending' }, [
+				E('span', { 'class': 'oum-engine-step-mark', 'aria-hidden': 'true' }),
+				E('span', { 'class': 'oum-engine-step-label' }, item.label),
+				E('span', { 'class': 'oum-engine-step-state' }, 'ожидает')
+			]));
+			const fill = E('span', { 'class': 'oum-engine-progress-fill' });
+			const content = E('div', { 'class': 'oum-engine-progress' }, [
+				E('p', { 'class': 'oum-engine-progress-message' }, 'Подготавливаем операцию…'),
+				E('div', { 'class': 'oum-engine-step-list' }, steps),
+				E('div', { 'class': 'oum-engine-progress-meta' }, [
+					E('span', { 'class': 'oum-engine-progress-stage' }, `Шаг 1 из ${plan.length}`),
+					E('strong', { 'class': 'oum-engine-progress-percent' }, '4%')
+				]),
+				E('div', { 'class': 'oum-engine-progress-bar', role: 'progressbar', 'aria-label': 'Ход смены VPN-движка', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '4' }, [ fill ]),
+				E('div', { 'class': 'oum-engine-progress-actions' })
+			]);
+			ui.showModal(`${engineMissing ? 'Установка' : 'Смена'}: ${title}`, [ content ]);
+			return {
+				content,
+				message: content.querySelector('.oum-engine-progress-message'),
+				plan,
+				steps,
+				fill,
+				bar: content.querySelector('.oum-engine-progress-bar'),
+				percent: content.querySelector('.oum-engine-progress-percent'),
+				stage: content.querySelector('.oum-engine-progress-stage'),
+				actions: content.querySelector('.oum-engine-progress-actions')
+			};
+		};
 		const showEngineJob = (status) => {
-			const title = status.state === 'running' ? `${engineMissing ? 'Установка' : 'Смена'}: ${pendingEngineTitle || 'VPN-движок'}` :
-				(status.state === 'success' ? 'VPN-движок установлен' : 'Не удалось установить VPN-движок');
-			const progress = status.total > 0 ? E('progress', { max: status.total, value: status.progress || 0 }) : E('progress', {});
-			const actions = status.state === 'running' ? [
-				E('button', { 'class': 'btn', disabled: '' }, 'Операция выполняется…')
-			] : (status.state === 'success' ? [
-				E('button', { 'class': 'btn', click: () => acknowledgeStatus(status).finally(() => { ui.hideModal(); window.location.reload(); }) }, 'Позже'),
-				' ',
-				E('button', { 'class': 'btn cbi-button-action important', click: rebootNow }, 'Перезагрузить сейчас')
-			] : [
-				E('button', { 'class': 'btn cbi-button-action important', click: () => { ui.hideModal(); acknowledgeStatus(status); } }, 'Закрыть')
-			]);
-			ui.showModal(title, [
-				E('p', {}, status.message || 'Подготавливаем операцию…'),
-				progress,
-				E('p', { 'class': 'oum-help' }, status.code ? `Этап: ${status.code}` : 'Ожидаем статус…'),
-				E('div', { 'class': 'right' }, actions)
-			]);
+			const terminal = status.state === 'success' || status.state === 'failed';
+			if (engineModalDismissed && !terminal) return;
+			if (!engineModal || !engineModal.content.isConnected) {
+				engineModalDismissed = false;
+				engineModal = buildEngineModal(pendingEngineTitle || 'VPN-движок');
+			}
+			const info = engineStageInfo(status, engineModal.plan);
+			const currentIndex = Math.min(info.stage, engineModal.plan.length - 1);
+			const currentLabel = engineModal.plan[currentIndex]?.label || 'Подготовка операции';
+			if (status.code === 'reconnecting')
+				engineModal.steps[currentIndex].querySelector('.oum-engine-step-label').textContent = 'Подключение сохранённого AWG-туннеля';
+			engineModal.message.textContent = status.message || 'Подготавливаем операцию…';
+			engineModal.fill.style.width = `${info.progress}%`;
+			engineModal.bar.setAttribute('aria-valuenow', String(info.progress));
+			engineModal.percent.textContent = `${info.progress}%`;
+			engineModal.stage.textContent = status.state === 'success' ? 'Все этапы завершены' :
+				(status.state === 'failed' ? `Не завершено: ${currentLabel}` : `Шаг ${currentIndex + 1} из ${engineModal.plan.length}`);
+			engineModal.content.dataset.state = status.state || 'running';
+			engineModal.steps.forEach((step, index) => {
+				const failed = status.state === 'failed' && index === currentIndex;
+				const done = status.state === 'success' || index < info.stage;
+				const active = status.state === 'running' && index === info.stage;
+				step.dataset.state = failed ? 'failed' : (done ? 'done' : (active ? 'active' : 'pending'));
+				step.querySelector('.oum-engine-step-state').textContent = failed ? 'ошибка' : (done ? 'готово' : (active ? 'выполняется…' : 'ожидает'));
+			});
+			if (status.state === 'running') {
+				engineModal.actions.replaceChildren(E('button', { 'class': 'btn', click: () => {
+					engineModalDismissed = true;
+					engineModal = null;
+					ui.hideModal();
+				} }, 'Скрыть'));
+			} else if (status.state === 'success') {
+				window.sessionStorage.removeItem('oum-engine-switch-title');
+				engineModal.actions.replaceChildren(
+					E('button', { 'class': 'btn', click: () => acknowledgeStatus(status).finally(() => { ui.hideModal(); window.location.reload(); }) }, 'Позже'),
+					E('button', { 'class': 'btn cbi-button-action important', click: rebootNow }, 'Перезагрузить сейчас')
+				);
+			} else {
+				window.sessionStorage.removeItem('oum-engine-switch-title');
+				engineModal.actions.replaceChildren(E('button', { 'class': 'btn cbi-button-action important', click: () => { ui.hideModal(); acknowledgeStatus(status); } }, 'Закрыть'));
+			}
 		};
 		const watchJob = () => {
 			if (watching) return;
@@ -524,7 +619,7 @@ return view.extend({
 				if (zapretStatus && status.action?.startsWith('zapret_'))
 					zapretStatus.textContent = status.message || 'Операция Zapret выполняется…';
 				if (status.action === 'engine') return;
-				if ((status.action === 'wifi_toggle' || status.action === 'dns' || status.action === 'adguard' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'wisp' || status.action === 'rollback_wisp' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
+				if ((status.action === 'wifi_toggle' || status.action === 'dns' || status.action === 'adguard' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'wisp' || status.action === 'rollback_wisp' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'engine_update' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action?.startsWith('zapret_')) && status.state === 'success')
 					acknowledgeStatus(status).finally(() => window.setTimeout(() => window.location.reload(), 900));
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
@@ -539,15 +634,21 @@ return view.extend({
 			else
 				ui.addNotification(null, E('p', {}, error.message), 'error');
 		});
-		const updateWanFields = () => root.querySelector('#pppoe-settings').hidden = selected('wan_type') !== 'pppoe';
+		const updateWanFields = () => {
+			const mode = selected('wan_type');
+			root.querySelector('#pppoe-settings').hidden = mode !== 'pppoe';
+			const wispSettings = root.querySelector('#wisp-settings');
+			if (wispSettings) wispSettings.hidden = mode !== 'wisp';
+			root.querySelector('#wan-wired-actions').hidden = mode === 'wisp';
+		};
 		const updateWifiFields = () => root.querySelector('#ssid-5').disabled = selected('wifi_mode') === 'smart';
 		const updateVpnInput = () => {
 			selectedSource = selected('vpn_source') || 'subscription';
-			urlInput.hidden = selectedSource !== 'subscription';
-			configInput.hidden = selectedSource === 'subscription';
 			sourceLabel.textContent = selectedSource === 'subscription' ? 'Ссылка подписки' :
 				(selectedSource === 'awg' ? 'Вставьте AWG-конфигурацию целиком' : 'Вставьте одну или несколько proxy-ссылок');
-			configInput.placeholder = selectedSource === 'awg' ? '[Interface]\nPrivateKey = …\n…' : 'vless://…';
+			configInput.placeholder = selectedSource === 'subscription' ?
+				'https://example.com/subscription\n// Вставьте ссылку подписки' :
+				(selectedSource === 'awg' ? '[Interface]\nPrivateKey = …\n…' : 'vless://…\nhy2://…');
 		};
 		const showVpnJob = (job) => {
 			vpnJobNode.dataset.state = job.state || 'idle';
@@ -576,9 +677,18 @@ return view.extend({
 			const text = engineMissing ? `${title} будет установлен с чистой конфигурацией и останется выключенным до добавления подключения.` : `Старый VPN-движок и его настройки будут полностью удалены. ${title} установится с чистой конфигурацией и останется выключенным до добавления подключения.`;
 			if (await confirmation(engineMissing ? `Установить ${title}?` : `Перейти на ${title}?`, text, engineActionLabel, true)) {
 				pendingEngineTitle = title;
+				window.sessionStorage.setItem('oum-engine-switch-title', title);
+				engineModalDismissed = false;
 				showEngineJob({ state: 'running', code: 'queued', message: 'Запускаем установку…' });
 				start(callSwitchEngine(target));
 			}
+		});
+		const updateEngineButton = root.querySelector('#update-engine');
+		if (updateEngineButton) updateEngineButton.addEventListener('click', async (event) => {
+			event.preventDefault();
+			const text = `OUM сверит ${engineTitle} с проверенной версией из текущей сборки. Если обновление есть, настройки и активное подключение будут сохранены, а служба кратковременно перезапустится.`;
+			if (await confirmation(`Проверить обновление ${engineTitle}?`, text, 'Проверить', false))
+				start(callUpdateEngine(engines.current));
 		});
 		root.querySelector('#apply-engine-dns').addEventListener('click', async (event) => {
 			event.preventDefault();
@@ -750,12 +860,11 @@ return view.extend({
 		}
 		importButton.addEventListener('click', (event) => {
 			event.preventDefault();
-			const payload = (selectedSource === 'subscription' ? urlInput.value : configInput.value).trim();
+			const payload = configInput.value.trim();
 			if (!payload) return showVpnJob({ state: 'failed', message: 'Введите данные подключения.' });
 			showVpnJob({ state: 'running', message: 'Запускаем безопасный импорт…' });
 			callStartVpnImport(selectedSource, payload).then((result) => {
 				resultError(result, 'Не удалось запустить импорт.');
-				urlInput.value = '';
 				configInput.value = '';
 				watchVpnJob();
 			}).catch((error) => showVpnJob({ state: 'failed', message: error.message }));
@@ -826,6 +935,124 @@ return view.extend({
 		root.querySelector('#reset-all').addEventListener('click', async () => {
 			if (await confirmation('Вернуть первый запуск?', 'VPN будет удалён, появится временная сеть FirstRun и потребуется войти как admin/admin. Текущий LAN-адрес не меняется.', 'Вернуть мастер', true)) start(callResetFirstRun());
 		});
+		const wifiPanel = root.querySelector('.oum-settings-grid > .oum-settings-panel:first-child');
+		const internetPanel = root.querySelector('.oum-settings-grid > .oum-internet-panel');
+		const networkPanel = root.querySelector('details.oum-settings-panel.oum-protected:not(.oum-vpn-section)');
+		const vpnPanel = root.querySelector('.oum-vpn-workspace');
+		const maintenancePanel = Array.from(root.querySelectorAll('.oum-settings-panel')).find((panel) => panel.querySelector(':scope > h3')?.textContent === 'Обслуживание OUM');
+		const maintenanceCards = maintenancePanel ? Array.from(maintenancePanel.querySelectorAll('.oum-maintenance-card')) : [];
+		const mobileSources = [ wifiPanel, internetPanel, networkPanel, vpnPanel, maintenancePanel ].filter(Boolean);
+		mobileSources.forEach((node) => node.classList.add('oum-mobile-sheet-source'));
+
+		let activeSheetNode = null;
+		let activeSheetPlaceholder = null;
+		const sheet = E('div', { 'class': 'oum-settings-sheet', hidden: '', role: 'dialog', 'aria-modal': 'true' }, [
+			E('div', { 'class': 'oum-settings-sheet-panel' }, [
+				E('span', { 'class': 'oum-settings-sheet-handle', 'aria-hidden': 'true' }),
+				E('header', { 'class': 'oum-settings-sheet-head' }, [
+					E('h3', { id: 'oum-settings-sheet-title' }, ''),
+					E('button', { type: 'button', 'class': 'oum-settings-sheet-close', 'aria-label': 'Закрыть' }, '×')
+				]),
+				E('div', { 'class': 'oum-settings-sheet-content' })
+			])
+		]);
+		const sheetTitle = sheet.querySelector('#oum-settings-sheet-title');
+		const sheetContent = sheet.querySelector('.oum-settings-sheet-content');
+		const closeSheet = () => {
+			if (activeSheetNode && activeSheetPlaceholder?.parentNode) {
+				activeSheetNode.classList.remove('oum-mobile-sheet-active');
+				activeSheetPlaceholder.parentNode.insertBefore(activeSheetNode, activeSheetPlaceholder.nextSibling);
+				activeSheetPlaceholder.remove();
+			}
+			activeSheetNode = null;
+			activeSheetPlaceholder = null;
+			delete sheet.dataset.section;
+			sheet.hidden = true;
+			document.documentElement.classList.remove('oum-settings-sheet-open');
+		};
+		root.querySelectorAll('.oum-mobile-sheet-cancel').forEach((button) => button.addEventListener('click', closeSheet));
+		const openSheet = (title, node, prepare) => {
+			if (!node) return;
+			closeSheet();
+			activeSheetNode = node;
+			activeSheetPlaceholder = document.createComment(`oum-settings:${title}`);
+			sheet.dataset.section = node.classList.contains('oum-internet-panel') ? 'internet' : '';
+			node.parentNode.insertBefore(activeSheetPlaceholder, node);
+			node.classList.add('oum-mobile-sheet-active');
+			if (node.tagName === 'DETAILS') node.open = true;
+			sheetTitle.textContent = title;
+			sheetContent.appendChild(node);
+			if (typeof prepare === 'function') prepare(node);
+			sheet.hidden = false;
+			document.documentElement.classList.add('oum-settings-sheet-open');
+			sheet.querySelector('.oum-settings-sheet-close').focus();
+		};
+		sheet.querySelector('.oum-settings-sheet-close').addEventListener('click', closeSheet);
+		sheet.addEventListener('click', (event) => { if (event.target === sheet) closeSheet(); });
+		document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !sheet.hidden) closeSheet(); });
+		root.appendChild(sheet);
+
+		const launcher = (title, description, action, danger = false) => {
+			const button = E('button', { type: 'button', 'class': `oum-mobile-settings-launcher${danger ? ' is-danger' : ''}` }, [
+				E('span', {}, [ E('strong', {}, title), E('small', {}, description) ]),
+				E('span', { 'class': 'oum-mobile-settings-launcher-action' }, [ E('span', {}, 'Настроить'), E('b', { 'aria-hidden': 'true' }, '›') ])
+			]);
+			button.addEventListener('click', action);
+			return button;
+		};
+		const showVpnSection = (name) => {
+			root.querySelectorAll('[data-vpn-settings-tab]').forEach((button) => button.dataset.active = 'false');
+			root.querySelectorAll('.oum-vpn-section').forEach((section) => { section.hidden = true; section.open = false; });
+			if (!name) return;
+			const button = root.querySelector(`[data-vpn-settings-tab="${name}"]`);
+			const section = root.querySelector(`#vpn-section-${name}`);
+			if (button) button.dataset.active = 'true';
+			if (section) { section.hidden = false; section.open = true; }
+		};
+		const openVpnSheet = (title, section) => openSheet(title, vpnPanel, () => {
+			sheet.dataset.section = `vpn-${section || 'engine'}`;
+			showVpnSection(section);
+		});
+		const vpnState = engineMissing ? 'Не установлен' : `${engineTitle}${engineVersion ? ` · ${engineVersion}` : ''}`;
+		const maintenanceTitles = [ 'Обновление проекта', 'Резервная копия', 'Восстановление', 'Сброс' ];
+		const maintenanceDescriptions = [
+			projectUpdatable ? `Установлена версия ${project.version}` : 'Локальная версия проекта',
+			'Скачать настройки OUM и сети',
+			'Загрузить ранее сохранённую копию',
+			'Сброс VPN или повторный первый запуск'
+		];
+		const mobileHub = E('section', { 'class': 'oum-mobile-settings-hub', 'aria-label': 'Разделы настроек' }, [
+			E('div', { 'class': 'oum-mobile-settings-intro' }, [
+				E('h2', {}, 'Настройки OUM'),
+				E('p', {}, 'Сеть, Wi‑Fi и защищённое подключение'),
+				E('small', {}, 'Пароли не показываются. Оставьте поле пустым, чтобы сохранить действующий.')
+			]),
+			E('div', { 'class': 'oum-mobile-settings-launchers' }, [
+				launcher('Wi-Fi', `${wifi.mode === 'separate' ? 'Две сети' : 'Одна сеть'} · ${wifi.ssid_24 || 'имя не задано'} · WPA2/WPA3 · ${wifi.enabled === false ? 'выключена' : 'включена'}`, () => openSheet('Wi-Fi', wifiPanel)),
+				launcher('Подключение к интернету', `${wisp.enabled ? 'Wi-Fi' : (wan.proto === 'pppoe' ? 'PPPoE' : 'DHCP')} · ${wan.up ? 'подключено' : 'нет соединения'}${wan.ipv4 ? ` · ${wan.ipv4}` : ''}`, () => openSheet('Подключение к интернету', internetPanel)),
+				launcher('Расширение сети', `Локальная сеть · ${mesh.enabled ? 'Mesh включена' : 'Mesh-сеть'}`, () => openSheet('Расширение сети', networkPanel))
+			]),
+			E('section', { 'class': 'oum-mobile-vpn-card' }, [
+				E('header', {}, [ E('strong', {}, 'VPN-движок'), E('span', {}, vpnState) ]),
+				E('div', { 'class': 'oum-mobile-vpn-current' }, [ E('span', { 'aria-hidden': 'true' }), E('strong', {}, engineTitle), E('small', {}, engineMissing ? 'не установлен' : 'активен') ]),
+				E('div', { 'class': 'oum-mobile-vpn-actions' }, [
+					E('button', { type: 'button' }, '⚙  Заменить движок'),
+					E('button', { type: 'button' }, '◉  DNS для VPN'),
+					E('button', { type: 'button' }, '♢  Защита'),
+					E('button', { type: 'button', disabled: (engines.current === 'openclash' || engines.current === 'podkop') ? null : '' }, '↻  Обновление')
+				])
+			]),
+			E('section', { 'class': 'oum-mobile-maintenance-hub' }, [
+				E('h3', {}, 'Обслуживание OUM'),
+				...maintenanceCards.map((card, index) => launcher(maintenanceTitles[index], maintenanceDescriptions[index], () => openSheet(maintenanceTitles[index], card), index === 3))
+			])
+		]);
+		const vpnActions = mobileHub.querySelectorAll('.oum-mobile-vpn-actions button');
+		vpnActions[0]?.addEventListener('click', () => openVpnSheet('VPN-движок'));
+		vpnActions[1]?.addEventListener('click', () => openVpnSheet('DNS для VPN', 'dns'));
+		vpnActions[2]?.addEventListener('click', () => openVpnSheet('Защищённое подключение', 'connection'));
+		vpnActions[3]?.addEventListener('click', () => root.querySelector('#update-engine')?.click());
+		page.insertBefore(mobileHub, root.querySelector('.oum-settings-grid'));
 		updateWanFields();
 		updateWifiFields();
 		updateVpnInput();

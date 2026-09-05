@@ -1,0 +1,35 @@
+{# Copyright 2022 OpenWrt LuCI contributors; Copyright 2026 OUM contributors; Apache-2.0 #}
+{% include('header', { blank_page: true }) %}
+
+<main id="view" class="oum-login-view">
+	<section class="oum-login-card" aria-labelledby="oum-login-title">
+		<header class="oum-login-console">
+			<div class="oum-login-brand">
+				<span class="oum-login-mark" aria-hidden="true">O</span>
+				<div><strong>OUM</strong><small>Домашний щит</small></div>
+			</div>
+			<span class="oum-login-local">OpenWrt</span>
+			<h1 id="oum-login-title">Вход в систему</h1>
+			<p>Управление домашней сетью и защищённым подключением.</p>
+		</header>
+		<form method="post" class="oum-login-form">
+			{% if (fuser): %}
+			<div class="oum-login-error" role="alert">
+				<strong>Не удалось войти</strong>
+				<span>Проверьте имя пользователя и пароль.</span>
+			</div>
+			{% endif %}
+			<label class="oum-login-field" for="luci_username">
+				<span>Имя пользователя</span>
+				<input name="luci_username" id="luci_username" type="text" autocomplete="username" value="admin" spellcheck="false">
+			</label>
+			<label class="oum-login-field" for="luci_password">
+				<span>Пароль</span>
+				<input name="luci_password" id="luci_password" type="password" autocomplete="current-password" autofocus>
+			</label>
+			<button class="btn cbi-button-positive important oum-login-submit" type="submit">Войти</button>
+			<p class="oum-login-footnote">Локальный веб-интерфейс OpenWrt</p>
+		</form>
+	</section>
+</main>
+{% include('footer', { blank_page: true }) %}

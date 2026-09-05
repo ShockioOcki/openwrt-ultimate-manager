@@ -1,0 +1,6 @@
+# OUM Theme — системные настройки отображения
+# Хранится в /etc/config/oum_theme, применяется темой через localStorage/UCI
+
+config theme 'settings'
+	option mode 'light'
+	option accent 'oum'

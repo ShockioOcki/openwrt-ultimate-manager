@@ -18,7 +18,9 @@ trap cleanup EXIT INT TERM
 
 mkdir -p "$PACKAGE/tools" "$PACKAGE/dist" "$PACKAGE/helpers"
 cp -R "$ROOT/luci-app-oum" "$PACKAGE/luci-app-oum"
+cp -R "$ROOT/luci-theme-oum" "$PACKAGE/luci-theme-oum"
 cp "$ROOT/tools/install-luci-dev.sh" "$PACKAGE/tools/install-luci-dev.sh"
+cp "$ROOT/tools/install-theme-dev.sh" "$PACKAGE/tools/install-theme-dev.sh"
 cp "$ROOT/dist/oum-test.sh" "$PACKAGE/dist/oum-test.sh"
 cp "$ROOT/helpers/source_converter.rb" "$PACKAGE/helpers/source_converter.rb"
 

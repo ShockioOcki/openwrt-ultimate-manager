@@ -2,17 +2,21 @@
 'require view';
 'require rpc';
 'require poll';
+'require ui';
 
 const callStatus = rpc.declare({ object: 'oum', method: 'status', expect: { '': {} } });
 const callDashboardStatus = rpc.declare({ object: 'oum', method: 'dashboardStatus', expect: { '': {} } });
+const callWifiQrCredentials = rpc.declare({ object: 'oum', method: 'wifiQrCredentials', expect: { '': {} } });
 const callNodeStatus = rpc.declare({ object: 'oum', method: 'nodeStatus', expect: { '': {} } });
 const callMeasureNodeDelays = rpc.declare({ object: 'oum', method: 'measureNodeDelays', expect: { '': {} } });
 const callSelectNode = rpc.declare({ object: 'oum', method: 'selectNode', params: [ 'name' ], expect: { '': {} } });
 const callSetVpnEnabled = rpc.declare({ object: 'oum', method: 'setVpnEnabled', params: [ 'enabled' ], expect: { '': {} } });
 const callSetDevicePolicy = rpc.declare({ object: 'oum', method: 'setDevicePolicy', params: [ 'mac', 'policy' ], expect: { '': {} } });
 const callSetDeviceAlias = rpc.declare({ object: 'oum', method: 'setDeviceAlias', params: [ 'mac', 'alias' ], expect: { '': {} } });
-const callSetDevicePaused = rpc.declare({ object: 'oum', method: 'setDevicePaused', params: [ 'mac', 'paused' ], expect: { '': {} } });
+const callSetDeviceParental = rpc.declare({ object: 'oum', method: 'setDeviceParental', params: [ 'mac', 'enabled' ], expect: { '': {} } });
 const callRefreshSubscriptionInfo = rpc.declare({ object: 'oum', method: 'refreshSubscriptionInfo', expect: { '': {} } });
+const callRefreshSubscription = rpc.declare({ object: 'oum', method: 'refreshSubscription', expect: { '': {} } });
+const callVpnJobStatus = rpc.declare({ object: 'oum', method: 'vpnJobStatus', expect: { '': {} } });
 const callPodkopRoutingStatus = rpc.declare({ object: 'oum', method: 'podkopRoutingStatus', expect: { '': {} } });
 const callApplyPodkopRouting = rpc.declare({ object: 'oum', method: 'applyPodkopRouting', params: [ 'proxy_lists', 'proxy_domains', 'proxy_subnets', 'direct_lists', 'direct_domains', 'direct_subnets', 'youtube_mode' ], expect: { '': {} } });
 const callPodkopDiagnostics = rpc.declare({ object: 'oum', method: 'podkopDiagnostics', expect: { '': {} } });
@@ -60,7 +64,8 @@ function sortedNodes(nodes) {
 
 function preferredNodes(nodeStatus) {
 	const currentKey = nodeStatus.current_id || nodeStatus.current;
-	const sorted = sortedNodes(nodeStatus.nodes).filter((node) => (node.id || node.name) !== currentKey);
+	const sorted = sortedNodes(nodeStatus.nodes).filter((node) =>
+		(node.id || node.name) !== currentKey && countryKey(node.name) !== 'RU');
 	const result = [], countries = new Set();
 	for (const required of [ 'FI', 'NL' ]) {
 		const node = sorted.find((candidate) => countryKey(candidate.name) === required);
@@ -95,7 +100,9 @@ function validDeviceAlias(alias) {
 	return Array.from(alias).length <= 32 && /^[\p{L}\p{N} _.\-]*$/u.test(alias);
 }
 
+let qrLibraryPromise = null;
 function loadQrLibrary() {
+	if (qrLibraryPromise) return qrLibraryPromise;
 	const load = (path) => new Promise((resolve, reject) => {
 		const script = document.createElement('script');
 		script.src = L.resource(`view/oum/${path}`);
@@ -104,21 +111,21 @@ function loadQrLibrary() {
 		document.head.appendChild(script);
 	});
 	const main = window.qrcode ? Promise.resolve() : load('qrcode.min.js');
-	return main.then(() => window.qrcode?.stringToBytesFuncs?.['UTF-8'] ? null : load('qrcode_UTF8.js'));
+	qrLibraryPromise = main.then(() => window.qrcode?.stringToBytesFuncs?.['UTF-8'] ? null : load('qrcode_UTF8.js'));
+	return qrLibraryPromise;
 }
 
 function escapeWifiQr(value) {
 	return String(value || '').replace(/[\\;,":]/g, '\\$&');
 }
 
-function drawQr(canvas, text) {
+function drawQr(canvas, text, logicalSize = 200) {
 	window.qrcode.stringToBytes = window.qrcode.stringToBytesFuncs['UTF-8'];
 	const code = window.qrcode(0, 'M');
 	code.addData(text, 'Byte');
 	code.make();
 	const count = code.getModuleCount();
 	const quiet = 4;
-	const logicalSize = 200;
 	const scale = Math.max(1, Math.floor(logicalSize / (count + quiet * 2)));
 	const size = (count + quiet * 2) * scale;
 	const ratio = window.devicePixelRatio || 1;
@@ -153,6 +160,14 @@ function formatUptime(seconds) {
 	return days > 0 ? `${days}д ${hours}ч` : `${hours}ч`;
 }
 
+function formatUptimeDetailed(seconds) {
+	const value = Number(seconds || 0);
+	const days = Math.floor(value / 86400);
+	const hours = Math.floor((value % 86400) / 3600);
+	const minutes = Math.floor((value % 3600) / 60);
+	return `${days ? `${days}д ` : ''}${hours}ч ${minutes}м`;
+}
+
 function trafficCell(traffic) {
 	const points = (traffic?.points || []).map(Number);
 	const max = Math.max(...points, 1);
@@ -172,12 +187,38 @@ return view.extend({
 		const dashboard = data[1];
 		const initialNodes = data[2];
 		const podkopRouting = data[3] || { catalog: [], proxy: {}, direct: {} };
-		if (!status.setup_complete)
-			return E('div', {}, [
-				E('h2', {}, 'OUM'),
-				E('p', {}, 'Сначала завершите базовую настройку роутера.'),
-				E('a', { class: 'btn cbi-button-action', href: L.url('oum', 'setup') }, 'Открыть мастер')
+		if (!status.setup_complete) {
+			const page = E('main', { 'class': 'oum-main' }, [
+				E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260902-mobile-main19` }),
+				E('div', { 'class': 'oum-page-head' }, [
+					E('div', {}, [
+						E('h2', {}, 'Панель OUM'),
+						E('p', { 'class': 'oum-muted' }, 'Домашняя сеть и защищённое подключение')
+					])
+				]),
+				E('section', { 'class': 'oum-empty-setup', 'aria-labelledby': 'oum-empty-title' }, [
+					E('div', { 'class': 'oum-empty-head' }, [
+						E('h3', { id: 'oum-empty-title' }, 'Подготовим роутер к работе'),
+						E('p', {}, 'Мастер безопасно настроит интернет, Wi-Fi и доступ к панели. Технические параметры можно будет изменить позже.')
+					]),
+					E('div', { 'class': 'oum-empty-plan' }, [
+						E('ol', {}, [
+							E('li', {}, [ E('span', {}, '1'), E('div', {}, [ E('strong', {}, 'Подключение к интернету'), E('small', {}, 'DHCP или PPPoE от вашего провайдера') ]) ]),
+							E('li', {}, [ E('span', {}, '2'), E('div', {}, [ E('strong', {}, 'Домашняя сеть Wi-Fi'), E('small', {}, 'Имя сети, пароль и удобный режим диапазонов') ]) ]),
+							E('li', {}, [ E('span', {}, '3'), E('div', {}, [ E('strong', {}, 'Защищённый доступ'), E('small', {}, 'VPN можно подключить сейчас или добавить позже') ]) ])
+						]),
+						E('div', { 'class': 'oum-empty-action' }, [
+							E('small', { 'class': 'oum-muted' }, 'Обычно занимает несколько минут'),
+							E('a', { class: 'btn cbi-button-action', href: L.url('oum', 'setup') }, 'Начать настройку')
+						])
+					])
+				])
 			]);
+			return E('div', {
+				'class': 'oum-dashboard oum-app',
+				'data-theme': document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+			}, [ page ]);
+		}
 
 		const dashboardHost = window.location.hostname.includes(':') ? `[${window.location.hostname}]` : window.location.hostname;
 		const zashboardUrl = `http://${dashboardHost}:9090/ui/zashboard/`;
@@ -192,81 +233,105 @@ return view.extend({
 			[ 'Инфраструктура', [ 'cloudflare', 'cloudfront', 'digitalocean', 'hetzner', 'ovh' ], false ],
 			[ 'Дополнительно', [ 'news', 'hodca' ], false ]
 		];
+		const routeIcons = {
+			russia_inside: 'russia.svg', russia_outside: 'russia.svg', geoblock: 'geoblock.svg', block: 'block.svg', youtube: 'youtube.svg',
+			discord: 'discord.svg', meta: 'meta.svg', twitter: 'x.svg', telegram: 'telegram.svg', tiktok: 'tiktok.svg',
+			hdrezka: 'hdrezka.svg', anime: 'myanimelist.svg', roblox: 'roblox.svg', porn: 'porn.svg', google_ai: 'googlegemini.svg',
+			google_play: 'googleplay.svg', cloudflare: 'cloudflare.svg', cloudfront: 'cloudfront.svg', digitalocean: 'digitalocean.svg',
+			hetzner: 'hetzner.svg', ovh: 'ovh.svg', news: 'news.svg', hodca: 'hodca.svg'
+		};
 		const catalogById = Object.fromEntries((podkopRouting.catalog || []).map((item) => [ item.id, item ]));
 		const routeRow = (item) => {
 			const viaVpn = item.id === 'youtube' ? youtubeInitialMode === 'vpn' : proxyRoutes.has(item.id);
 			return E('div', { 'class': 'oum-route-row', 'data-route-row': item.id }, [
-				E('div', { 'class': 'oum-route-service' }, [
-					E('strong', {}, item.label),
-					...(item.id === 'youtube' ? [ E('small', {}, viaVpn ? 'Zapret остановлен' : 'обрабатывается Zapret') ] : [])
-				]),
-				E('div', { 'class': 'oum-route-switch' }, [
-					E('label', {}, [ E('input', { type: 'radio', name: `route_${item.id}`, value: 'vpn', 'data-community-route': item.id, checked: viaVpn ? '' : null }), E('span', {}, 'Через VPN') ]),
-					E('label', {}, [ E('input', { type: 'radio', name: `route_${item.id}`, value: 'direct', 'data-community-route': item.id, checked: !viaVpn ? '' : null }), E('span', {}, item.id === 'youtube' ? 'Напрямую + Zapret' : 'Напрямую') ])
-				])
+				E('span', { 'class': 'oum-sr-only' }, viaVpn ? 'Через VPN' : (item.id === 'youtube' ? 'Напрямую + Zapret' : 'Напрямую')),
+				E('input', { type: 'radio', name: `route_${item.id}`, value: 'vpn', 'data-community-route': item.id, checked: viaVpn ? '' : null }),
+				E('input', { type: 'radio', name: `route_${item.id}`, value: 'direct', 'data-community-route': item.id, checked: !viaVpn ? '' : null }),
+				E('span', { 'class': 'oum-route-icon', 'aria-hidden': 'true' }, E('img', { src: `/luci-static/oum/icons/${routeIcons[item.id] || 'ui-globe.svg'}`, alt: '' })),
+				E('strong', {}, item.label),
+				...(item.id === 'youtube' ? [ E('small', { 'class': 'oum-route-zapret', hidden: viaVpn ? '' : null }, 'Zapret') ] : [])
 			]);
 		};
-		const communityCatalog = () => E('div', { 'class': 'oum-route-catalog' }, categoryDefinitions.map(([ title, ids, open ]) =>
-			E('details', { 'class': 'oum-route-category', open: open ? '' : null }, [
-				E('summary', {}, [ E('strong', {}, title), E('span', { 'class': 'oum-muted' }, `${ids.filter((id) => catalogById[id]).length} сервисов`) ]),
-				E('div', { 'class': 'oum-route-category-list' }, ids.filter((id) => catalogById[id]).map((id) => routeRow(catalogById[id])))
-			])));
+		const communityCatalog = () => E('div', { 'class': 'oum-route-catalog' }, categoryDefinitions.flatMap(([, ids]) =>
+			ids.filter((id) => catalogById[id]).map((id) => routeRow(catalogById[id]))));
+		const systemMeter = (id, label, tone = '') => E('div', { 'class': 'oum-system-metric' }, [
+			E('div', { 'class': 'oum-system-metric-head' }, [ E('span', {}, label), E('span', { id: `${id}-detail` }, '—') ]),
+			E('div', { 'class': `oum-meter${tone ? ` ${tone}` : ''}` }, E('span', { id: `${id}-meter` }))
+		]);
 
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: L.resource('oum/oum.css') }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260902-mobile-main19` }),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('div', {}, [ E('h2', {}, 'Панель OUM'), E('p', { 'class': 'oum-muted' }, 'Домашняя сеть и защищённое подключение') ]),
 				E('div', { 'class': 'oum-head-actions' }, [
-					E('span', { 'class': 'oum-status-badge', id: 'header-vpn-state' }, 'Проверяем VPN'),
-					E('a', { 'class': 'btn cbi-button', href: L.url('oum', 'logout') }, 'Выйти'),
-					E('button', { 'class': 'btn cbi-button', id: 'oum-theme-toggle', type: 'button' }, 'Тёмная')
+					E('span', { 'class': 'oum-status-badge', id: 'header-vpn-state' }, 'Проверяем VPN')
 				])
 			]),
 			E('div', { 'class': 'oum-warning', id: 'unmanaged-tunnel-warning', hidden: '' }),
 			E('div', { 'class': 'oum-warning', id: 'reboot-required-warning', hidden: '' }, 'После замены VPN-движка рекомендуется перезагрузить роутер из раздела «Настройки».'),
 			E('div', { 'class': 'oum-cards' }, [
-				E('div', { 'class': 'oum-card' }, [ E('img', { 'class': 'oum-metric-icon', src: L.resource('oum/icons/ui-globe.svg'), alt: '' }), E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
-				E('div', { 'class': 'oum-card oum-client-metric' }, [ E('div', {}, [ E('img', { 'class': 'oum-metric-icon', src: L.resource('oum/icons/ui-wifi.svg'), alt: '' }), E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, '') ]), E('button', { 'class': 'oum-qr-tile', id: 'show-wifi-qr', type: 'button' }, [ E('span', { 'aria-hidden': 'true' }, '▦'), E('small', {}, 'Wi‑Fi QR') ]) ]),
-				E('div', { 'class': 'oum-card' }, [ E('span', { 'class': 'oum-metric-icon oum-temperature-icon', 'aria-hidden': 'true' }, '°'), E('small', {}, 'Температура'), E('strong', { id: 'health-state', 'class': 'oum-health' }, '—'), E('div', { id: 'health-detail', 'class': 'oum-muted' }, 'Максимум по датчикам') ]),
+				E('div', { 'class': 'oum-card' }, [ E('img', { 'class': 'oum-metric-icon', src: '/luci-static/oum/icons/ui-globe.svg?v=2', width: '48', height: '48', alt: '' }), E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
+				E('div', { 'class': 'oum-card oum-client-metric' }, [ E('div', {}, [ E('img', { 'class': 'oum-metric-icon', src: '/luci-static/oum/icons/ui-users.svg?v=1', width: '48', height: '48', alt: '' }), E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, '') ]), E('button', { 'class': 'oum-qr-tile', id: 'show-wifi-qr', type: 'button', disabled: '', title: 'Подготавливаем QR-код Wi-Fi' }, [ E('canvas', { 'class': 'oum-qr-preview', id: 'wifi-qr-preview', hidden: '', 'aria-hidden': 'true' }), E('span', { 'class': 'oum-qr-placeholder', 'aria-hidden': 'true' }, '•••'), E('small', {}, 'Wi‑Fi QR') ]) ]),
+				E('div', { 'class': 'oum-card' }, [ E('img', { 'class': 'oum-metric-icon oum-temperature-icon', src: '/luci-static/oum/icons/ui-temperature.svg?v=1', width: '48', height: '48', alt: '' }), E('small', {}, 'Температура'), E('strong', { id: 'health-state', 'class': 'oum-health' }, '—'), E('div', { id: 'health-detail', 'class': 'oum-muted' }, 'Максимум по датчикам') ]),
 				E('div', { 'class': 'oum-card oum-vpn-metric' }, [
-					E('img', { 'class': 'oum-metric-icon', src: L.resource('oum/icons/ui-vpn.svg'), alt: '' }),
+					E('img', { 'class': 'oum-metric-icon', src: '/luci-static/oum/icons/ui-vpn.svg?v=2', width: '48', height: '48', alt: '' }),
 					E('small', {}, 'VPN-движок'),
 					E('div', { 'class': 'oum-vpn-card-row' }, [
 						E('strong', { id: 'active-source' }, sourceNames[dashboard.active_source] || dashboard.active_source),
-						E('button', { 'class': 'btn cbi-button', id: 'vpn-toggle' }, '')
+						E('button', { 'class': 'btn cbi-button oum-vpn-toggle', id: 'vpn-toggle', hidden: '' }, '')
 					]),
 					E('div', { 'class': 'oum-card-message oum-muted', id: 'vpn-control-message' }, '')
 				])
 			]),
 			E('div', { 'class': 'oum-panels' }, [
 				E('section', { 'class': 'oum-panel', id: 'devices-panel' }, [
-					E('h3', {}, 'Подключённые устройства'),
-					E('p', { 'class': 'oum-muted oum-device-help' }, 'Не знаешь, какое это устройство? Выключи его — оно пропадёт из списка примерно через 10 секунд. После этого его можно переименовать в разделе «Недавно были». '),
+					E('div', { 'class': 'oum-section-head oum-device-head' }, [
+						E('div', {}, [ E('h3', {}, 'Подключённые устройства'), E('p', { 'class': 'oum-muted oum-device-help' }, 'Выключи неизвестное устройство — оно пропадёт из списка примерно через 10 секунд.') ]),
+						E('span', { 'class': 'oum-device-count', id: 'active-client-badge' }, '0 устройств')
+					]),
 					E('table', { 'class': 'oum-clients' }, [
-						E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'IP-адрес'), E('th', {}, 'Подключение'), E('th', { 'class': 'optional' }, 'MAC'), E('th', {}, 'Трафик за 24 ч'), E('th', {}, 'Маршрутизация'), E('th', {}, 'Доступ') ])),
+						E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'IP-адрес'), E('th', {}, 'Подключение'), E('th', { 'class': 'optional' }, 'MAC'), E('th', {}, 'Трафик за 24 ч'), E('th', {}, 'Маршрутизация'), E('th', {}, 'Контроль'), E('th', { 'class': 'oum-mobile-device-action' }, 'Настройка') ])),
 						E('tbody', { id: 'client-list' })
+					]),
+					E('div', { 'class': 'oum-mobile-client-list', id: 'mobile-client-list' }),
+					E('button', { type: 'button', 'class': 'oum-mobile-client-more', id: 'mobile-client-more', hidden: '' }, [
+						E('span', {}, 'Показать все'),
+						E('svg', { viewBox: '0 0 24 24', width: '14', height: '14', 'aria-hidden': 'true' }, E('path', { d: 'm7 10 5 5 5-5', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }))
 					]),
 					E('details', { 'class': 'oum-offline', id: 'offline-section', hidden: '' }, [
 						E('summary', { id: 'offline-summary' }, 'Недавно были (офлайн)'),
 						E('table', { 'class': 'oum-clients' }, [
-							E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'Последний IP'), E('th', { 'class': 'optional' }, 'MAC'), E('th', {}, 'Маршрутизация'), E('th', {}, 'Доступ') ])),
+							E('thead', {}, E('tr', {}, [ E('th', {}, 'Имя'), E('th', {}, 'Последний IP'), E('th', { 'class': 'optional' }, 'MAC'), E('th', {}, 'Маршрутизация'), E('th', {}, 'Контроль') ])),
 							E('tbody', { id: 'offline-client-list' })
 						])
 					]),
-					E('div', { 'class': 'oum-policy-message oum-muted', id: 'policy-message' }, 'Режим применяется к выбранному устройству и сохраняется после перезагрузки.')
+					E('div', { 'class': 'oum-policy-message oum-muted', id: 'policy-message' }, 'В родительский контроль попадают только устройства, добавленные кнопкой «Добавить».')
 				]),
 				E('section', { 'class': 'oum-panel', id: 'node-panel', hidden: '' }, [
+					E('div', { 'class': 'oum-openclash-empty', id: 'openclash-panel', hidden: '' }, [
+						E('div', { 'class': 'oum-node-head' }, [ E('h3', {}, 'OpenClash'), E('span', { 'class': 'oum-muted', id: 'openclash-version' }, '') ]),
+						E('strong', { id: 'openclash-state' }, 'Подключение не настроено'),
+						E('p', { 'class': 'oum-muted', id: 'openclash-hint' }, 'Добавьте подписку, AWG или Proxy — после запуска здесь появятся текущая нода и полный список серверов.'),
+						E('a', { 'class': 'btn cbi-button-action', href: L.url('oum', 'settings') }, 'Открыть настройки')
+					]),
 					E('div', { 'class': 'oum-subscription', id: 'subscription-panel', hidden: '' }, [
 						E('div', { 'class': 'oum-subscription-head' }, [
-							E('h3', {}, 'Подписка'),
-							E('span', { 'class': 'oum-subscription-status oum-muted', id: 'subscription-status', title: 'Данные обновляются автоматически каждые 30 минут.' }, '—'),
+							E('div', { 'class': 'oum-subscription-copy' }, [
+								E('div', { 'class': 'oum-subscription-title' }, [
+									E('h3', {}, 'Подписка'),
+									E('span', { 'class': 'oum-subscription-status oum-muted', id: 'subscription-status', title: 'Данные обновляются автоматически каждые 30 минут.' }, '—')
+								]),
+								E('div', { 'class': 'oum-subscription-progress', id: 'subscription-progress', role: 'progressbar', 'aria-label': 'Использованный трафик подписки', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0' }, [
+									E('span', { id: 'subscription-progress-value' })
+								])
+							]),
 							E('button', { 'class': 'btn cbi-button', id: 'refresh-subscription' }, 'Обновить')
 						])
 					]),
-					E('div', { id: 'passwall-panel', hidden: '' }, [
+					E('div', { 'class': 'oum-passwall-overview', id: 'passwall-panel', hidden: '' }, [
 						E('div', { 'class': 'oum-node-head' }, [
 							E('h3', {}, 'PassWall'),
-							E('span', { 'class': 'oum-muted', id: 'passwall-version' }, '')
+							E('span', { 'class': 'oum-passwall-badge', id: 'passwall-summary-badge' }, 'Проверяем состояние')
 						]),
 						E('div', { 'class': 'oum-passwall-grid' }, [
 							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Xray'), E('strong', { id: 'passwall-xray' }, '—') ]),
@@ -274,9 +339,11 @@ return view.extend({
 							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Маршрутизация'), E('strong', { id: 'passwall-firewall' }, '—') ]),
 							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'GeoSite / GeoIP'), E('strong', { id: 'passwall-geo' }, '—') ])
 						]),
-						E('div', { 'class': 'oum-passwall-route' }, [ E('small', { 'class': 'oum-muted' }, 'Профиль маршрутизации'), E('strong', { id: 'passwall-profile' }, '—') ]),
-						E('div', { 'class': 'oum-passwall-rules oum-muted', id: 'passwall-rules' }, ''),
-						E('div', { 'class': 'oum-passwall-versions oum-muted', id: 'passwall-versions' }, ''),
+						E('div', { 'class': 'oum-passwall-active' }, [
+							E('small', { id: 'passwall-active-label' }, 'Активная нода'),
+							E('strong', { id: 'passwall-active-node' }, 'Нода не выбрана'),
+							E('div', { 'class': 'oum-passwall-active-meta', id: 'passwall-active-meta' }, 'Проверяем профиль и DNS')
+						]),
 						E('details', { 'class': 'oum-passwall-diagnostics' }, [
 							E('summary', {}, 'DNS и защита'),
 							E('div', { 'class': 'oum-passwall-diagnostic-grid' }, [
@@ -290,42 +357,54 @@ return view.extend({
 						])
 					]),
 					E('div', { id: 'podkop-panel', hidden: '' }, [
-						E('div', { 'class': 'oum-node-head' }, [
-							E('h3', { id: 'podkop-title' }, 'Podkop + Zapret'),
-							E('span', { 'class': 'oum-muted', id: 'podkop-version' }, '')
+						E('div', { 'class': 'oum-podkop-summary' }, [
+							E('div', { 'class': 'oum-podkop-identity' }, [
+								E('span', { 'class': 'oum-podkop-signal', 'aria-hidden': 'true' }),
+								E('strong', { id: 'podkop-title' }, 'Podkop + Zapret'),
+								E('span', { 'class': 'oum-muted', id: 'podkop-version' }, ''),
+								E('span', { 'class': 'oum-podkop-zapret', id: 'podkop-zapret' }, 'Zapret')
+							]),
+							E('div', { 'class': 'oum-podkop-meta' }, [
+								E('span', { id: 'podkop-vpn-count', 'class': 'oum-podkop-count oum-podkop-count-vpn' }, 'VPN: 0'),
+								E('span', { id: 'podkop-direct-count', 'class': 'oum-podkop-count' }, 'Прямо: 0'),
+								E('span', { id: 'podkop-routing-dirty', 'class': 'oum-podkop-dirty', hidden: '' }, 'Изменено')
+							])
 						]),
-						E('div', { 'class': 'oum-passwall-grid' }, [
-							E('div', { 'class': 'oum-passwall-state' }, [ E('small', { id: 'podkop-transport-label' }, 'AWG-туннель'), E('strong', { id: 'podkop-tunnel' }, '—') ]),
-							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Podkop'), E('strong', { id: 'podkop-routing' }, '—') ]),
-							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Zapret / YouTube'), E('strong', { id: 'podkop-zapret' }, '—') ]),
-							E('div', { 'class': 'oum-passwall-state' }, [ E('small', {}, 'Защищённый маршрут'), E('strong', { id: 'podkop-route-kind' }, '—') ])
+						E('div', { hidden: '' }, [
+							E('span', { id: 'podkop-transport-label' }), E('span', { id: 'podkop-tunnel' }), E('span', { id: 'podkop-routing' }), E('span', { id: 'podkop-route-kind' })
+						]),
+						E('div', { 'class': 'oum-mobile-podkop-actions', 'aria-label': 'Разделы Podkop' }, [
+							E('button', { type: 'button', 'data-mobile-podkop': 'routing' }, [ E('span', { 'class': 'oum-mobile-podkop-icon', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/oum/icons/ui-services.svg?v=1', alt: '' })), E('strong', {}, 'Сервисы') ]),
+							E('button', { type: 'button', 'data-mobile-podkop': 'domains' }, [ E('span', { 'class': 'oum-mobile-podkop-icon', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/oum/icons/ui-globe.svg?v=2', alt: '' })), E('strong', {}, 'Домены') ]),
+							E('button', { type: 'button', 'data-mobile-podkop': 'diagnostics' }, [ E('span', { 'class': 'oum-mobile-podkop-icon', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/oum/icons/ui-diagnostics.svg?v=1', alt: '' })), E('strong', {}, 'Диагностика') ])
 						]),
 						E('div', { 'class': 'oum-tabs' }, [
-							E('button', { 'class': 'oum-tab', 'data-podkop-tab': 'routing', 'data-active': 'true' }, 'Маршрутизация'),
+							E('button', { 'class': 'oum-tab', 'data-podkop-tab': 'routing', 'data-active': 'true' }, 'Сервисы'),
 							E('button', { 'class': 'oum-tab', 'data-podkop-tab': 'diagnostics', 'data-active': 'false' }, 'Диагностика')
 						]),
 						E('div', { id: 'podkop-routing-tab' }, [
-							E('div', { 'class': 'oum-route-intro' }, [
-								E('div', {}, [ E('strong', {}, 'Куда направлять сервисы'), E('span', { 'class': 'oum-muted' }, 'Podkop отправляет трафик через текущее защищённое подключение либо напрямую через провайдера.') ]),
-								E('span', { id: 'podkop-route-summary', 'class': 'oum-muted' }, '')
-							]),
 							communityCatalog(),
 							E('details', { 'class': 'oum-custom-rules' }, [
 								E('summary', {}, 'Свои домены и подсети'),
-								E('div', { 'class': 'oum-route-columns' }, [
-									E('div', { 'class': 'oum-route-box' }, [
-										E('h4', {}, 'Через VPN'), E('p', { 'class': 'oum-muted' }, 'Дополнительные назначения для защищённого подключения.'),
-										E('label', { 'class': 'oum-route-label' }, 'Домены'), E('textarea', { id: 'podkop-proxy-domains', placeholder: 'example.com\n.example.org' }, (podkopRouting.proxy?.domains || []).join('\n')),
-										E('label', { 'class': 'oum-route-label' }, 'Подсети'), E('textarea', { id: 'podkop-proxy-subnets', placeholder: '203.0.113.0/24\n198.51.100.10' }, (podkopRouting.proxy?.subnets || []).join('\n'))
-									]),
-									E('div', { 'class': 'oum-route-box' }, [
-										E('h4', {}, 'Напрямую'), E('p', { 'class': 'oum-muted' }, 'Явные исключения из защищённого подключения.'),
-										E('label', { 'class': 'oum-route-label' }, 'Домены'), E('textarea', { id: 'podkop-direct-domains', placeholder: 'local.example.com' }, (podkopRouting.direct?.domains || []).join('\n')),
-										E('label', { 'class': 'oum-route-label' }, 'Подсети'), E('textarea', { id: 'podkop-direct-subnets', placeholder: '192.0.2.0/24' }, (podkopRouting.direct?.subnets || []).join('\n'))
-									])
+								E('div', { 'class': 'oum-custom-route-tabs', role: 'tablist', 'aria-label': 'Направление своих правил' }, [
+									E('button', { type: 'button', 'class': 'oum-custom-route-tab', 'data-custom-route': 'proxy', 'data-active': 'true' }, 'Через VPN'),
+									E('button', { type: 'button', 'class': 'oum-custom-route-tab', 'data-custom-route': 'direct', 'data-active': 'false' }, 'Напрямую')
+								]),
+								E('p', { 'class': 'oum-muted oum-custom-route-help', id: 'podkop-custom-route-help' }, 'Дополнительные назначения для защищённого подключения.'),
+								E('div', { 'class': 'oum-custom-route-pane', 'data-custom-route-pane': 'proxy' }, [
+									E('label', { 'class': 'oum-route-field' }, [ E('strong', {}, 'Домены'), E('textarea', { id: 'podkop-proxy-domains', placeholder: 'example.com, sub.example.com\n// комментарий' }, (podkopRouting.proxy?.domains || []).join('\n')), E('small', { 'class': 'oum-muted' }, 'Через запятую, пробел или перенос. Комментарии через //') ]),
+									E('label', { 'class': 'oum-route-field' }, [ E('strong', {}, 'Подсети'), E('textarea', { id: 'podkop-proxy-subnets', placeholder: '203.0.113.0/24\n198.51.100.10' }, (podkopRouting.proxy?.subnets || []).join('\n')), E('small', { 'class': 'oum-muted' }, 'IP или CIDR, через запятую, пробел или перенос') ])
+								]),
+								E('div', { 'class': 'oum-custom-route-pane', 'data-custom-route-pane': 'direct', hidden: '' }, [
+									E('label', { 'class': 'oum-route-field' }, [ E('strong', {}, 'Домены'), E('textarea', { id: 'podkop-direct-domains', placeholder: 'local.example.com' }, (podkopRouting.direct?.domains || []).join('\n')), E('small', { 'class': 'oum-muted' }, 'Эти домены всегда обходят защищённое подключение') ]),
+									E('label', { 'class': 'oum-route-field' }, [ E('strong', {}, 'Подсети'), E('textarea', { id: 'podkop-direct-subnets', placeholder: '192.0.2.0/24' }, (podkopRouting.direct?.subnets || []).join('\n')), E('small', { 'class': 'oum-muted' }, 'Эти IP и подсети всегда идут через провайдера') ])
 								])
 							]),
-							E('div', { 'class': 'oum-route-actions' }, [ E('button', { 'class': 'btn cbi-button-action', id: 'podkop-routing-save' }, 'Сохранить маршрутизацию'), E('span', { 'class': 'oum-route-message oum-muted', id: 'podkop-routing-message' }, '') ])
+							E('div', { 'class': 'oum-route-actions' }, [
+								E('span', { 'class': 'oum-route-message oum-muted', id: 'podkop-routing-message' }, ''),
+								E('button', { 'class': 'btn cbi-button', id: 'podkop-routing-reset' }, 'Сбросить'),
+								E('button', { 'class': 'btn cbi-button-action', id: 'podkop-routing-save' }, 'Сохранить')
+							])
 						]),
 						E('div', { id: 'podkop-diagnostics-tab', hidden: '' }, [
 							E('div', { 'class': 'oum-diagnostic-layout' }, [
@@ -362,28 +441,47 @@ return view.extend({
 							E('h3', { id: 'node-panel-title' }, 'Точка подключения'),
 							E('div', { 'class': 'oum-node-actions' }, [
 								E('a', { 'class': 'btn cbi-button', id: 'zashboard-link', href: zashboardUrl, target: '_blank', rel: 'noreferrer' }, 'Zashboard'),
+								E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Измерить TCP'),
 								E('button', { 'class': 'btn cbi-button-action', id: 'show-node-picker' }, 'Выбрать ноду')
 							])
 						]),
+						E('p', { 'class': 'oum-node-panel-hint oum-muted', id: 'node-panel-hint', hidden: '' }, 'Топ-3 без России всегда видны · быстрые серверы разных стран'),
 						E('div', { 'class': 'oum-current-node', id: 'current-node' }, 'Нет активной ноды'),
+						E('div', { 'class': 'oum-node-list oum-node-quick', id: 'quick-node-list', hidden: '' }),
 						E('div', { 'class': 'oum-node-message oum-muted', id: 'node-message' }),
 						E('details', { 'class': 'oum-node-all', id: 'node-picker' }, [
-							E('summary', { id: 'all-nodes-summary' }, 'Список нод'),
-							E('div', { 'class': 'oum-node-actions' }, [ E('button', { 'class': 'btn cbi-button', id: 'measure-nodes' }, 'Измерить TCP'), E('span', { 'class': 'oum-node-hint oum-muted' }, 'Лёгкое TCP-соединение до сервера ноды.') ]),
+							E('summary', {}, [ E('span', { id: 'all-nodes-summary' }, 'Все ноды'), E('span', { 'class': 'oum-node-hint oum-muted' }, 'Лёгкое TCP · быстрые наверху') ]),
 							E('div', { 'class': 'oum-node-list oum-node-all-grid', id: 'all-node-list' })
 						])
 					])
 				])
 			]),
-			E('section', { 'class': 'oum-panel oum-system-panel' }, [
-				E('div', { 'class': 'oum-section-head' }, [ E('h3', {}, 'Система'), E('span', { 'class': 'oum-muted', id: 'system-uptime' }, '—') ]),
-				E('div', { 'class': 'oum-system-meters' }, [
-					E('div', {}, [ E('strong', {}, 'Оперативная память'), E('div', { 'class': 'oum-meter' }, E('span', { id: 'memory-meter' })), E('small', { 'class': 'oum-muted', id: 'memory-detail' }, '—') ]),
-					E('div', {}, [ E('strong', {}, 'Нагрузка'), E('div', { 'class': 'oum-meter' }, E('span', { id: 'load-meter' })), E('small', { 'class': 'oum-muted', id: 'load-detail' }, '—') ])
+			E('details', { 'class': 'oum-panel oum-system-panel', open: '' }, [
+				E('summary', { 'class': 'oum-system-summary' }, [
+					E('div', { 'class': 'oum-system-title' }, [ E('span', { 'class': 'oum-system-icon', 'aria-hidden': 'true' }), E('h3', {}, 'Система'), E('span', { 'class': 'oum-muted', id: 'system-meta' }, '—') ]),
+					E('span', { 'class': 'oum-muted', id: 'system-uptime' }, '—')
+				]),
+				E('div', { 'class': 'oum-system-body' }, [
+					E('section', { 'class': 'oum-system-group' }, [
+						E('h4', { id: 'memory-title' }, 'Оперативная память'),
+						systemMeter('memory-available', 'Свободно'),
+						systemMeter('memory-used', 'Занято'),
+						systemMeter('memory-cached', 'Кэшировано', 'is-secondary'),
+						systemMeter('memory-buffered', 'Буферизовано', 'is-muted')
+					]),
+					E('section', { 'class': 'oum-system-group' }, [
+						E('h4', {}, 'Хранилище'),
+						systemMeter('storage-root', 'Дисковое пространство (/overlay)'),
+						systemMeter('storage-tmp', 'Временное хранилище (/tmp)', 'is-secondary')
+					]),
+					E('section', { 'class': 'oum-system-group' }, [
+						E('h4', {}, 'Состояние портов'),
+						E('div', { 'class': 'oum-port-grid', id: 'system-port-grid' })
+					])
 				])
 			])
 		]);
-		const root = E('div', { 'class': 'oum-dashboard oum-app', 'data-theme': 'light' }, [ appSidebar('dashboard'), page ]);
+		const root = E('div', { 'class': 'oum-dashboard oum-app', 'data-theme': document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light' }, [ page ]);
 
 		const nodePanel = root.querySelector('#node-panel');
 		const nodeControls = root.querySelector('#node-controls');
@@ -392,12 +490,16 @@ return view.extend({
 		const nodeMessage = root.querySelector('#node-message');
 		const measureButton = root.querySelector('#measure-nodes');
 		const nodePanelTitle = root.querySelector('#node-panel-title');
+		const nodePanelHint = root.querySelector('#node-panel-hint');
 		const zashboardLink = root.querySelector('#zashboard-link');
 		const subscriptionPanel = root.querySelector('#subscription-panel');
 		const subscriptionRefresh = root.querySelector('#refresh-subscription');
 		const subscriptionStatus = root.querySelector('#subscription-status');
+		const subscriptionProgress = root.querySelector('#subscription-progress');
+		const subscriptionProgressValue = root.querySelector('#subscription-progress-value');
+		const quickNodeList = root.querySelector('#quick-node-list');
+		const openclashPanel = root.querySelector('#openclash-panel');
 		const wifiQrButton = root.querySelector('#show-wifi-qr');
-		const themeToggle = root.querySelector('#oum-theme-toggle');
 		const vpnToggle = root.querySelector('#vpn-toggle');
 		const vpnControlMessage = root.querySelector('#vpn-control-message');
 		const policyMessage = root.querySelector('#policy-message');
@@ -406,24 +508,36 @@ return view.extend({
 		let vpnWatchTimer = null;
 		let passwallInstalled = dashboard.passwall?.installed === true;
 		let podkopInstalled = dashboard.podkop?.installed === true;
+		let openclashInstalled = dashboard.openclash?.installed === true;
 		let nodesAvailable = initialNodes.available === true;
 		let dashboardState = dashboard;
+		let passwallState = {};
+		let passwallNodeState = {};
 		let editingAliasMac = null;
-		const setTheme = (theme) => {
-			root.dataset.theme = theme;
-			themeToggle.textContent = theme === 'dark' ? 'Светлая' : 'Тёмная';
-			try { window.localStorage.setItem('oum-theme', theme); } catch (_) {}
+		let mobileClientsExpanded = false;
+		const updateOpenclashPanel = () => {
+			const visible = vpnEngine === 'openclash' && openclashInstalled && !nodesAvailable;
+			openclashPanel.hidden = !visible;
+			if (!visible) return;
+			root.querySelector('#openclash-version').textContent = dashboardState.openclash?.version ? `Версия ${dashboardState.openclash.version}` : '';
+			root.querySelector('#openclash-state').textContent = dashboardState.active_source === 'none' ? 'Подключение не настроено' : (dashboardState.vpn_enabled ? 'Ожидаем ноды OpenClash' : 'OpenClash выключен');
+			root.querySelector('#openclash-hint').textContent = dashboardState.active_source === 'none' ?
+				'Добавьте подписку, AWG или Proxy — после запуска здесь появятся текущая нода и полный список серверов.' :
+				'Запустите подключение. Если список нод не появится, откройте настройки и проверьте выбранный источник.';
 		};
-		try { setTheme(window.localStorage.getItem('oum-theme') === 'dark' ? 'dark' : 'light'); } catch (_) { setTheme('light'); }
-		themeToggle.addEventListener('click', () => setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark'));
-		const updateVpnPanelVisibility = () => { nodePanel.hidden = !(passwallInstalled || podkopInstalled || nodesAvailable); };
+		const updateVpnPanelVisibility = () => {
+			nodePanel.hidden = !(passwallInstalled || podkopInstalled || openclashInstalled || nodesAvailable);
+			updateOpenclashPanel();
+		};
 		const podkopRoutingMessage = root.querySelector('#podkop-routing-message');
 		const podkopRoutingSave = root.querySelector('#podkop-routing-save');
+		const podkopRoutingReset = root.querySelector('#podkop-routing-reset');
 		const podkopDiagnosticsRefresh = root.querySelector('#podkop-diagnostics-refresh');
 		const podkopDiagnosticRestart = root.querySelector('#podkop-diagnostic-restart');
 		const podkopQuicToggle = root.querySelector('#podkop-quic-toggle');
 		const zapretManagerPrepare = root.querySelector('#zapret-manager-prepare');
 		let podkopQuicDisabled = false;
+		let savedRoutingSignature = null;
 
 		for (const tab of root.querySelectorAll('[data-podkop-tab]')) tab.addEventListener('click', (event) => {
 			event.preventDefault();
@@ -433,17 +547,49 @@ return view.extend({
 			root.querySelector('#podkop-routing-tab').hidden = selected !== 'routing';
 			root.querySelector('#podkop-diagnostics-tab').hidden = selected !== 'diagnostics';
 		});
+		for (const button of root.querySelectorAll('[data-mobile-podkop]')) button.addEventListener('click', (event) => {
+			event.preventDefault();
+			const selected = button.dataset.mobilePodkop;
+			const panel = root.querySelector('#podkop-panel');
+			const routing = selected !== 'diagnostics';
+			panel.dataset.mobileExpanded = panel.dataset.mobileExpanded === selected ? '' : selected;
+			for (const tab of root.querySelectorAll('[data-podkop-tab]'))
+				tab.dataset.active = tab.dataset.podkopTab === (routing ? 'routing' : 'diagnostics') ? 'true' : 'false';
+			root.querySelector('#podkop-routing-tab').hidden = !routing;
+			root.querySelector('#podkop-diagnostics-tab').hidden = routing;
+			if (selected === 'domains' && panel.dataset.mobileExpanded === 'domains')
+				root.querySelector('.oum-custom-rules').open = true;
+			button.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+		});
+		for (const tab of root.querySelectorAll('[data-custom-route]')) tab.addEventListener('click', (event) => {
+			event.preventDefault();
+			const selected = tab.dataset.customRoute;
+			for (const button of root.querySelectorAll('[data-custom-route]'))
+				button.dataset.active = button.dataset.customRoute === selected ? 'true' : 'false';
+			for (const pane of root.querySelectorAll('[data-custom-route-pane]'))
+				pane.hidden = pane.dataset.customRoutePane !== selected;
+			root.querySelector('#podkop-custom-route-help').textContent = selected === 'proxy' ?
+				'Дополнительные назначения для защищённого подключения.' : 'Явные исключения из защищённого подключения.';
+		});
 
 		const selectedCommunities = (route) => Array.from(root.querySelectorAll('[data-community-route]:checked')).filter((item) => item.value === route).map((item) => item.dataset.communityRoute).join('\n');
 		const selectedYoutubeMode = () => root.querySelector('[data-community-route="youtube"]:checked')?.value === 'vpn' ? 'vpn' : 'zapret';
+		const routingSignature = () => JSON.stringify({
+			vpn: selectedCommunities('vpn'), direct: selectedCommunities('direct'), youtube: selectedYoutubeMode(),
+			proxyDomains: root.querySelector('#podkop-proxy-domains').value, proxySubnets: root.querySelector('#podkop-proxy-subnets').value,
+			directDomains: root.querySelector('#podkop-direct-domains').value, directSubnets: root.querySelector('#podkop-direct-subnets').value
+		});
 		const updateRouteSummary = () => {
 			const vpnCount = selectedCommunities('vpn').split('\n').filter(Boolean).length;
 			const directCount = selectedCommunities('direct').split('\n').filter(Boolean).length;
-			root.querySelector('#podkop-route-summary').textContent = `Через VPN: ${vpnCount} · напрямую: ${directCount}`;
-			const youtubeHint = root.querySelector('[data-route-row="youtube"] small');
-			if (youtubeHint) youtubeHint.textContent = selectedYoutubeMode() === 'vpn' ? 'Zapret будет остановлен' : 'будет обработан Zapret';
+			root.querySelector('#podkop-vpn-count').textContent = `VPN: ${vpnCount}`;
+			root.querySelector('#podkop-direct-count').textContent = `Прямо: ${directCount}`;
+			root.querySelector('#podkop-routing-dirty').hidden = savedRoutingSignature === null || routingSignature() === savedRoutingSignature;
+			const youtubeHint = root.querySelector('[data-route-row="youtube"] .oum-route-zapret');
+			if (youtubeHint) youtubeHint.hidden = selectedYoutubeMode() === 'vpn';
 		};
 		root.querySelector('#podkop-routing-tab').addEventListener('change', updateRouteSummary);
+		root.querySelector('#podkop-routing-tab').addEventListener('input', updateRouteSummary);
 		for (const row of root.querySelectorAll('.oum-route-row')) {
 			row.tabIndex = 0;
 			row.setAttribute('role', 'switch');
@@ -463,7 +609,24 @@ return view.extend({
 				toggle();
 			});
 		}
+		savedRoutingSignature = routingSignature();
 		updateRouteSummary();
+		podkopRoutingReset.addEventListener('click', (event) => {
+			event.preventDefault();
+			for (const row of root.querySelectorAll('.oum-route-row')) {
+				const id = row.dataset.routeRow;
+				const original = id === 'youtube' ? (youtubeInitialMode === 'vpn' ? 'vpn' : 'direct') : (proxyRoutes.has(id) ? 'vpn' : 'direct');
+				const input = row.querySelector(`input[value="${original}"]`);
+				if (input) input.checked = true;
+				row.setAttribute('aria-checked', String(original === 'vpn'));
+			}
+			root.querySelector('#podkop-proxy-domains').value = (podkopRouting.proxy?.domains || []).join('\n');
+			root.querySelector('#podkop-proxy-subnets').value = (podkopRouting.proxy?.subnets || []).join('\n');
+			root.querySelector('#podkop-direct-domains').value = (podkopRouting.direct?.domains || []).join('\n');
+			root.querySelector('#podkop-direct-subnets').value = (podkopRouting.direct?.subnets || []).join('\n');
+			podkopRoutingMessage.textContent = '';
+			updateRouteSummary();
+		});
 		podkopRoutingSave.addEventListener('click', (event) => {
 			event.preventDefault();
 			podkopRoutingSave.disabled = true;
@@ -480,6 +643,8 @@ return view.extend({
 					podkopRoutingMessage.textContent = job.message || 'Применяем…';
 					if (job.state === 'running' && attempts++ < 90) return watch();
 					if (job.state !== 'success') throw new Error(job.message || 'Маршрутизация не применена.');
+					savedRoutingSignature = routingSignature();
+					updateRouteSummary();
 					return callDashboardStatus().then(updateDashboard);
 				});
 				return watch();
@@ -614,6 +779,7 @@ return view.extend({
 			subscriptionRefresh.disabled = info.refreshing === true;
 			if (!info.available) {
 				subscriptionStatus.textContent = info.refreshing ? 'Получаем данные у провайдера…' : 'Провайдер не передал сведения о подписке.';
+				subscriptionProgress.hidden = true;
 				return;
 			}
 
@@ -629,11 +795,19 @@ return view.extend({
 				expiry = `до ${date} (${days} дн.)`;
 			}
 			subscriptionStatus.textContent = info.refreshing ? 'Обновляем данные…' : `${traffic} · ${expiry}`;
+			const usedPercent = total > 0 ? Math.max(0, Math.min(100, Math.round(used / total * 100))) : 0;
+			subscriptionProgress.hidden = total <= 0;
+			subscriptionProgress.setAttribute('aria-valuenow', String(usedPercent));
+			subscriptionProgressValue.style.width = `${usedPercent}%`;
 		};
 
 		const updateDashboard = (fresh) => {
 			dashboardState = fresh;
 			vpnEngine = fresh.vpn_engine || 'openclash';
+			passwallInstalled = fresh.passwall?.installed === true;
+			podkopInstalled = fresh.podkop?.installed === true;
+			openclashInstalled = fresh.openclash?.installed === true;
+			updateVpnPanelVisibility();
 			const tunnelWarning = root.querySelector('#unmanaged-tunnel-warning');
 			root.querySelector('#reboot-required-warning').hidden = fresh.reboot_required !== true;
 			const unmanaged = fresh.unmanaged_tunnels || [];
@@ -642,12 +816,16 @@ return view.extend({
 			tunnelWarning.textContent = activeUnmanaged.length ?
 				`Обнаружено дополнительное VPN-подключение, созданное не через OUM: ${activeUnmanaged.map((item) => item.name).join(', ')}. Если оно включено одновременно с OUM, интернет может работать неправильно.` : '';
 			root.querySelector('#wan-state').textContent = fresh.wan?.up ? 'Подключён' : 'Нет соединения';
+			root.querySelector('#wan-state').dataset.state = fresh.wan?.up ? 'good' : 'bad';
 			root.querySelector('#wan-detail').textContent = fresh.wan?.via === 'wifi' ?
 				`через Wi-Fi${fresh.wan.ssid ? ` · ${fresh.wan.ssid}` : ''}${fresh.wan.ipv4 ? ` · ${fresh.wan.ipv4}` : ''}` :
 				(fresh.wan?.ipv4 ? `${fresh.wan.ipv4} · ${String(fresh.wan.proto || '').toUpperCase()}` : String(fresh.wan?.proto || '').toUpperCase());
-			root.querySelector('#client-count').textContent = String(fresh.clients?.length || 0);
-			const ssids = Array.from(new Set((fresh.wifi || []).map((item) => item.ssid)));
-			root.querySelector('#wifi-detail').textContent = ssids.length ? ssids.join(' · ') : 'Wi-Fi выключен';
+			const clientCount = fresh.clients?.length || 0;
+			const clientCountWord = clientCount % 10 === 1 && clientCount % 100 !== 11 ? 'устройство' :
+				(clientCount % 10 >= 2 && clientCount % 10 <= 4 && (clientCount % 100 < 12 || clientCount % 100 > 14) ? 'устройства' : 'устройств');
+			root.querySelector('#client-count').textContent = `${clientCount} ${clientCountWord}`;
+			root.querySelector('#wifi-detail').textContent = clientCount === 1 ? 'устройство онлайн' :
+				(clientCount > 1 && clientCount < 5 ? 'устройства онлайн' : 'устройств онлайн');
 			wifiQrButton.hidden = !(fresh.wifi || []).length;
 			const health = fresh.health || {};
 			const temperatureText = health.temperature != null ? `${Math.round(health.temperature)} °C` : '—';
@@ -655,19 +833,45 @@ return view.extend({
 			healthNode.dataset.temperature = health.temperature_state || 'unknown';
 			healthNode.textContent = temperatureText;
 			root.querySelector('#health-detail').textContent = health.temperature_state === 'hot' ? 'Нужно проветрить' : (health.temperature_state === 'warm' ? 'Выше обычного' : 'Максимум по датчикам');
-			root.querySelector('#system-uptime').textContent = `Время работы ${formatUptime(health.uptime)}`;
-			root.querySelector('#memory-meter').style.width = `${Math.min(100, Number(health.memory_percent || 0))}%`;
-			root.querySelector('#memory-detail').textContent = `${formatBytes(health.memory_used || 0)} / ${formatBytes(health.memory_total || 0)} (${health.memory_percent || 0}%)`;
-			const loadPercent = Math.min(100, Math.max(0, Number(health.load || 0) * 25));
-			root.querySelector('#load-meter').style.width = `${loadPercent}%`;
-			root.querySelector('#load-detail').textContent = `Load average: ${Number(health.load || 0).toFixed(2)}`;
-			root.querySelector('#active-source').textContent = sourceNames[vpnEngine === 'passwall' ? 'passwall' : (vpnEngine === 'podkop' ? 'podkop' : fresh.active_source)] || fresh.active_source;
+			const totalMemory = Number(health.memory_total || 0);
+			const setSystemMeter = (id, value, total) => {
+				const percent = total > 0 ? Math.min(100, Math.max(0, value * 100 / total)) : 0;
+				root.querySelector(`#${id}-meter`).style.width = `${percent}%`;
+				root.querySelector(`#${id}-detail`).textContent = `${formatBytes(value)} / ${formatBytes(total)} (${Math.round(percent)}%)`;
+			};
+			const model = String(health.model || '').match(/(?:Router\s+)?([A-Z0-9-]+)$/)?.[1] || String(health.model || 'OpenWrt');
+			const load = Number(health.load || 0);
+			root.querySelector('#system-meta').textContent = `· ${formatUptime(health.uptime)} · ${model} · ${health.kernel || '—'}`;
+			root.querySelector('#system-uptime').textContent = `Время работы ${formatUptimeDetailed(health.uptime)} · ${load < .15 ? 'без нагрузки' : (load < .7 ? 'низкая нагрузка' : 'повышенная нагрузка')}`;
+			root.querySelector('#memory-title').textContent = `Оперативная память · ${formatBytes(totalMemory)}`;
+			setSystemMeter('memory-available', Number(health.memory_available || 0), totalMemory);
+			setSystemMeter('memory-used', Number(health.memory_used || 0), totalMemory);
+			setSystemMeter('memory-cached', Number(health.memory_cached || 0), totalMemory);
+			setSystemMeter('memory-buffered', Number(health.memory_buffered || 0), totalMemory);
+			setSystemMeter('storage-root', Number(health.root_used || 0), Number(health.root_total || 0));
+			setSystemMeter('storage-tmp', Number(health.tmp_used || 0), Number(health.tmp_total || 0));
+			root.querySelector('#system-port-grid').replaceChildren(...(health.ports || []).map((port) => {
+				const speed = port.up ? (port.speed >= 1000 ? `${port.speed / 1000} GbE` : `${port.speed} MbE`) : 'нет соединения';
+				return E('div', { 'class': 'oum-port-card', 'data-up': port.up ? 'true' : 'false' }, [
+					E('strong', { 'class': 'oum-port-name' }, port.name),
+					E('div', { 'class': 'oum-port-state', 'aria-label': port.up ? 'Порт подключён' : 'Порт не подключён' }, E('span', {})),
+					E('div', { 'class': 'oum-port-speed' }, speed),
+					E('div', { 'class': 'oum-port-link' }, E('span', {})),
+					E('div', { 'class': 'oum-port-traffic' }, [ E('span', {}, `Передано ${formatBytes(port.tx_bytes || 0)}`), E('span', {}, `Получено ${formatBytes(port.rx_bytes || 0)}`) ])
+				]);
+			}));
+			const engineTitle = vpnEngine === 'podkop' ?
+				`Podkop${fresh.podkop?.version ? ` ${fresh.podkop.version}` : ''}` :
+				(vpnEngine === 'passwall' ? `PassWall${fresh.passwall?.version ? ` ${fresh.passwall.version}` : ''}` :
+					(sourceNames[fresh.active_source] || fresh.active_source));
+			root.querySelector('#active-source').textContent = engineTitle;
 			vpnEnabled = fresh.vpn_enabled === true;
 			vpnToggle.textContent = vpnEnabled ? 'Отключить' : 'Включить';
 			// A broken or half-started VPN must always remain possible to disable.
 			vpnToggle.disabled = !vpnEnabled && vpnEngine === 'openclash' && fresh.active_source === 'none';
+			const podkopRoute = fresh.podkop?.transport === 'reality' ? 'Reality' : 'AWG';
 			vpnControlMessage.textContent = !vpnEnabled ? 'VPN выключен' :
-				(fresh.vpn_ready === true ? 'VPN работает' : 'VPN запускается или требует внимания');
+				(fresh.vpn_ready === true ? (vpnEngine === 'podkop' ? `Через ${podkopRoute}` : 'VPN работает') : 'VPN запускается или требует внимания');
 			const headerVpn = root.querySelector('#header-vpn-state');
 			headerVpn.textContent = fresh.vpn_ready === true ? 'VPN работает' : (vpnEnabled ? 'VPN требует внимания' : 'VPN выключен');
 			headerVpn.dataset.state = fresh.vpn_ready === true ? 'good' : (vpnEnabled ? 'warn' : 'off');
@@ -686,41 +890,70 @@ return view.extend({
 						E('span', { 'class': 'oum-device-name' }, client.name),
 						E('button', { type: 'button', 'class': 'btn cbi-button oum-device-rename', 'data-device-action': 'edit', 'data-device-mac': client.mac }, 'Переименовать')
 					]));
-			const pauseButton = (client) => E('button', {
+			const parentalButton = (client) => E('button', {
 				type: 'button',
-				'class': `btn ${client.paused ? 'cbi-button-action' : 'cbi-button'} oum-pause-button`,
-				'data-device-action': 'pause',
+				'class': `btn ${client.parental_managed ? 'cbi-button-action' : 'cbi-button'} oum-parental-add`,
+				'data-device-action': 'parental',
 				'data-device-mac': client.mac,
-				'data-device-paused': client.paused ? '1' : '0'
-			}, client.paused ? 'Возобновить' : 'Пауза');
+				'data-device-parental': client.parental_managed ? '1' : '0',
+				title: client.parental_managed ? 'Убрать устройство из родительского контроля' : 'Добавить устройство в родительский контроль'
+			}, client.parental_managed ? 'Добавлено' : 'Добавить');
+			const mobileDeviceButton = (client) => E('button', {
+				type: 'button',
+				'class': 'btn cbi-button oum-mobile-device-open',
+				'data-device-action': 'mobile',
+				'data-device-mac': client.mac,
+				'aria-label': `Настроить устройство ${client.name}`
+			}, 'Настроить');
+			const mobileDeviceRow = (client) => E('button', {
+				type: 'button',
+				'class': 'oum-mobile-client-row',
+				'data-device-action': 'mobile',
+				'data-device-mac': client.mac,
+				'aria-label': `Настроить устройство ${client.name}`
+			}, [
+				E('span', { 'class': 'oum-mobile-client-state', 'aria-hidden': 'true' }),
+				E('span', { 'class': 'oum-mobile-client-copy' }, [
+					E('strong', {}, client.name),
+					E('small', {}, `${client.ip || 'Без IP'} · ${client.medium === 'wifi' ? 'Wi-Fi' : (client.medium === 'ethernet' ? 'Кабель' : 'Подключение')}`)
+				]),
+				E('span', { 'class': 'oum-mobile-client-tune', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/oum/icons/ui-tune.svg?v=1', alt: '' }))
+			]);
 			if (!editingAliasMac || !activeEditor) {
 				body.replaceChildren(...(fresh.clients || []).map((client) => E('tr', { 'class': client.paused ? 'oum-client-paused' : '' }, [
-				nameCell(client), E('td', {}, client.ip),
-				E('td', {}, client.medium === 'wifi' ? 'Wi-Fi' : (client.medium === 'ethernet' ? 'Кабель' : 'Не определено')),
-				E('td', { 'class': 'optional' }, client.mac), trafficCell(client.traffic),
-				E('td', {}, policySelect(client)),
-				E('td', {}, pauseButton(client))
-			])));
+					nameCell(client), E('td', {}, client.ip),
+					E('td', {}, client.medium === 'wifi' ? 'Wi-Fi' : (client.medium === 'ethernet' ? 'Кабель' : 'Не определено')),
+					E('td', { 'class': 'optional' }, client.mac), trafficCell(client.traffic),
+					E('td', {}, policySelect(client)),
+					E('td', {}, parentalButton(client)),
+					E('td', { 'class': 'oum-mobile-device-action' }, mobileDeviceButton(client))
+				])));
 				offlineBody.replaceChildren(...(fresh.offline_clients || []).map((client) => {
 					const select = policySelect(client);
 					select.disabled = true;
 					return E('tr', { 'class': client.paused ? 'oum-client-paused' : '' }, [
 						nameCell(client), E('td', {}, client.ip || '—'), E('td', { 'class': 'optional' }, client.mac),
-						E('td', {}, select), E('td', {}, pauseButton(client))
+						E('td', {}, select), E('td', {}, parentalButton(client))
 					]);
 				}));
+				const mobileClients = mobileClientsExpanded ? (fresh.clients || []) : (fresh.clients || []).slice(0, 3);
+				root.querySelector('#mobile-client-list').replaceChildren(...mobileClients.map(mobileDeviceRow));
 			}
 			if (!fresh.clients?.length)
-				body.appendChild(E('tr', {}, E('td', { colspan: 7, 'class': 'oum-muted' }, 'Нет активных устройств')));
+				body.appendChild(E('tr', {}, E('td', { colspan: 8, 'class': 'oum-muted' }, 'Нет активных устройств')));
+			const clientCountLabel = clientCount % 10 === 1 && clientCount % 100 !== 11 ? 'устройство' :
+				([ 2, 3, 4 ].includes(clientCount % 10) && ![ 12, 13, 14 ].includes(clientCount % 100) ? 'устройства' : 'устройств');
+			root.querySelector('#active-client-badge').textContent = `${clientCount} ${clientCountLabel}`;
+			const mobileMore = root.querySelector('#mobile-client-more');
+			mobileMore.hidden = clientCount <= 3;
+			mobileMore.querySelector('span').textContent = mobileClientsExpanded ? 'Свернуть' : 'Показать все';
+			mobileMore.dataset.expanded = mobileClientsExpanded ? 'true' : 'false';
 			const offlineSection = root.querySelector('#offline-section');
 			offlineSection.hidden = !(fresh.offline_clients || []).length;
 			root.querySelector('#offline-summary').textContent = `Недавно были (офлайн) · ${(fresh.offline_clients || []).length}`;
 			for (const select of body.querySelectorAll('.oum-policy'))
 				select.disabled = false;
-			policyMessage.textContent = vpnEngine === 'passwall' ?
-				'PassWall закрепляет адрес устройства и добавляет его в соответствующее shunt-правило.' :
-				(vpnEngine === 'podkop' ? 'Podkop применяет исключение либо полную маршрутизацию к IP-адресу устройства.' :
-				'Режим применяется к выбранному устройству и сохраняется после перезагрузки.');
+			policyMessage.textContent = 'В родительский контроль попадают только устройства, добавленные кнопкой «Добавить».';
 			updatePasswall(fresh.passwall || {});
 			updatePodkop(fresh.podkop || {});
 		};
@@ -734,34 +967,65 @@ return view.extend({
 			const youtubeViaVpn = state.youtube_mode === 'vpn';
 			const reality = state.transport === 'reality';
 			root.querySelector('#podkop-title').textContent = youtubeViaVpn ? 'Podkop' : 'Podkop + Zapret';
-			root.querySelector('#podkop-version').textContent = `Podkop ${state.version || '—'}${youtubeViaVpn ? '' : ` · Zapret ${state.zapret_version || '—'}`}`;
+			root.querySelector('#podkop-version').textContent = `· ${state.version || '—'}${state.zapret_strategy ? ` · ${state.zapret_strategy}` : ''} · через ${reality ? 'Reality' : 'AWG'}`;
 			root.querySelector('#podkop-transport-label').textContent = reality ? 'Reality-прокси' : 'AWG-туннель';
 			root.querySelector('#podkop-tunnel').textContent = reality ? (state.ready ? (state.proxy_endpoint || 'Работает') : 'Требует внимания') : (state.tunnel_up ? `${state.interface || 'AWG'} поднят` : 'Требует внимания');
 			root.querySelector('#podkop-routing').textContent = state.ready ? 'Работает' : 'Требует внимания';
-			root.querySelector('#podkop-zapret').textContent = youtubeViaVpn ? 'Отключён · YouTube через VPN' : (state.zapret ? `Работает${state.zapret_strategy ? ` · ${state.zapret_strategy}` : ''}` : 'Требует внимания');
+			const zapretState = root.querySelector('#podkop-zapret');
+			zapretState.textContent = youtubeViaVpn ? 'Zapret: выкл' : (state.zapret ? 'Zapret: вкл' : 'Zapret: ошибка');
+			zapretState.dataset.state = youtubeViaVpn ? 'off' : (state.zapret ? 'good' : 'bad');
 			root.querySelector('#podkop-route-kind').textContent = reality ? 'Через Reality' : 'Через AWG';
+		};
+
+		const refreshPasswallSummary = () => {
+			const state = passwallState || {};
+			const fresh = passwallNodeState || {};
+			const nodes = fresh.nodes || [];
+			const fixedProxy = dashboardState.active_source === 'proxy';
+			const current = nodes.find((node) =>
+				fresh.current_id ? node.id === fresh.current_id : node.name === fresh.current);
+			const currentName = (fixedProxy ? state.selected_node : current?.name) || fresh.current || state.selected_node || 'Подключение не настроено';
+			const currentDelay = current?.delay > 0 ? ` · ${current.delay} ms` : '';
+			const versions = state.versions || {};
+			const core = versions.xray ? ' · Xray' : '';
+			const profile = state.profile || 'Профиль не выбран';
+			const diagnostics = state.diagnostics || {};
+			const directDns = diagnostics.direct_dns || 'не задан';
+			const remoteDns = diagnostics.remote_dns || 'не задан';
+			const ipv6 = diagnostics.ipv6_tproxy === true ? 'IPv6 TProxy' :
+				(diagnostics.ipv6_filtered === true ? 'IPv6 фильтрация' : 'IPv6 без защиты');
+			const healthy = state.xray === true && state.dns === true && state.firewall === true && state.geo_ready === true;
+			const badge = root.querySelector('#passwall-summary-badge');
+			badge.textContent = `${healthy ? 'Работает' : 'Требует внимания'} · ${profile} · ${currentName}`;
+			badge.dataset.ok = healthy ? 'true' : 'false';
+			root.querySelector('#passwall-active-label').textContent = fixedProxy ? 'Подключение' : 'Активная нода';
+			root.querySelector('#passwall-active-node').textContent = `${currentName}${currentDelay}${core}`;
+			root.querySelector('#passwall-active-meta').textContent =
+				fixedProxy ?
+					`${profile} · Фиксированный сервер · Прямой ${directDns} · Удалённый ${remoteDns} · ${ipv6}` :
+					`${profile} · ${nodes.length} нод · Прямой ${directDns} · Удалённый ${remoteDns} · ${ipv6}`;
 		};
 
 		const updatePasswall = (state) => {
 			const panel = root.querySelector('#passwall-panel');
+			passwallState = state || {};
 			passwallInstalled = state.installed === true;
 			panel.hidden = !passwallInstalled;
 			updateVpnPanelVisibility();
 			if (panel.hidden) return;
-			const health = [ [ 'xray', state.xray ], [ 'dns', state.dns ], [ 'firewall', state.firewall ], [ 'geo', state.geo_ready ] ];
-			for (const [ name, ok ] of health) {
-				const element = root.querySelector(`#passwall-${name}`);
-				element.textContent = ok ? 'Работает' : 'Требует внимания';
-				element.dataset.ok = ok ? 'true' : 'false';
-			}
-			root.querySelector('#passwall-profile').textContent = state.profile || 'Не выбран';
-			const rules = state.rules || [];
-			root.querySelector('#passwall-rules').textContent = rules.length ?
-				`Правила: ${rules.map((rule) => rule.label).join(' · ')}` : 'Shunt-правила не найдены.';
-			const versions = state.versions || {};
-			root.querySelector('#passwall-version').textContent = versions.passwall ? `Версия ${versions.passwall}` : '';
-			root.querySelector('#passwall-versions').textContent = `Xray ${versions.xray || '—'} · HAProxy ${versions.haproxy || '—'}`;
 			const diagnostics = state.diagnostics || {};
+			const health = [
+				[ 'xray', state.xray, state.xray ? 'Работает' : 'Требует внимания' ],
+				[ 'dns', state.dns, state.dns ? `Работает${diagnostics.dns_mode ? ` (${diagnostics.dns_mode})` : ''}` : 'Требует внимания' ],
+				[ 'firewall', state.firewall, state.firewall ? 'Работает' : 'Требует внимания' ],
+				[ 'geo', state.geo_ready, state.geo_ready ? 'Готово' : 'Требует внимания' ]
+			];
+			for (const [ name, ok, label ] of health) {
+				const element = root.querySelector(`#passwall-${name}`);
+				element.textContent = label;
+				element.dataset.ok = ok ? 'true' : 'false';
+				element.closest('.oum-passwall-state').dataset.ok = ok ? 'true' : 'false';
+			}
 			const setDiagnostic = (id, text, ok) => {
 				const element = root.querySelector(`#passwall-diag-${id}`);
 				element.textContent = text;
@@ -780,37 +1044,57 @@ return view.extend({
 			setDiagnostic('ipv6', ipv6Label, ipv6Protected);
 			const geoReady = diagnostics.geosite === true && diagnostics.geoip === true;
 			setDiagnostic('geo', geoReady ? 'Оба набора готовы' : 'Неполный набор', geoReady);
+			refreshPasswallSummary();
 		};
 
 		const updateNodes = (fresh) => {
 			nodesAvailable = fresh.available === true;
 			nodeControls.hidden = !nodesAvailable;
 			updateVpnPanelVisibility();
-			if (!fresh.available) return;
 			const isPasswall = fresh.engine === 'passwall';
+			if (isPasswall) passwallNodeState = fresh;
+			if (!fresh.available) {
+				if (isPasswall) refreshPasswallSummary();
+				return;
+			}
 			nodeControls.dataset.engine = isPasswall ? 'passwall' : 'openclash';
-			nodePanelTitle.textContent = 'Точка подключения';
 			zashboardLink.hidden = isPasswall;
 			zashboardLink.style.display = isPasswall ? 'none' : '';
+			const pickerButton = root.querySelector('#show-node-picker');
+			pickerButton.hidden = isPasswall;
+			pickerButton.style.display = isPasswall ? 'none' : '';
+			nodePanelHint.hidden = !isPasswall;
 			measureButton.disabled = fresh.applying === true;
 			const delayText = (node, emptyText) => node.delay > 0 ? `${node.delay} ms` :
 				(node.tested || fresh.measured_at ? 'offline' : emptyText);
-			const makeNode = (node, isCurrent) => E('div', { 'class': 'oum-node' }, [
-				E('span', { title: node.name }, node.name),
-				E('span', { 'class': 'oum-delay' }, delayText(node, '—')),
+			const delayState = (node) => !node.delay || node.delay <= 0 ? 'offline' :
+				(node.delay < 120 ? 'fast' : (node.delay < 180 ? 'medium' : 'slow'));
+			const makeNode = (node, isCurrent, quick) => E('div', { 'class': `oum-node${isCurrent ? ' is-current' : ''}${quick ? ' is-quick' : ''}` }, [
+				E('div', { 'class': 'oum-node-copy' }, [
+					E('span', { 'class': 'oum-node-name', title: node.name }, node.name),
+					E('span', { 'class': 'oum-delay', 'data-delay': delayState(node) }, delayText(node, '—'))
+				]),
 				E('button', {
 					'class': 'btn cbi-button', 'data-node': isCurrent ? null : (node.id || node.name),
 					disabled: isCurrent || fresh.applying === true ? '' : null
-				}, isCurrent ? 'Активна' : 'Выбрать')
+				}, isCurrent ? 'Активна' : (isPasswall ? 'Выбор' : 'Выбрать'))
 			]);
 			const current = (fresh.nodes || []).find((node) =>
 				fresh.current_id ? node.id === fresh.current_id : node.name === fresh.current);
-			root.querySelector('#current-node').textContent = current ?
-				`${current.name} · ${delayText(current, 'TCP не измерен')}` : (fresh.current || 'Не выбрана');
+			const currentNode = root.querySelector('#current-node');
+			currentNode.replaceChildren(
+				E('strong', {}, current ? `${current.name} · ${delayText(current, 'TCP не измерен')}` : (fresh.current || 'Не выбрана')),
+				current ? E('span', { 'class': 'oum-current-badge' }, 'Активна') : ''
+			);
 			const all = sortedNodes(fresh.nodes);
-			root.querySelector('#all-nodes-summary').textContent = `Список нод (${all.length})`;
+			nodePanelTitle.textContent = isPasswall ? `Ноды PassWall (${all.length})` : 'Точка подключения';
+			const quick = preferredNodes(fresh).slice(0, 3);
+			quickNodeList.hidden = quick.length === 0;
+			quickNodeList.replaceChildren(...quick.map((node) => makeNode(node, false, true)));
+			root.querySelector('#all-nodes-summary').textContent = isPasswall ? `Показать все ${all.length}` : `Все ноды (${all.length})`;
 			allNodeList.replaceChildren(...all.map((node) => makeNode(node,
-				fresh.current_id ? node.id === fresh.current_id : node.name === fresh.current)));
+				fresh.current_id ? node.id === fresh.current_id : node.name === fresh.current, false)));
+			if (isPasswall) refreshPasswallSummary();
 		};
 
 		const showNodeMessage = (message, failed) => {
@@ -841,57 +1125,63 @@ return view.extend({
 		subscriptionRefresh.addEventListener('click', (ev) => {
 			ev.preventDefault();
 			subscriptionRefresh.disabled = true;
-			subscriptionStatus.textContent = 'Обновляем данные подписки…';
-			callRefreshSubscriptionInfo().then((result) => {
-				if (!result.ok) throw new Error(result.message || 'Не удалось обновить данные подписки.');
+			subscriptionRefresh.textContent = 'Обновляем…';
+			subscriptionStatus.textContent = 'Загружаем новый список серверов…';
+			callRefreshSubscription().then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Не удалось обновить подписку.');
 				let attempts = 0;
-				const watch = () => callDashboardStatus().then((fresh) => {
-					updateDashboard(fresh);
-					if (fresh.subscription?.refreshing === true && attempts++ < 15)
+				const watch = () => callVpnJobStatus().then((job) => {
+					if (job.state === 'running' && attempts++ < 60)
 						return new Promise((resolve) => window.setTimeout(resolve, 1000)).then(watch);
+					if (job.state !== 'success')
+						throw new Error(job.message || 'Не удалось применить обновлённую подписку.');
+					return Promise.all([ callDashboardStatus(), callNodeStatus() ]).then(([ fresh, nodes ]) => {
+						updateDashboard(fresh);
+						updateNodes(nodes);
+						showNodeMessage('Подписка и список нод обновлены.', false);
+					});
 				});
 				return watch();
 			}).catch((err) => {
 				subscriptionStatus.textContent = err.message;
+			}).finally(() => {
 				subscriptionRefresh.disabled = false;
+				subscriptionRefresh.textContent = 'Обновить';
 			});
 		});
-		wifiQrButton.addEventListener('click', () => {
-			const network = (dashboardState.wifi || [])[0];
-			if (!network) return;
-			const password = E('input', { type: 'password', autocomplete: 'off', placeholder: 'Пароль Wi-Fi', 'aria-label': 'Пароль Wi-Fi' });
-			const error = E('p', { 'class': 'oum-node-message', 'data-state': 'idle' });
-			const generate = async () => {
-				const key = password.value;
-				if (network.password_set && !key) {
-					error.dataset.state = 'failed';
-					error.textContent = 'Введите действующий пароль Wi-Fi. OUM не читает и не показывает сохранённый пароль.';
-					password.focus();
-					return;
-				}
-				try {
-					await loadQrLibrary();
-					const payload = network.password_set ? `WIFI:T:WPA;S:${escapeWifiQr(network.ssid)};P:${escapeWifiQr(key)};;` : `WIFI:T:nopass;S:${escapeWifiQr(network.ssid)};;`;
-					const canvas = E('canvas', { 'aria-label': `QR-код сети ${network.ssid}` });
-					drawQr(canvas, payload);
-					password.value = '';
-					ui.showModal(`Wi-Fi: ${network.ssid}`, [
-						E('div', { 'class': 'oum-qr-wrap' }, [ canvas, E('strong', {}, 'Наведи камерой телефона'), E('span', { 'class': 'oum-muted' }, 'Пароль не сохранён в браузере.') ]),
-						E('div', { 'class': 'right' }, E('button', { 'class': 'btn cbi-button-action', click: ui.hideModal }, 'Готово'))
-					]);
-				}
-				catch (qrError) {
-					error.dataset.state = 'failed';
-					error.textContent = qrError.message;
-				}
-			};
-			ui.showModal('Подключить телефон к Wi-Fi', [
-				E('p', {}, `Сеть: ${network.ssid}`),
-				...(network.password_set ? [ E('p', { 'class': 'oum-muted' }, 'Введите пароль только для создания QR-кода. Он не будет сохранён.'), password ] : []),
-				error,
-				E('div', { 'class': 'right' }, [ E('button', { 'class': 'btn', click: ui.hideModal }, 'Отмена'), ' ', E('button', { 'class': 'btn cbi-button-action important', click: generate }, 'Создать QR') ])
-			]);
-			if (network.password_set) window.requestAnimationFrame(() => password.focus());
+		let wifiQrData = null;
+		const prepareWifiQr = async () => {
+			const result = await callWifiQrCredentials();
+			if (!result.ok) throw new Error(result.message || 'Не удалось получить параметры Wi-Fi.');
+			await loadQrLibrary();
+			const secured = result.encryption && result.encryption !== 'none' && result.key;
+			const type = secured && String(result.encryption).includes('wep') ? 'WEP' : (secured ? 'WPA' : 'nopass');
+			const payload = secured ? `WIFI:T:${type};S:${escapeWifiQr(result.ssid)};P:${escapeWifiQr(result.key)};;` : `WIFI:T:nopass;S:${escapeWifiQr(result.ssid)};;`;
+			wifiQrData = { ssid: result.ssid, payload };
+			const preview = root.querySelector('#wifi-qr-preview');
+			drawQr(preview, payload, 72);
+			preview.hidden = false;
+			root.querySelector('.oum-qr-placeholder').hidden = true;
+			wifiQrButton.disabled = false;
+			wifiQrButton.title = `Показать QR-код сети ${result.ssid}`;
+		};
+		prepareWifiQr().catch(() => {
+			wifiQrButton.disabled = true;
+			wifiQrButton.title = 'QR-код недоступен: проверьте точку Wi-Fi';
+		});
+		wifiQrButton.addEventListener('click', async () => {
+			try {
+				if (!wifiQrData) await prepareWifiQr();
+				const canvas = E('canvas', { 'aria-label': `QR-код сети ${wifiQrData.ssid}` });
+				drawQr(canvas, wifiQrData.payload, 220);
+				ui.showModal(`Wi-Fi: ${wifiQrData.ssid}`, [
+					E('div', { 'class': 'oum-qr-wrap' }, [ canvas, E('strong', {}, 'Наведи камерой телефона'), E('span', { 'class': 'oum-muted' }, 'Код подключит устройство к текущей сети Wi-Fi.') ]),
+					E('div', { 'class': 'right' }, E('button', { 'class': 'btn cbi-button-action', click: ui.hideModal }, 'Готово'))
+				]);
+			}
+			catch (qrError) {
+				ui.addNotification(null, E('p', {}, qrError.message), 'warning');
+			}
 		});
 
 		vpnToggle.addEventListener('click', (ev) => {
@@ -960,10 +1250,97 @@ return view.extend({
 		});
 
 		root.querySelector('#devices-panel').addEventListener('click', (ev) => {
+			const mobileMore = ev.target.closest('#mobile-client-more');
+			if (mobileMore) {
+				ev.preventDefault();
+				mobileClientsExpanded = !mobileClientsExpanded;
+				updateDashboard(dashboardState);
+				return;
+			}
 			const action = ev.target.closest('[data-device-action]');
 			if (!action) return;
 			ev.preventDefault();
 			const mac = action.dataset.deviceMac;
+			if (action.dataset.deviceAction === 'mobile') {
+				const client = (dashboardState.clients || []).find((item) => item.mac === mac);
+				if (!client) return;
+				const aliasInput = E('input', { maxlength: 32, value: client.alias || client.name, 'aria-label': 'Имя устройства' });
+				const routeSelect = policySelect(client);
+				const parentalToggle = E('button', {
+					type: 'button',
+					'class': `btn ${client.parental_managed ? 'cbi-button-negative' : 'cbi-button'} oum-mobile-parental-toggle`
+				}, client.parental_managed ? 'Убрать' : 'Добавить');
+				const message = E('p', { 'class': 'oum-muted oum-mobile-device-message', role: 'status' }, '');
+				const saveAlias = E('button', { type: 'button', 'class': 'btn cbi-button oum-mobile-alias-save' }, 'Сохранить');
+				const close = E('button', { type: 'button', 'class': 'btn cbi-button', click: ui.hideModal }, 'Готово');
+				const finish = () => callDashboardStatus().then((state) => {
+					updateDashboard(state);
+					document.getElementById('oum-device-custom')?.classList.remove('active');
+					ui.hideModal();
+				});
+				saveAlias.addEventListener('click', () => {
+					const alias = String(aliasInput.value || '').trim();
+					if (!validDeviceAlias(alias)) {
+						message.textContent = 'До 32 символов: буквы, цифры, пробел, дефис, точка или подчёркивание.';
+						aliasInput.focus();
+						return;
+					}
+					saveAlias.disabled = true;
+					message.textContent = 'Сохраняем имя…';
+					callSetDeviceAlias(mac, alias).then((result) => {
+						if (!result.ok) throw new Error(result.message || 'Не удалось сохранить имя.');
+						return finish();
+					}).catch((error) => { message.textContent = error.message; saveAlias.disabled = false; });
+				});
+				routeSelect.addEventListener('change', () => {
+					routeSelect.disabled = true;
+					message.textContent = 'Применяем маршрутизацию…';
+					callSetDevicePolicy(mac, routeSelect.value).then((result) => {
+						if (!result.ok) throw new Error(result.message || 'Не удалось изменить маршрутизацию.');
+						return finish();
+					}).catch((error) => { message.textContent = error.message; routeSelect.disabled = false; });
+				});
+				parentalToggle.addEventListener('click', () => {
+					parentalToggle.disabled = true;
+					message.textContent = client.parental_managed ? 'Убираем устройство…' : 'Добавляем устройство…';
+					callSetDeviceParental(mac, !client.parental_managed).then((result) => {
+						if (!result.ok) throw new Error(result.message || 'Не удалось изменить родительский контроль.');
+						return finish();
+					}).catch((error) => { message.textContent = error.message; parentalToggle.disabled = false; });
+				});
+				ui.showModal(client.name, [
+					E('div', { 'class': 'oum-mobile-device-sheet' }, [
+						E('div', { 'class': 'oum-mobile-device-identity' }, [
+							E('span', { 'class': 'oum-mobile-device-state', 'aria-hidden': 'true' }),
+							E('span', { 'class': 'oum-mobile-device-copy' }, [
+								E('strong', {}, client.name),
+								E('small', {}, `Онлайн · ${client.medium === 'wifi' ? 'Wi-Fi' : (client.medium === 'ethernet' ? 'Кабель' : 'Подключено')}`)
+							])
+						]),
+						E('div', { 'class': 'oum-mobile-device-facts' }, [
+							E('div', {}, [ E('small', {}, 'IP-адрес'), E('strong', {}, client.ip || '—') ]),
+							E('div', {}, [ E('small', {}, 'Подключение'), E('strong', {}, client.medium === 'wifi' ? 'Wi-Fi' : (client.medium === 'ethernet' ? 'Кабель' : 'Не определено')) ]),
+							E('div', {}, [ E('small', {}, 'MAC'), E('strong', {}, client.mac) ]),
+							E('div', {}, [ E('small', {}, 'Трафик за 24 ч'), E('strong', {}, `${formatBytes(client.traffic?.down || 0)} ↓ · ${formatBytes(client.traffic?.up || 0)} ↑`) ])
+						]),
+						E('label', { 'class': 'oum-mobile-device-field' }, [
+							E('strong', {}, 'Имя устройства'),
+							E('span', { 'class': 'oum-mobile-device-input-row' }, [ aliasInput, saveAlias ])
+						]),
+						E('label', { 'class': 'oum-mobile-device-field' }, [ E('strong', {}, 'Маршрутизация'), routeSelect ]),
+						E('div', { 'class': 'oum-mobile-parental-row' }, [
+							E('span', {}, [
+								E('strong', {}, 'Родительский контроль'),
+								E('small', {}, client.parental_managed ? 'Устройство добавлено' : 'Ограничения пока не применяются')
+							]),
+							parentalToggle
+						]),
+						message
+					]),
+					E('div', { 'class': 'right' }, close)
+				]);
+				return;
+			}
 			if (action.dataset.deviceAction === 'edit') {
 				editingAliasMac = mac;
 				updateDashboard(dashboardState);
@@ -979,15 +1356,15 @@ return view.extend({
 				updateDashboard(dashboardState);
 				return;
 			}
-			if (action.dataset.deviceAction === 'pause') {
-				const paused = action.dataset.devicePaused !== '1';
+			if (action.dataset.deviceAction === 'parental') {
+				const enabled = action.dataset.deviceParental !== '1';
 				action.disabled = true;
 				policyMessage.dataset.state = 'idle';
-				policyMessage.textContent = paused ? 'Приостанавливаем доступ устройства…' : 'Восстанавливаем доступ устройства…';
-				callSetDevicePaused(mac, paused).then((result) => {
-					if (!result.ok) throw new Error(result.message || 'Не удалось изменить доступ устройства.');
+				policyMessage.textContent = enabled ? 'Добавляем устройство в родительский контроль…' : 'Убираем устройство из родительского контроля…';
+				callSetDeviceParental(mac, enabled).then((result) => {
+					if (!result.ok) throw new Error(result.message || 'Не удалось изменить список родительского контроля.');
 					policyMessage.textContent = result.message;
-					return new Promise((resolve) => window.setTimeout(resolve, 2300)).then(() => callDashboardStatus()).then(updateDashboard);
+					return callDashboardStatus().then(updateDashboard);
 				}).catch((error) => {
 					policyMessage.dataset.state = 'failed';
 					policyMessage.textContent = error.message;
@@ -1068,6 +1445,122 @@ return view.extend({
 			updateDashboard(fresh);
 			updateNodes(nodes);
 		}), 10);
+		// === Mobile 1:1 patch v-main12 - bottom nav + system pills + podkop sheets + device/QR bottom-sheet ===
+		setTimeout(()=>{
+		  const tryInit=()=>{ if(window.innerWidth<=900){
+		    try{
+		      if(!document.querySelector(".oum-bottom-nav")){
+		        const nav=document.createElement("nav"); nav.className="oum-bottom-nav";
+		        const cur=location.pathname.includes("parental")?"parental":location.pathname.includes("settings")?"settings":location.pathname.includes("help")?"help":"dashboard";
+		        nav.innerHTML="<button class=\""+(cur==="dashboard"?"active":"")+"\" data-nav=\"dashboard\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z\"/></svg><span>Главная</span></button><button class=\""+(cur==="parental"?"active":"")+"\" data-nav=\"parental\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\"><path d=\"M12 3l7 4v5c0 3.5-2.2 6.5-7 8-4.8-1.5-7-4.5-7-8V7l7-4Z\"/><path d=\"M9 11h6\"/><path d=\"M9 15h6\"/></svg><span style=\"font-size:9px;line-height:1\">Родительский<br>контроль</span></button><button class=\""+(cur==="settings"?"active":"")+"\" data-nav=\"settings\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\"><circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4\"/></svg><span>Настройки</span></button><button class=\""+(cur==="help"?"active":"")+"\" data-nav=\"help\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-1.5 2-1.5 3\"/><circle cx=\"12\" cy=\"17\" r=\"0.8\" fill=\"currentColor\" stroke=\"none\"/></svg><span>Помощь</span></button>";
+		        nav.querySelectorAll("button").forEach(b=>{ if(b.dataset.nav===cur) b.classList.add("active"); b.addEventListener("click",()=>{ const t=b.dataset.nav; location.href=t==="dashboard"?L.url("oum","dashboard"):t==="parental"?L.url("oum","parental"):t==="settings"?L.url("oum","settings"):L.url("oum","help");});});
+		        document.body.appendChild(nav);
+		        const m=document.querySelector(".oum-main"); if(m) m.style.paddingBottom="64px";
+		      }
+		    }catch(e){}
+		    try{
+		      const sys=document.querySelector(".oum-system-panel");
+		      if(sys && !sys.querySelector(".oum-system-pills")){
+		        const pills=document.createElement("div"); pills.className="oum-system-pills";
+		        const memAvail=document.querySelector("#memory-available-detail")?.textContent||"";
+		        const rootUsed=document.querySelector("#storage-root-detail")?.textContent||"";
+		        const memPct=(memAvail.match(/(\d+)%/)||[])[1]||"42";
+		        const rootPct=(rootUsed.match(/(\d+)%/)||[])[1]||"46";
+		        const portsUp=document.querySelectorAll(".oum-port-card[data-up=\"true\"]").length||2;
+		        pills.innerHTML="<span class=\"oum-system-pill\">RAM "+memPct+"% свободно</span><span class=\"oum-system-pill\">Overlay "+rootPct+"%</span><span class=\"oum-system-pill good\">"+portsUp+" порта активно</span>";
+		        const body=sys.querySelector(".oum-system-body"); if(body) body.before(pills);
+		        const summary=sys.querySelector("summary, .oum-system-summary"); if(summary){ summary.style.cursor="pointer"; summary.addEventListener("click",(e)=>{e.preventDefault(); const isOpen=sys.dataset.mobileOpen==="true"; sys.dataset.mobileOpen=isOpen?"false":"true"; if(sys.tagName==="DETAILS") sys.open=!isOpen;}); }
+		        sys.dataset.mobileOpen="false"; if(sys.tagName==="DETAILS") sys.open=true;
+		      }
+		    }catch(e){}
+		    try{
+		      const podkop=document.querySelector("#podkop-panel");
+		      if(podkop && !document.getElementById("oum-podkop-sheet-services")){
+		        const createSheet=(id,title,contentId)=>{
+		          const m=document.createElement("div"); m.id=id; m.className="oum-modal";
+		          m.innerHTML="<div class=\"oum-bottom-sheet\"><div class=\"sheet-handle\"></div><div style=\"display:flex;justify-content:space-between;align-items:center\"><strong>"+title+"</strong><button onclick=\"this.closest(\\\"oum-modal\\\").classList.remove(\\\"active\\\")\" style=\"width:28px;height:28px;border:1px solid #e5e7eb;border-radius:8px\">✕</button></div><div id=\""+contentId+"\"></div><button style=\"width:100%;height:42px;background:#2563eb;color:#fff;border:none;border-radius:12px;font-weight:600;margin-top:8px\" onclick=\"this.closest(\\\"oum-modal\\\").classList.remove(\\\"active\\\")\">Сохранить</button></div>";
+		          m.addEventListener("click",e=>{if(e.target===m) m.classList.remove("active")});
+		          const bs=m.querySelector(".oum-bottom-sheet");
+		          let sy=0,cy=0,drag=false;
+		          bs.addEventListener("touchstart",e=>{sy=e.touches[0].clientY;drag=true;bs.style.transition="none"},{passive:true});
+		          bs.addEventListener("touchmove",e=>{if(!drag)return;cy=e.touches[0].clientY-sy;if(cy>0) bs.style.transform="translateY("+cy+"px)"},{passive:true});
+		          bs.addEventListener("touchend",()=>{drag=false;bs.style.transition="transform .2s"; if(cy>90) m.classList.remove("active"); bs.style.transform=""; cy=0});
+		          document.body.appendChild(m); return m;
+		        };
+		        const sServices=createSheet("oum-podkop-sheet-services","Сервисы","oum-services-clone");
+		        const sDomains=createSheet("oum-podkop-sheet-domains","Свои домены и подсети","oum-domains-clone");
+		        const sDiag=createSheet("oum-podkop-sheet-diag","Диагностика","oum-diag-clone");
+		        const btns=document.querySelectorAll("[data-mobile-podkop]");
+		        btns.forEach(b=>{
+		          const t=b.dataset.mobilePodkop;
+		          const clone=b.cloneNode(true); b.parentNode.replaceChild(clone,b);
+		          clone.addEventListener("click",e=>{
+		            e.preventDefault(); e.stopPropagation();
+		            if(t==="routing"){
+		              const dst=document.getElementById("oum-services-clone");
+		              if(dst){
+		                dst.innerHTML="";
+		                const rows=document.querySelectorAll(".oum-route-row");
+		                const pills=document.createElement("div"); pills.className="pills"; pills.style.cssText="display:flex;flex-wrap:wrap;gap:8px";
+		                rows.forEach(row=>{
+		                  const label=row.querySelector(".oum-route-service strong")?.textContent?.trim() || row.querySelector("strong")?.textContent?.trim() || "Service";
+		                  const isVpn=row.querySelector('input[value="vpn"]')?.checked;
+		                  const pill=document.createElement("span"); pill.className="pill"+(isVpn?" active":""); pill.textContent=label;
+		                  if(label.toLowerCase().includes("youtube") && row.querySelector('input[value="direct"]')?.checked){ pill.style.position="relative"; pill.style.paddingRight="28px"; const badge=document.createElement("span"); badge.textContent="Zapret"; badge.style.cssText="position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:8px;font-weight:700;background:#fef9c3;border:1px solid #fde68a;color:#92400e;padding:1px 4px;border-radius:6px"; pill.appendChild(badge); }
+		                  pill.addEventListener("click",()=>{ const vpn=row.querySelector('input[value="vpn"]'); const direct=row.querySelector('input[value="direct"]'); if(vpn&&direct){ if(vpn.checked){direct.checked=true;} else {vpn.checked=true;} row.setAttribute("aria-checked", String(vpn.checked)); pill.classList.toggle("active", vpn.checked); }});
+		                  pills.appendChild(pill);
+		                });
+		                dst.appendChild(pills);
+		              }
+		              sServices.classList.add("active");
+		            } else if(t==="domains"){ const src=document.querySelector(".oum-custom-rules"); const dst=document.getElementById("oum-domains-clone"); if(src&&dst){dst.innerHTML=""; const c=src.cloneNode(true); c.open=true; c.hidden=false; dst.appendChild(c);} sDomains.classList.add("active");}
+		            else if(t==="diagnostics"){ const src=document.querySelector("#podkop-diagnostics-tab"); const dst=document.getElementById("oum-diag-clone"); if(src&&dst){dst.innerHTML=""; const c=src.cloneNode(true); c.hidden=false; c.style.display="block"; dst.appendChild(c);} sDiag.classList.add("active");}
+		          });
+		        });
+		      }
+		    }catch(e){}
+		  }}
+		  tryInit(); setInterval(tryInit,2000); window.addEventListener("resize",tryInit);
+		}, 900);
+		// force device/QR modals to bottom-sheet like Podkop (mobile only)
+		try{
+		  const origShowModal = L.ui.showModal;
+		  L.ui.showModal = ui.showModal = function(title, content){
+		    const isDevice = String(title).includes("S22") || String(title).includes("Комп") || String(title).includes("Ultra") || (Array.isArray(content) && content.some(c=>c && c.className && String(c.className).includes("oum-mobile-device-sheet")));
+		    const isQR = String(title).includes("Wi-Fi");
+		    if((isDevice || isQR) && window.innerWidth<=900){
+		      let sid = isDevice ? "oum-device-custom" : "oum-qr-custom";
+		      let sheet=document.getElementById(sid);
+		      if(!sheet){
+		        sheet=document.createElement("div"); sheet.id=sid; sheet.className="oum-modal";
+		        sheet.innerHTML='<div class="oum-bottom-sheet"><div class="sheet-handle"></div><div id="'+sid+'-content"></div><button type="button" class="oum-sheet-done">Готово</button></div>';
+		        sheet.querySelector('.oum-sheet-done').addEventListener('click',()=>sheet.classList.remove('active'));
+		        sheet.addEventListener("click",e=>{if(e.target===sheet) sheet.classList.remove("active")});
+		        const bs=sheet.querySelector(".oum-bottom-sheet");
+		        let sy=0,cy=0,drag=false;
+		        bs.addEventListener("touchstart",e=>{sy=e.touches[0].clientY;drag=true;bs.style.transition="none"},{passive:true});
+		        bs.addEventListener("touchmove",e=>{if(!drag)return;cy=e.touches[0].clientY-sy;if(cy>0) bs.style.transform="translateY("+cy+"px)"},{passive:true});
+		        bs.addEventListener("touchend",()=>{drag=false;bs.style.transition="transform .2s"; if(cy>90) sheet.classList.remove("active"); bs.style.transform=""; cy=0});
+		        document.body.appendChild(sheet);
+		      }
+		      const dst=document.getElementById(sid+"-content");
+		      dst.innerHTML="";
+		      const h=document.createElement("div"); h.className="oum-sheet-title"; h.textContent=isQR ? "Подключение к Wi-Fi" : "Устройство";
+		      dst.appendChild(h);
+		      if(isQR){
+		        const network=document.createElement("div"); network.className="oum-qr-network";
+		        const label=document.createElement("span"); label.textContent="Сеть";
+		        const name=document.createElement("strong"); name.textContent=String(title).replace(/^Wi-Fi:\s*/,"");
+		        network.append(label,name); dst.appendChild(network);
+		      }
+		      (Array.isArray(content)?content:[content]).forEach(el=>{ if(!el || !el.cloneNode) return; if(String(el.className||"").includes("right")) return; dst.appendChild(el); });
+		      if(isQR && wifiQrData){ const qr=dst.querySelector("canvas"); if(qr) drawQr(qr,wifiQrData.payload,220); }
+		      sheet.classList.add("active");
+		      return;
+		    }
+		    return origShowModal.apply(L.ui, arguments);
+		  };
+		}catch(e){console.log(e)}
 		return root;
 	},
 

@@ -1,0 +1,129 @@
+{#
+ Copyright 2008-2022 OpenWrt LuCI contributors
+ Copyright 2026 OUM contributors
+ Licensed under the Apache License 2.0.
+#}
+
+{%
+	import { getuid, getspnam } from 'luci.core';
+	const boardinfo = ubus.call('system', 'board') || {};
+	http.prepare_content('text/html; charset=UTF-8');
+-%}
+
+<!DOCTYPE html>
+<html lang="{{ dispatcher.lang }}" data-theme="light" data-darkmode="false">
+	<head>
+		<meta charset="utf-8">
+		<title>{{ striptags(`${dispatched?.title ? `${_(dispatched.title)} | ` : ''}${boardinfo.hostname ?? 'OUM'}`) }}</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+		<meta name="theme-color" content="#eef0ea">
+		<meta name="color-scheme" content="light dark">
+		<meta name="darkreader-lock">
+		<script>
+			(function() {
+				var mode = localStorage.getItem('oum-theme-mode') || localStorage.getItem('oum-theme') || 'light';
+				if (mode === 'auto' && window.matchMedia)
+					mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+				document.documentElement.setAttribute('data-theme', mode === 'dark' ? 'dark' : 'light');
+				document.documentElement.setAttribute('data-darkmode', mode === 'dark' ? 'true' : 'false');
+			})();
+		</script>
+		<link rel="stylesheet" href="{{ media }}/bootstrap-base.css?v={{ pkgs_update_time }}">
+		<link rel="stylesheet" media="only screen and (max-device-width: 854px)" href="{{ media }}/bootstrap-mobile.css?v={{ pkgs_update_time }}">
+		<link rel="stylesheet" href="{{ media }}/cascade.css?v={{ pkgs_update_time }}-20260903-act29">
+		{% if (ctx.request_path[0] == 'oum'): %}<link rel="stylesheet" href="{{ resource }}/oum/oum.css?v=20260905-quickping84">{% endif %}
+		<style>
+			body.theme-oum[data-page^="oum-"] .oum-page-head #oum-theme-toggle,
+			body.theme-oum[data-page^="oum-"] .oum-page-head a[href*="/logout"] { display: none !important; }
+			body.theme-oum[data-page="oum-dashboard"] .oum-device-alias-form {
+				display: grid !important;
+				grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr) !important;
+				align-items: center !important;
+				gap: 6px !important;
+				width: 100% !important;
+				min-width: 0 !important;
+			}
+			body.theme-oum[data-page="oum-dashboard"] .oum-device-alias-form > input {
+				grid-column: 1 / -1 !important;
+				width: 100% !important;
+				min-width: 0 !important;
+				max-width: none !important;
+				height: 36px !important;
+				box-sizing: border-box !important;
+			}
+			body.theme-oum[data-page="oum-dashboard"] .oum-device-alias-form > .oum-device-rename {
+				width: 100% !important;
+				min-width: 0 !important;
+				height: 38px !important;
+				min-height: 38px !important;
+				padding-inline: 5px !important;
+				line-height: 1.2 !important;
+				white-space: nowrap !important;
+			}
+		</style>
+		<link rel="icon" href="{{ media }}/logo.svg" sizes="any">
+		{% if (node?.css): %}<link rel="stylesheet" href="{{ resource }}/{{ node.css }}?v={{ pkgs_update_time }}">{% endif %}
+		{% if (css): %}<style title="text/css">{{ css }}</style>{% endif %}
+		<script src="{{ dispatcher.build_url('admin/translations', dispatcher.lang) }}"></script>
+		<script src="{{ resource }}/cbi.js"></script>
+	</head>
+
+	<body class="theme-oum {{ blank_page ? 'oum-auth-page' : '' }} lang_{{ dispatcher.lang }} {{ entityencode(striptags(node?.title ?? ''), true) }}" data-page="{{ entityencode(join('-', ctx.request_path), true) }}">
+		{% if (!blank_page): %}
+		<div id="oum-system-shell">
+			<aside id="oum-system-sidebar" aria-label="{{ _('Navigation') }}">
+				<a class="oum-system-brand" href="/">
+					<span class="oum-system-mark" aria-hidden="true">O</span>
+					<span><strong>OUM</strong><small>Домашний щит</small></span>
+				</a>
+				<div class="oum-system-menu-label">МЕНЮ</div>
+				<ul class="nav" id="topmenu" style="display:none"></ul>
+				<ul class="oum-system-modes" id="modemenu" style="display:none"></ul>
+				<div class="oum-system-sidebar-foot">
+					{% if (ctx.authuser == 'root'): %}
+					{% if (ctx.request_path[0] == 'admin'): %}
+					<a class="btn oum-luci-admin" href="{{ dispatcher.build_url('oum') }}">Вернуться в OUM</a>
+					{% else %}
+					<a class="btn oum-luci-admin" href="{{ dispatcher.build_url('admin') }}">Стандартный LuCI</a>
+					{% endif %}
+					{% endif %}
+					<div class="oum-system-sidebar-actions">
+						<button id="oum-theme-toggle" class="btn oum-theme-toggle" type="button">Тёмная</button>
+						<a class="btn oum-logout" href="{{ dispatcher.build_url('oum/logout') }}">Выйти</a>
+					</div>
+					<span>{{ striptags(boardinfo.hostname ?? 'OpenWrt') }}</span>
+					<small>{{ version.distname }} {{ version.distversion }}</small>
+				</div>
+			</aside>
+
+			<div id="oum-system-stage">
+				<header id="oum-system-header">
+					<button id="oum-menu-toggle" class="oum-icon-button" type="button" aria-label="{{ _('Navigation') }}" aria-expanded="false"><span></span><span></span><span></span></button>
+					<div class="oum-system-title">
+						<strong>{{ striptags(_(dispatched?.title ?? 'OpenWrt')) }}</strong>
+						<small>{{ striptags(boardinfo.hostname ?? 'OpenWrt') }} · {{ version.distversion }}</small>
+					</div>
+					<div id="indicators" class="oum-system-indicators"></div>
+				</header>
+
+				<div id="oum-menu-overlay" hidden></div>
+				<main id="maincontent" class="container">
+					{% if (getuid() == 0 && getspnam('root')?.pwdp === ''): %}
+					<div class="alert-message warning">
+						<h4>{{ _('No password set!') }}</h4>
+						<p>{{ _('There is no password set on this router. Please configure a root password to protect the web interface.') }}</p>
+						{% if (dispatcher.lookup('admin/system/admin')): %}<div class="right"><a class="btn" href="{{ dispatcher.build_url('admin/system/admin') }}">{{ _('Go to password configuration...') }}</a></div>{% endif %}
+					</div>
+					{% endif %}
+
+					{% if (boardinfo.rootfs_type == 'initramfs'): %}
+					<div class="alert-message warning">
+						<h4>{{ _('System running in recovery (initramfs) mode.') }}</h4>
+						<p>{{ _('No changes to settings will be stored and are lost after rebooting. This mode should only be used to install a firmware upgrade') }}</p>
+						{% if (dispatcher.lookup('admin/system/flash')): %}<div class="right"><a class="btn" href="{{ dispatcher.build_url('admin/system/flash') }}">{{ _('Go to firmware upgrade...') }}</a></div>{% endif %}
+					</div>
+					{% endif %}
+
+					<noscript><div class="alert-message warning">{{ _('JavaScript required!') }}</div></noscript>
+					<div id="tabmenu" style="display:none"></div>
+		{% endif %}

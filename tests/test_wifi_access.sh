@@ -5,7 +5,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 RPC="$ROOT/luci-app-oum/root/usr/share/rpcd/ucode/oum"
 JOB="$ROOT/luci-app-oum/root/usr/libexec/oum-system-job"
-SETTINGS="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/settings-v4.js"
+SETTINGS="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/settings-v43.js"
 FIRST="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/first-run-v2.js"
 ACL="$ROOT/luci-app-oum/root/usr/share/rpcd/acl.d/luci-app-oum.json"
 

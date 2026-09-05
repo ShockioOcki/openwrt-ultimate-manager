@@ -250,6 +250,7 @@ sh tools/install-luci-dev.sh luci-app-oum
 
 ```text
 luci-app-oum/         LuCI-интерфейс, RPC и системные адаптеры OUM
+luci-theme-oum/       Системная тема LuCI в стиле панели OUM
 src/                  модули терминального менеджера
 helpers/              безопасные конвертеры YAML и резервных копий
 tools/                сборка, установка и подготовка пакетов

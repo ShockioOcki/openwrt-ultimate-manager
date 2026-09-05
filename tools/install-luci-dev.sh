@@ -9,7 +9,7 @@ REPO_DIR="$(CDPATH= cd -- "$SOURCE_DIR/.." && pwd)"
 [ -f "$REPO_DIR/helpers/source_converter.rb" ] || { echo "Converter source not found" >&2; exit 1; }
 
 mkdir -p /etc/config /usr/share/luci/menu.d /usr/share/ucode/luci/controller /usr/share/rpcd/acl.d /usr/share/rpcd/ucode \
-	/usr/libexec/oum /www/luci-static/resources/view/oum
+	/usr/libexec/oum /www/luci-static/resources/view/oum /www/luci-static/resources/oum
 
 [ -f /etc/config/oum ] || cp "$SOURCE_DIR/root/etc/config/oum" /etc/config/oum
 cp "$SOURCE_DIR/root/usr/share/luci/menu.d/luci-app-oum.json" /usr/share/luci/menu.d/luci-app-oum.json
@@ -42,6 +42,7 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-strategy" /usr/libexec/oum-zapret-st
 cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-quic" /usr/libexec/oum-zapret-quic
 cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-manager" /usr/libexec/oum-zapret-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-login-default" /usr/libexec/oum-login-default
+cp "$SOURCE_DIR/root/usr/libexec/oum-upstream-check" /usr/libexec/oum-upstream-check
 cp "$REPO_DIR/dist/oum-test.sh" /usr/libexec/oum-runtime.sh
 cp "$REPO_DIR/helpers/source_converter.rb" /usr/libexec/oum/source_converter.rb
 rm -f /www/luci-static/resources/view/oum/first-run.js \
@@ -51,8 +52,11 @@ rm -f /www/luci-static/resources/view/oum/first-run.js \
 	/www/luci-static/resources/view/oum/settings-v2.js \
 	/www/luci-static/resources/view/oum/settings-v3.js
 cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/first-run-v2.js" /www/luci-static/resources/view/oum/first-run-v2.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/dashboard-v11.js" /www/luci-static/resources/view/oum/dashboard-v11.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/settings-v4.js" /www/luci-static/resources/view/oum/settings-v4.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/dashboard-v43.js" /www/luci-static/resources/view/oum/dashboard-v43.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/settings-v43.js" /www/luci-static/resources/view/oum/settings-v43.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/parental-v3.js" /www/luci-static/resources/view/oum/parental-v3.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/help-v3.js" /www/luci-static/resources/view/oum/help-v3.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/oum/oum.css" /www/luci-static/resources/oum/oum.css
 
 chmod 600 /etc/config/oum
 chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/oum-reset-first-run \
@@ -72,6 +76,7 @@ chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/ou
 	/usr/libexec/oum-zapret-quic \
 	/usr/libexec/oum-zapret-manager \
 	/usr/libexec/oum-login-default \
+	/usr/libexec/oum-upstream-check \
 	/usr/libexec/oum-runtime.sh
 chmod 600 /usr/libexec/oum/source_converter.rb
 mkdir -p /usr/share/oum
@@ -82,9 +87,18 @@ chmod 644 /usr/share/oum/zapret-youtube-strategies
 find /usr/share/oum/packages -type f -exec chmod 600 {} \;
 chmod 644 /usr/share/luci/menu.d/luci-app-oum.json /usr/share/ucode/luci/controller/oum.uc /usr/share/rpcd/acl.d/luci-app-oum.json \
 	/usr/share/rpcd/ucode/oum /www/luci-static/resources/view/oum/first-run-v2.js \
-	/www/luci-static/resources/view/oum/dashboard-v11.js /www/luci-static/resources/view/oum/settings-v4.js
+	/www/luci-static/resources/view/oum/dashboard-v43.js /www/luci-static/resources/view/oum/settings-v43.js \
+	/www/luci-static/resources/view/oum/parental-v3.js /www/luci-static/resources/view/oum/help-v3.js \
+	/www/luci-static/resources/oum/oum.css
 
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
+# LuCI derives its browser module version from the package database mtime.
+# Development copies do not change that database, so bump only its timestamp.
+if [ -e /lib/apk/db/installed ]; then
+	touch /lib/apk/db/installed 2>/dev/null || true
+elif [ -e /usr/lib/opkg/status ]; then
+	touch /usr/lib/opkg/status 2>/dev/null || true
+fi
 /usr/libexec/oum-login-default
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart

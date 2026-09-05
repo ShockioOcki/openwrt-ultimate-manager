@@ -4,7 +4,8 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 RPC="$ROOT/luci-app-oum/root/usr/share/rpcd/ucode/oum"
-PAGE="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/parental-v1.js"
+PAGE="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/parental-v3.js"
+DASHBOARD="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v43.js"
 MENU="$ROOT/luci-app-oum/root/usr/share/luci/menu.d/luci-app-oum.json"
 ACL="$ROOT/luci-app-oum/root/usr/share/rpcd/acl.d/luci-app-oum.json"
 CRON="$ROOT/luci-app-oum/root/usr/libexec/oum-parental-cron"
@@ -15,6 +16,8 @@ grep -Fq 'parentalStatus:' "$RPC"
 grep -Fq 'setParentalSchedule:' "$RPC"
 grep -Fq 'setAdGuard:' "$RPC"
 grep -Fq 'setDeviceAdGuard:' "$RPC"
+grep -Fq 'setDeviceParental:' "$RPC"
+grep -Fq "parental_managed" "$RPC"
 grep -Fq "manual_paused" "$RPC"
 grep -Fq "schedule_paused" "$CRON"
 grep -Fq "oum_adguard_family" "$ADGUARD"
@@ -27,5 +30,9 @@ grep -Fq 'защищённый DNS в браузере может обойти �
 grep -Fq 'oum/parental' "$MENU"
 grep -Fq 'parentalStatus' "$ACL"
 grep -Fq 'setParentalSchedule' "$ACL"
+grep -Fq 'setDeviceParental' "$ACL"
+grep -Fq 'callSetDeviceParental' "$DASHBOARD"
+grep -Fq "client.parental_managed ? 'Добавлено' : 'Добавить'" "$DASHBOARD"
+grep -Fq 'случайные лампы, телевизоры и другая техника' "$PAGE"
 
 printf 'parental tests: OK\n'

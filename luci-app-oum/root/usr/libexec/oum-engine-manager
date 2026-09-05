@@ -8,8 +8,10 @@ TARGET="${2:-}"
 WORK=/tmp/oum-engine-switch
 PACKAGE_CACHE=/etc/oum/packages
 STATUS="${OUM_ENGINE_STATUS:-}"
+STATUS_ACTION="${OUM_ENGINE_ACTION:-engine}"
 LOG=/tmp/oum-engine-switch.log
 ERROR_FILE=/tmp/oum-engine-error
+UPDATE_RESULT=/tmp/oum-engine-update-result
 
 PASSWALL_VERSION=26.5.11-r1
 PASSWALL_RELEASE=https://github.com/ShockioOcki/openwrt-ultimate-manager/releases/download/passwall-26.5.11-owrt25.12-aarch64
@@ -56,7 +58,7 @@ update_status() {
 	code="$1"
 	message="$2"
 	tmp="$STATUS.engine.tmp"
-	printf 'state=running\naction=engine\ncode=%s\nmessage=%s\n' "$code" "$message" > "$tmp"
+	printf 'state=running\naction=%s\ncode=%s\nmessage=%s\n' "$STATUS_ACTION" "$code" "$message" > "$tmp"
 	mv "$tmp" "$STATUS"
 }
 
@@ -402,6 +404,101 @@ install_engine() {
 	[ -z "$dns" ] || /usr/libexec/oum-dns-manager configure "$1" "$dns" "$bootstrap" >> "$LOG" 2>&1 || return 1
 }
 
+installed_version() {
+	apk list --installed "$1" 2>/dev/null | sed -n "s/^$1-\\([^ ]*\\).*/\\1/p" | head -n 1
+}
+
+engine_update_needed() {
+	case "$1" in
+		openclash)
+			[ "$(installed_version luci-app-openclash)" = "$OPENCLASH_VERSION" ] || return 0
+			[ -x /etc/openclash/core/clash_meta ] || return 0
+			/etc/openclash/core/clash_meta -v 2>/dev/null | grep -Fq "$MIHOMO_VERSION" || return 0
+			;;
+		podkop)
+			[ "$(installed_version podkop)" = "$PODKOP_VERSION" ] || return 0
+			[ "$(installed_version luci-app-podkop)" = "$PODKOP_VERSION" ] || return 0
+			if [ "${OUM_SKIP_ZAPRET:-0}" != 1 ]; then
+				[ "$(installed_version zapret)" = "$ZAPRET_VERSION" ] || return 0
+				[ "$(installed_version luci-app-zapret)" = "$ZAPRET_VERSION" ] || return 0
+			fi
+			;;
+		*) return 1 ;;
+	esac
+	return 1
+}
+
+update_openclash_in_place() {
+	was_running=0
+	engine_running openclash && was_running=1 || true
+	cp /etc/config/openclash "$WORK/openclash.config" || return 1
+	gzip -dc "$WORK/openclash/$MIHOMO_ARCHIVE" > "$WORK/openclash/clash_meta.new" || return 1
+	chmod 755 "$WORK/openclash/clash_meta.new"
+	"$WORK/openclash/clash_meta.new" -v 2>/dev/null | grep -Fq "$MIHOMO_VERSION" || return 1
+	stop_engine openclash
+	apk add --allow-untrusted "$WORK/openclash/$OPENCLASH_APK" >> "$LOG" 2>&1 || return 1
+	cp "$WORK/openclash/clash_meta.new" /etc/openclash/core/clash_meta || return 1
+	chmod 755 /etc/openclash/core/clash_meta
+	[ -s /etc/config/openclash ] || cp "$WORK/openclash.config" /etc/config/openclash
+	[ "$was_running" = 0 ] || /etc/init.d/openclash restart >> "$LOG" 2>&1 || return 1
+}
+
+update_podkop_in_place() {
+	podkop_running=0
+	zapret_running=0
+	engine_running podkop && podkop_running=1 || true
+	pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1 && zapret_running=1 || true
+	tar -czf "$WORK/podkop-config.tgz" /etc/config/podkop /etc/config/zapret /opt/zapret/config 2>/dev/null || true
+	/etc/init.d/zapret stop >> "$LOG" 2>&1 || true
+	/etc/init.d/podkop stop >> "$LOG" 2>&1 || true
+	apk add --allow-untrusted \
+		"$WORK/podkop/podkop-$PODKOP_VERSION.apk" \
+		"$WORK/podkop/luci-app-podkop-$PODKOP_VERSION.apk" >> "$LOG" 2>&1 || return 1
+	if [ "${OUM_SKIP_ZAPRET:-0}" != 1 ]; then
+		apk add --no-scripts --allow-untrusted \
+			"$WORK/podkop/zapret-$ZAPRET_VERSION.apk" \
+			"$WORK/podkop/luci-app-zapret-$ZAPRET_VERSION.apk" >> "$LOG" 2>&1 || return 1
+	fi
+	[ -s /etc/config/podkop ] || { [ ! -s "$WORK/podkop-config.tgz" ] || tar -xzf "$WORK/podkop-config.tgz" -C /; }
+	[ "$(installed_version podkop)" = "$PODKOP_VERSION" ] || return 1
+	[ "$(installed_version luci-app-podkop)" = "$PODKOP_VERSION" ] || return 1
+	if [ "${OUM_SKIP_ZAPRET:-0}" != 1 ]; then
+		[ "$(installed_version zapret)" = "$ZAPRET_VERSION" ] || return 1
+		[ "$(installed_version luci-app-zapret)" = "$ZAPRET_VERSION" ] || return 1
+	fi
+	[ "$podkop_running" = 0 ] || /etc/init.d/podkop restart >> "$LOG" 2>&1 || return 1
+	[ "$zapret_running" = 0 ] || /etc/init.d/zapret restart >> "$LOG" 2>&1 || return 1
+}
+
+update_engine() {
+	case "$TARGET" in openclash|podkop) ;; *) die 'Обновление доступно только для OpenClash и Podkop + Zapret.' ;; esac
+	check_platform
+	CURRENT="$(current_engine)"
+	[ "$CURRENT" = "$TARGET" ] || die 'Активный VPN-движок изменился. Обновите страницу.'
+	: > "$LOG"
+	rm -f "$ERROR_FILE" "$UPDATE_RESULT"
+	if ! engine_update_needed "$TARGET"; then
+		printf '%s\n' current > "$UPDATE_RESULT"
+		return 0
+	fi
+	rm -rf "$WORK"
+	mkdir -p "$WORK"
+	update_status runtime 'Подготавливаем безопасное обновление движка…'
+	ensure_oum_runtime || die 'Не удалось подготовить системные компоненты OUM.'
+	update_status vpn_access 'Проверяем доступ к проверенным файлам обновления…'
+	download_access || die 'Нет доступа к GitHub или репозиторию OpenWrt.'
+	update_status downloading 'Загружаем обновление и проверяем SHA-256…'
+	download_engine "$TARGET" || die 'Не удалось загрузить или проверить обновление движка.'
+	update_status installing 'Обновляем движок без удаления его настроек…'
+	case "$TARGET" in
+		openclash) update_openclash_in_place || die 'OpenClash не обновился; конфигурация сохранена.' ;;
+		podkop) update_podkop_in_place || die 'Podkop не обновился; конфигурация сохранена.' ;;
+	esac
+	printf '%s\n' updated > "$UPDATE_RESULT"
+	rm -f /tmp/luci-indexcache
+	rm -f /tmp/luci-modulecache/* 2>/dev/null || true
+}
+
 cleanup() {
 	rm -rf "$WORK"
 }
@@ -564,7 +661,8 @@ switch_engine() {
 
 case "$ACTION" in
 	switch) switch_engine ;;
+	update) update_engine ;;
 	preflight) preflight_engine ;;
 	current) current_engine ;;
-	*) printf 'usage: %s {current|preflight ENGINE|switch ENGINE}\n' "$0" >&2; exit 2 ;;
+	*) printf 'usage: %s {current|preflight ENGINE|switch ENGINE|update ENGINE}\n' "$0" >&2; exit 2 ;;
 esac

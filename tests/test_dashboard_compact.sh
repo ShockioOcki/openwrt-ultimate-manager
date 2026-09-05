@@ -3,17 +3,17 @@
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-DASHBOARD="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v11.js"
+DASHBOARD="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v43.js"
 RPC="$ROOT/luci-app-oum/root/usr/share/rpcd/ucode/oum"
 QR="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/qrcode.min.js"
 
 grep -Fq "password_set: length(iface.key ?? '') > 0" "$RPC"
 grep -Fq 'Показать QR' "$DASHBOARD"
 grep -Fq 'Наведи камерой телефона' "$DASHBOARD"
-grep -Fq 'WIFI:T:WPA' "$DASHBOARD"
+grep -Fq 'WIFI:T:${type}' "$DASHBOARD"
 grep -Fq "load('qrcode.min.js')" "$DASHBOARD"
 grep -Fq 'Выбрать ноду' "$DASHBOARD"
-grep -Fq 'Список нод (' "$DASHBOARD"
+grep -Fq 'Все ноды (' "$DASHBOARD"
 ! grep -Fq "E('div', { 'class': 'oum-node-title' }, 'Быстрый доступ')" "$DASHBOARD"
 ! grep -Fq "id: 'subscription-progress'" "$DASHBOARD"
 test -s "$QR"

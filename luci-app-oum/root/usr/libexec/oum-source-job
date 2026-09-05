@@ -60,6 +60,7 @@ case "$kind" in
 			uci set oum.main.active_source='subscription'
 			uci set oum.main.pending_source='none'
 			uci commit oum
+			rm -f /tmp/oum-openclash-nodes.cache
 			write_status success active 'Subscription.yaml активирован'
 		else
 			write_status failed activation_failed 'OpenClash отклонил подписку; предыдущий профиль восстановлен'

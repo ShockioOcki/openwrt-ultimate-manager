@@ -20,7 +20,7 @@ return view.extend({
 			[ '4', 'Не помогло?', 'Сохраните резервную копию OUM, перезагрузите роутер и повторите проверку. Сброс VPN не меняет WAN и Wi-Fi.', null ]
 		];
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: L.resource('oum/oum.css') }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260902-mobile9` }),
 			E('h2', {}, 'Если интернет не работает'),
 			E('p', {}, 'Идите сверху вниз: сначала обычное подключение, затем DNS и только после этого VPN.'),
 			E('div', { 'class': 'oum-help-grid' }, checks.map(([ number, title, text, ok ]) => E('section', { 'class': 'oum-help-step' }, [ E('span', { 'class': 'oum-help-number' }, number), E('div', {}, [ E('h3', {}, title), E('p', { 'class': ok == null ? '' : 'oum-help-result', 'data-ok': ok == null ? null : String(ok) }, text) ]) ]))),
@@ -32,7 +32,7 @@ return view.extend({
 			]),
 			E('p', { 'class': 'oum-help-extra' }, [ E('strong', {}, 'Безопасность: '), 'вход admin без пароля используйте только в доверенной локальной сети. Не публикуйте LuCI или OUM в интернет.' ])
 		]);
-		return E('div', { 'class': 'oum-help-page oum-app', 'data-theme': 'light' }, [ appSidebar('help'), page ]);
+		return E('div', { 'class': 'oum-help-page oum-app', 'data-theme': document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light' }, [ page ]);
 	},
 	handleSaveApply: null,
 	handleSave: null,

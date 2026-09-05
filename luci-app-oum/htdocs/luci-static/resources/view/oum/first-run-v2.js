@@ -52,16 +52,24 @@ return view.extend({
 	render(status) {
 		if (status.setup_complete)
 			return E('div', { 'class': 'oum-shell' }, [
-			E('link', { rel: 'stylesheet', href: L.resource('oum/oum.css') }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260905-quickping84` }),
 				E('h2', {}, 'Роутер уже настроен'),
 				E('p', {}, 'Мастер первого запуска завершён. Откройте главную страницу OUM.'),
 				E('a', { 'class': 'btn cbi-button-action', 'href': L.url('oum', 'dashboard') }, 'Перейти на главную')
 			]);
 
-		const root = E('div', { 'class': 'oum-shell' }, [
-			E('link', { rel: 'stylesheet', href: L.resource('oum/oum.css') }),
-			E('h2', {}, 'Добро пожаловать в OUM'),
-			E('p', {}, 'Четыре понятных шага — и роутер готов к работе.'),
+		const root = E('div', {
+			'class': 'oum-shell oum-first-run',
+			'data-theme': document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+		}, [
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260905-quickping84` }),
+			E('div', { 'class': 'oum-setup-head' }, [
+				E('div', {}, [
+					E('h2', {}, 'Добро пожаловать в OUM'),
+					E('p', { 'class': 'oum-muted' }, 'Четыре понятных шага — и роутер готов к работе.')
+				]),
+				E('span', { 'class': 'oum-setup-counter', id: 'oum-setup-counter' }, 'Шаг 1 из 4')
+			]),
 			E('div', { 'class': 'oum-progress' }, [1,2,3,4].map((n) => E('span', { 'data-progress': n }))),
 
 			E('section', { 'class': 'oum-step', 'data-step': 1 }, [
@@ -123,6 +131,7 @@ return view.extend({
 		const update = () => {
 			root.querySelectorAll('.oum-step').forEach((n) => n.hidden = +n.dataset.step !== step);
 			root.querySelectorAll('[data-progress]').forEach((n) => n.classList.toggle('active', +n.dataset.progress <= step));
+			root.querySelector('#oum-setup-counter').textContent = `Шаг ${step} из 4`;
 			root.querySelector('#oum-back').disabled = step === 1;
 			root.querySelector('#oum-next').textContent = step === 4 ? 'Применить настройки' : 'Продолжить';
 		};

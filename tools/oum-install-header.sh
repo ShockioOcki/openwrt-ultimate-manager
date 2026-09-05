@@ -36,6 +36,7 @@ oum_backup_current() {
 
 	set --
 	for absolute in \
+		/etc/config/luci \
 		/etc/config/oum \
 		/usr/share/luci/menu.d/luci-app-oum.json \
 		/usr/share/ucode/luci/controller/oum.uc \
@@ -44,7 +45,12 @@ oum_backup_current() {
 		/usr/libexec/oum \
 		/usr/libexec/oum-* \
 		/usr/share/oum \
-		/www/luci-static/resources/view/oum
+		/www/luci-static/resources/view/oum \
+		/etc/config/oum_theme \
+		/usr/share/ucode/luci/template/themes/oum \
+		/usr/share/rpcd/acl.d/luci-theme-oum.json \
+		/www/luci-static/oum \
+		/www/luci-static/resources/menu-oum.js
 	do
 		[ -e "$absolute" ] || continue
 		set -- "$@" "${absolute#/}"
@@ -84,6 +90,8 @@ oum_install_package() {
 
 	sh "$OUM_INSTALL_TMP/package/tools/install-luci-dev.sh" \
 		"$OUM_INSTALL_TMP/package/luci-app-oum" || oum_die 'installation failed; backup was preserved'
+	sh "$OUM_INSTALL_TMP/package/tools/install-theme-dev.sh" \
+		"$OUM_INSTALL_TMP/package/luci-theme-oum" || oum_die 'system theme installation failed; backup was preserved'
 	/usr/libexec/oum-awg-manager install || oum_die 'AmneziaWG package installation failed'
 	mkdir -p /etc/oum
 	printf '%s\n' "$OUM_INSTALLER_VERSION" > /etc/oum/version

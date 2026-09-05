@@ -218,6 +218,7 @@ function validDeviceAlias(value) {
 
 function deviceSectionHasState(uci, section) {
 	return (uci.get('oum', section, 'policy') ?? 'default') != 'default' ||
+		uci.get('oum', section, 'parental_managed') == '1' ||
 		uci.get('oum', section, 'paused') == '1' ||
 		uci.get('oum', section, 'manual_paused') == '1' ||
 		uci.get('oum', section, 'schedule_paused') == '1' ||
@@ -268,6 +269,7 @@ function connectedClients(uci) {
 			}
 			if (length(alias)) aliases[mac] = alias;
 			parental[mac] = {
+				managed: device.parental_managed == '1',
 				manual_paused: device.manual_paused == '1' || (device.paused == '1' && device.schedule_paused != '1' && device.manual_paused == null),
 				schedule_paused: device.schedule_paused == '1', sched_enabled: device.sched_enabled == '1',
 				sched_days: device.sched_days ?? '1,2,3,4,5', start: device.sched_start ?? '22:00', stop: device.sched_stop ?? '07:00',
@@ -350,6 +352,7 @@ function connectedClients(uci) {
 			start: parental[mac]?.start ?? '22:00',
 			stop: parental[mac]?.stop ?? '07:00',
 			adblock: parental[mac]?.adblock ?? 'inherit',
+			parental_managed: parental[mac]?.managed ?? false,
 			online: true,
 			seen: client.seen
 		});
@@ -387,6 +390,7 @@ function offlineClients(uci, online) {
 			start: device.sched_start ?? '22:00',
 			stop: device.sched_stop ?? '07:00',
 			adblock: device.adblock ?? 'inherit',
+			parental_managed: device.parental_managed == '1',
 			online: false,
 			seen: false
 		});
@@ -397,8 +401,10 @@ function offlineClients(uci, online) {
 function parentalStatusData(uci) {
 	let online = connectedClients(uci);
 	let result = [];
-	for (let client in online) push(result, client);
-	for (let client in offlineClients(uci, online)) push(result, client);
+	for (let client in online)
+		if (client.parental_managed) push(result, client);
+	for (let client in offlineClients(uci, online))
+		if (client.parental_managed) push(result, client);
 	return {
 		mode: uci.get('oum', 'main', 'adguard_mode') ?? 'off',
 		devices: sort(result, (a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0))
@@ -425,18 +431,47 @@ function thermalStatus() {
 function healthStatus() {
 	let bus = connect();
 	let info = bus?.call('system', 'info') ?? {};
+	let board = bus?.call('system', 'board') ?? {};
 	let memory = info.memory ?? {};
 	let total = +(memory.total ?? 0);
 	let available = +(memory.available ?? memory.free ?? 0);
 	let used = total > available ? total - available : 0;
 	let thermal = thermalStatus();
 	let temperature = thermal.maximum;
+	let ports = [];
+	for (let path in glob('/sys/class/net/*')) {
+		let name = basename(path);
+		if (!match(name, /^(wan|lan[0-9]+)$/))
+			continue;
+		let state = trim(readfile(`${path}/operstate`) ?? 'down');
+		let speed = +(trim(readfile(`${path}/speed`) ?? '0'));
+		push(ports, {
+			name,
+			up: state == 'up',
+			speed: speed > 0 ? speed : 0,
+			rx_bytes: +(trim(readfile(`${path}/statistics/rx_bytes`) ?? '0')),
+			tx_bytes: +(trim(readfile(`${path}/statistics/tx_bytes`) ?? '0'))
+		});
+	}
+	ports = sort(ports, (a, b) => a.name == 'wan' ? -1 : (b.name == 'wan' ? 1 : (a.name < b.name ? -1 : 1)));
+	let root = info.root ?? {};
+	let tmp = info.tmp ?? {};
 	return {
 		uptime: +(info.uptime ?? 0),
 		load: +(info.load?.[0] ?? 0) / 65535,
 		memory_total: total,
+		memory_available: available,
 		memory_used: used,
+		memory_cached: +(memory.cached ?? 0),
+		memory_buffered: +(memory.buffered ?? 0),
 		memory_percent: total > 0 ? used * 100 / total : 0,
+		root_total: +(root.total ?? 0) * 1024,
+		root_used: +(root.used ?? 0) * 1024,
+		tmp_total: +(tmp.total ?? 0) * 1024,
+		tmp_used: +(tmp.used ?? 0) * 1024,
+		model: board.model ?? '',
+		kernel: board.kernel ?? '',
+		ports,
 		temperature,
 		temperature_state: temperature == null ? 'unknown' : (temperature < 65 ? 'normal' : (temperature <= 75 ? 'warm' : 'hot'))
 	};
@@ -562,11 +597,32 @@ function wispStatusData(uci) {
 
 function scanWifiNetworks(uci, band) {
 	let iface = radioInterfaceForBand(uci, band);
-	if (!length(iface))
-		return [];
+	let temporaryIface = '';
+	if (!length(iface)) {
+		let phy = '';
+		uci.foreach('wireless', 'wifi-device', (radio) => {
+			if (!length(phy) && radio.band == band)
+				phy = radio.phy ?? '';
+		});
+		if (!match(phy, /^[A-Za-z0-9_-]+$/))
+			return [];
+		temporaryIface = band == '5g' ? 'oum_scan5' : 'oum_scan2';
+		system(`/usr/sbin/iw dev ${temporaryIface} del >/dev/null 2>&1`);
+		if (system(`/usr/sbin/iw phy ${phy} interface add ${temporaryIface} type managed >/dev/null 2>&1`) != 0)
+			return [];
+		if (system(`/sbin/ip link set ${temporaryIface} up >/dev/null 2>&1`) != 0) {
+			system(`/usr/sbin/iw dev ${temporaryIface} del >/dev/null 2>&1`);
+			return [];
+		}
+		system('/bin/sleep 1');
+		iface = temporaryIface;
+	}
 	let process = popen(`/usr/bin/iwinfo ${iface} scan 2>/dev/null`);
-	if (!process)
+	if (!process) {
+		if (length(temporaryIface))
+			system(`/usr/sbin/iw dev ${temporaryIface} del >/dev/null 2>&1`);
 		return [];
+	}
 	let result = [], current = null;
 	let finish = () => {
 		if (!current || !length(current.ssid ?? '')) return;
@@ -592,6 +648,8 @@ function scanWifiNetworks(uci, band) {
 	}
 	finish();
 	process.close();
+	if (length(temporaryIface))
+		system(`/usr/sbin/iw dev ${temporaryIface} del >/dev/null 2>&1`);
 	return sort(result, (a, b) => b.signal - a.signal || (a.ssid < b.ssid ? -1 : 1));
 }
 
@@ -640,6 +698,23 @@ function packageVersion(name) {
 	return replace(value, `${name}-`, '');
 }
 
+function upstreamData() {
+	// Upstream releases cache (/tmp/oum-upstream.cache).
+	// Сверка пинов движков с latest-релизами GitHub (кэш /tmp/oum-upstream.cache).
+	// Запуск дешёвый: при свежем кэше скрипт выходит сразу, иначе — фон.
+	system('/usr/libexec/oum-upstream-check >/dev/null 2>&1');
+	let raw = readfile('/tmp/oum-upstream.cache');
+	let result = {};
+	if (!raw)
+		return result;
+	for (let line in split(raw, '\n')) {
+		let pair = match(line, /^([a-z_]+)=(.*)$/);
+		if (pair)
+			result[pair[1]] = pair[2];
+	}
+	return result;
+}
+
 function passwallCachePresent() {
 	let files = [
 		'chinadns-ng-2025.08.09-r1.apk', 'dns2socks-2.1-r2.apk', 'geoview-0.2.6-r1.apk',
@@ -662,6 +737,7 @@ function engineStatusData() {
 	return {
 		current: podkop ? 'podkop' : (passwall ? 'passwall' : (openclash ? 'openclash' : 'none')),
 		supported: supported ? true : false,
+		upstream: upstreamData(),
 		passwall: {
 			installed: passwall ? true : false,
 			version: packageVersion('luci-app-passwall'),
@@ -1631,6 +1707,23 @@ const methods = {
 		}
 	},
 
+	updateVpnEngine: {
+		args: { engine: '' },
+		call: function(request) {
+			let engine = request.args.engine ?? '';
+			if (!(engine in [ 'openclash', 'podkop' ]))
+				return failure('unsupported_engine', 'Обновление доступно только для OpenClash и Podkop + Zapret.');
+			let status = engineStatusData();
+			if (!status.supported)
+				return failure('unsupported_platform', 'Для этого устройства пока нет проверенного комплекта обновления.');
+			if (status.current != engine)
+				return failure('engine_changed', 'Активный VPN-движок изменился. Обновите страницу.');
+			if (!access('/usr/libexec/oum-engine-manager'))
+				return failure('runtime_missing', 'Менеджер VPN-движков не установлен.');
+			return startSystemJob('engine_update', { engine });
+		}
+	},
+
 	configurePodkop: {
 		args: { interface: '' },
 		call: function(request) {
@@ -1823,13 +1916,14 @@ const methods = {
 	dashboardStatus: {
 		call: function() {
 			const uci = cursor();
+			const engines = engineStatusData();
 			const clients = connectedClients(uci);
 			const traffic = trafficStatusData();
 			for (let client in clients)
 				client.traffic = traffic[client.ip] ?? { down: 0, up: 0, points: [] };
 			const passwall = passwallStatusData();
 			const podkop = podkopStatusData();
-			const engine = podkop.installed ? 'podkop' : (passwall.installed ? 'passwall' : 'openclash');
+			const engine = engines.current;
 			return {
 				wan: networkStatus(),
 				wifi: wifiStatus(uci),
@@ -1844,9 +1938,29 @@ const methods = {
 				policy_applying: access('/tmp/oum-device-policy.lock') ? true : false,
 				passwall,
 				podkop,
+				openclash: engines.openclash,
 				unmanaged_tunnels: unmanagedTunnels(uci),
 				subscription: engine == 'openclash' ? subscriptionStatusData(false) : { available: false, refreshing: false }
 			};
+		}
+	},
+
+	wifiQrCredentials: {
+		call: function() {
+			const uci = cursor();
+			let network = null;
+			uci.foreach('wireless', 'wifi-iface', (iface) => {
+				if (network || iface.mode != 'ap' || iface.disabled == '1' || !length(iface.ssid ?? ''))
+					return;
+				network = {
+					ssid: iface.ssid,
+					key: iface.key ?? '',
+					encryption: iface.encryption ?? 'none'
+				};
+			});
+			if (!network)
+				return failure('wifi_unavailable', 'Активная точка Wi-Fi не найдена.');
+			return { ok: true, ...network };
 		}
 	},
 
@@ -1860,6 +1974,40 @@ const methods = {
 			system(`rm -f ${SUBSCRIPTION_CACHE}`);
 			subscriptionStatusData(true);
 			return { ok: true, message: 'Обновляем данные подписки…' };
+		}
+	},
+
+	refreshSubscription: {
+		call: function() {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			const uci = cursor();
+			if ((uci.get('oum', 'main', 'active_source') ?? 'none') != 'subscription')
+				return failure('not_subscription', 'Сейчас активна не подписка.');
+			let url = uci.get('openclash', 'oum_subscription_info', 'url') ?? '';
+			if (!match(url, /^https?:\/\//) || match(url, /[\r\n]/))
+				return failure('subscription_url_missing', 'Ссылка подписки не найдена. Добавьте её заново в настройках.');
+			if (!access('/usr/libexec/oum-source-job'))
+				return failure('runtime_missing', 'Компонент обновления подписки не установлен.');
+			let current = vpnJobStatus();
+			if (current.state == 'running')
+				return failure('job_running', 'Другое обновление уже выполняется.');
+			if (system(`mkdir ${VPN_JOB_LOCK}`) != 0)
+				return failure('job_running', 'Другая операция с подключением уже выполняется.');
+			if (system(`rm -rf ${VPN_JOB_DIR} && mkdir -p ${VPN_JOB_DIR} && chmod 700 ${VPN_JOB_DIR}`) != 0) {
+				system(`rmdir ${VPN_JOB_LOCK}`);
+				return failure('job_directory', 'Не удалось подготовить обновление подписки.');
+			}
+			if (!writePrivate(`${VPN_JOB_DIR}/input`, `${url}\n`) ||
+			    !writePrivate(`${VPN_JOB_DIR}/status`, 'state=running\ncode=queued\nmessage=Загружаем обновлённую подписку\n')) {
+				system(`rm -rf ${VPN_JOB_DIR}; rmdir ${VPN_JOB_LOCK}`);
+				return failure('input_write', 'Не удалось подготовить данные подписки.');
+			}
+			if (system(`(/usr/libexec/oum-source-job subscription ${VPN_JOB_DIR}/input) >/dev/null 2>&1 &`) != 0) {
+				system(`rm -rf ${VPN_JOB_DIR}; rmdir ${VPN_JOB_LOCK}`);
+				return failure('job_start', 'Не удалось запустить обновление подписки.');
+			}
+			return { ok: true, state: 'running', message: 'Обновляем подписку и список нод…' };
 		}
 	},
 
@@ -2052,6 +2200,49 @@ const methods = {
 			if (system('(/usr/libexec/oum-device-policy apply) >/tmp/oum-device-policy-start.log 2>&1 &') != 0)
 				return failure('apply_failed', 'Не удалось применить паузу устройства.');
 			return { ok: true, mac, paused, message: paused ? 'Доступ в интернет приостановлен.' : 'Доступ в интернет восстановлен.' };
+		}
+	},
+
+	setDeviceParental: {
+		args: { mac: '', enabled: false },
+		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			let mac = uc(request.args.mac ?? '');
+			let enabled = request.args.enabled;
+			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
+				return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
+			if (type(enabled) != 'bool')
+				return failure('invalid_state', 'Некорректное состояние родительского контроля.');
+			const uci = cursor();
+			let section = null;
+			uci.foreach('oum', 'device', (device) => {
+				if (uc(device.mac ?? '') == mac) section = device['.name'];
+			});
+			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
+			if (enabled && !client)
+				return failure('client_offline', 'Чтобы добавить устройство, оно должно быть подключено к роутеру.');
+			if (!section && enabled) section = uci.add('oum', 'device');
+			if (!section)
+				return { ok: true, mac, enabled: false, message: 'Устройство уже удалено из родительского контроля.' };
+			uci.set('oum', section, 'mac', mac);
+			if (enabled) {
+				uci.set('oum', section, 'parental_managed', '1');
+				if (client?.ip) uci.set('oum', section, 'ip', client.ip);
+			}
+			else {
+				for (let option in [ 'parental_managed', 'manual_paused', 'schedule_paused', 'sched_enabled', 'sched_days', 'sched_start', 'sched_stop', 'paused', 'adblock' ])
+					uci.delete('oum', section, option);
+				if (!length(uci.get('oum', section, 'alias') ?? '') && !deviceSectionHasState(uci, section))
+					uci.delete('oum', section);
+			}
+			if (!uci.commit('oum'))
+				return failure('commit_failed', 'Не удалось сохранить состав родительского контроля.');
+			if (!enabled) {
+				system('/usr/libexec/oum-device-policy apply >/tmp/oum-parental-remove-policy.log 2>&1');
+				system('/usr/libexec/oum-adguard >/tmp/oum-parental-remove-dns.log 2>&1');
+			}
+			return { ok: true, mac, enabled, message: enabled ? 'Устройство добавлено в родительский контроль.' : 'Устройство удалено из родительского контроля.' };
 		}
 	},
 
