@@ -1,0 +1,65 @@
+#!/bin/sh
+
+set -eu
+
+node="${1:-}"
+shunt=oum_shunt
+[ -n "$node" ] || exit 2
+[ "$(uci -q get "passwall.$node")" = nodes ] || exit 2
+
+# Recreate only OUM-owned rules so their evaluation order is deterministic:
+# explicit AI services -> private networks -> Russian resources -> default VPN.
+for section in oum_ai oum_private oum_ru; do
+	uci -q delete "passwall.$section" || true
+done
+uci -q delete "passwall.$shunt" || true
+
+uci -q set passwall.oum_ai=shunt_rules
+uci -q set "passwall.oum_ai.remarks=AI services"
+uci -q set "passwall.oum_ai.network=tcp,udp"
+uci -q set "passwall.oum_ai.domain_list=geosite:category-ai-!cn
+domain:chatgpt.com
+domain:openai.com
+domain:oaistatic.com
+domain:oaiusercontent.com
+domain:gemini.google.com
+domain:generativelanguage.googleapis.com"
+
+uci -q set passwall.oum_private=shunt_rules
+uci -q set "passwall.oum_private.remarks=Private networks"
+uci -q set "passwall.oum_private.network=tcp,udp"
+uci -q set "passwall.oum_private.ip_list=geoip:private"
+
+uci -q set passwall.oum_ru=shunt_rules
+uci -q set "passwall.oum_ru.remarks=Russia direct"
+uci -q set "passwall.oum_ru.network=tcp,udp"
+# The pinned geosite build exposes RU as the compatible CATEGORY-RU and
+# TLD-RU groups; its aggregate RU entry is malformed for the pinned Xray.
+uci -q set "passwall.oum_ru.domain_list=geosite:category-ru
+geosite:tld-ru"
+uci -q set "passwall.oum_ru.ip_list=geoip:ru"
+
+uci -q set "passwall.$shunt=nodes"
+uci -q set "passwall.$shunt.remarks=OUM Bypass Russia"
+uci -q set "passwall.$shunt.type=Xray"
+uci -q set "passwall.$shunt.protocol=_shunt"
+uci -q set "passwall.$shunt.oum_ai=_default"
+uci -q set "passwall.$shunt.oum_private=_direct"
+uci -q set "passwall.$shunt.oum_ru=_direct"
+uci -q set "passwall.$shunt.default_node=$node"
+uci -q set "passwall.$shunt.domainStrategy=IPOnDemand"
+
+# The legacy China/GFW lists conflict with a Russia-only direct policy.
+uci -q set passwall.@global[0].use_direct_list='0'
+uci -q set passwall.@global[0].use_proxy_list='0'
+uci -q set passwall.@global[0].use_gfw_list='0'
+uci -q set passwall.@global[0].chn_list='0'
+uci -q set passwall.@global[0].chinadns_ng_default_tag='gfw'
+uci -q set passwall.@global[0].direct_dns_mode='udp'
+uci -q set passwall.@global[0].direct_dns='77.88.8.1:53'
+uci -q set passwall.@global[0].v2ray_dns_mode='tcp'
+uci -q set passwall.@global[0].remote_dns='1.1.1.1:53'
+uci -q set passwall.@global_xray[0].sniffing_override_dest='1'
+uci -q set passwall.@global[0].tcp_node="$shunt"
+uci -q set passwall.@global[0].udp_node='tcp'
+uci -q commit passwall

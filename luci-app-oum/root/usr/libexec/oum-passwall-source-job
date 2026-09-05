@@ -131,13 +131,8 @@ first_managed_node() {
 activate_source() {
 	node="$(first_managed_node)" || return 1
 	[ -n "$node" ] || return 1
+	/usr/libexec/oum-passwall-bypass-russia "$node" || return 1
 	uci -q batch <<EOF
-set passwall.$SHUNT=nodes
-set passwall.$SHUNT.remarks='OUM Routing'
-set passwall.$SHUNT.type='Xray'
-set passwall.$SHUNT.protocol='_shunt'
-set passwall.$SHUNT.default_node='$node'
-set passwall.$SHUNT.domainStrategy='IPOnDemand'
 set passwall.@global[0].tcp_node='$SHUNT'
 set passwall.@global[0].udp_node='tcp'
 set passwall.@global[0].enabled='1'
