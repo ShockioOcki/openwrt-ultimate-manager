@@ -58,14 +58,16 @@ ruby -ryaml -e '
   abort "mass routing missing" unless config.fetch("rules").include?("RULE-SET,google-play,DIRECT")
   abort "Chinese domains must be direct" unless config.fetch("rules").include?("RULE-SET,cn-domains,DIRECT")
   abort "Chinese IPs must be direct" unless config.fetch("rules").include?("RULE-SET,cn-ips,DIRECT,no-resolve")
-  abort "Games must be direct" unless config.fetch("rules").include?("RULE-SET,category-games,DIRECT")
+  abort "International games must be direct" unless config.fetch("rules").include?("RULE-SET,category-games-not-cn,DIRECT")
   rules = config.fetch("rules")
-  abort "blocked services must take precedence over games" unless rules.index("RULE-SET,ru-blocked-domains,PROXY") < rules.index("RULE-SET,category-games,DIRECT")
+  abort "Discord must take precedence over games" unless rules.index("RULE-SET,discord-domains,PROXY") < rules.index("RULE-SET,category-games-not-cn,DIRECT")
+  abort "blocked services must take precedence over games" unless rules.index("RULE-SET,ru-blocked-domains,PROXY") < rules.index("RULE-SET,category-games-not-cn,DIRECT")
   abort "Samsung must be direct" unless config.fetch("rules").include?("RULE-SET,samsung,DIRECT")
   %w[gearupbooster.com gearupportal.com guinfra.com sdp.gg].each do |domain|
     abort "GearUP must be direct: #{domain}" unless config.fetch("rules").include?("DOMAIN-SUFFIX,#{domain},DIRECT")
   end
   abort "Meta must use its selector" unless config.fetch("rules").include?("RULE-SET,meta-domains,META")
+  abort "aggregate game list must not be used" if config.fetch("rule-providers").key?("category-games")
   abort "unexpected torrent block" if config.fetch("rules").any? { |rule| rule.downcase.include?("torrent") }
 ' "$TMP/standalone.yaml"
 

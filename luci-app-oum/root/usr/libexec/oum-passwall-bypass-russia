@@ -8,8 +8,8 @@ shunt=oum_shunt
 [ "$(uci -q get "passwall.$node")" = nodes ] || exit 2
 
 # Recreate only OUM-owned rules so their evaluation order is deterministic:
-# game booster infra -> explicit AI services -> private networks -> China -> games -> Russia -> default VPN.
-for section in oum_gearup oum_ai oum_private oum_cn oum_games oum_ru; do
+# game booster infra -> explicit proxy services -> private networks -> China -> international games -> Russia -> default VPN.
+for section in oum_gearup oum_ai oum_discord oum_private oum_cn oum_games oum_ru; do
 	uci -q delete "passwall.$section" || true
 done
 uci -q delete "passwall.$shunt" || true
@@ -33,6 +33,11 @@ domain:oaiusercontent.com
 domain:gemini.google.com
 domain:generativelanguage.googleapis.com"
 
+uci -q set passwall.oum_discord=shunt_rules
+uci -q set "passwall.oum_discord.remarks=Discord proxy"
+uci -q set "passwall.oum_discord.network=tcp,udp"
+uci -q set "passwall.oum_discord.domain_list=geosite:discord"
+
 uci -q set passwall.oum_private=shunt_rules
 uci -q set "passwall.oum_private.remarks=Private networks"
 uci -q set "passwall.oum_private.network=tcp,udp"
@@ -45,9 +50,9 @@ uci -q set "passwall.oum_cn.domain_list=geosite:cn"
 uci -q set "passwall.oum_cn.ip_list=geoip:cn"
 
 uci -q set passwall.oum_games=shunt_rules
-uci -q set "passwall.oum_games.remarks=Games direct"
+uci -q set "passwall.oum_games.remarks=International games direct"
 uci -q set "passwall.oum_games.network=tcp,udp"
-uci -q set "passwall.oum_games.domain_list=geosite:category-games"
+uci -q set "passwall.oum_games.domain_list=geosite:category-games-!cn"
 
 uci -q set passwall.oum_ru=shunt_rules
 uci -q set "passwall.oum_ru.remarks=Russia direct"
@@ -64,6 +69,7 @@ uci -q set "passwall.$shunt.type=Xray"
 uci -q set "passwall.$shunt.protocol=_shunt"
 uci -q set "passwall.$shunt.oum_gearup=_direct"
 uci -q set "passwall.$shunt.oum_ai=_default"
+uci -q set "passwall.$shunt.oum_discord=_default"
 uci -q set "passwall.$shunt.oum_private=_direct"
 uci -q set "passwall.$shunt.oum_cn=_direct"
 uci -q set "passwall.$shunt.oum_games=_direct"
