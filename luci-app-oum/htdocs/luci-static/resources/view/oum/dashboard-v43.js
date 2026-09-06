@@ -23,6 +23,8 @@ const callPodkopDiagnostics = rpc.declare({ object: 'oum', method: 'podkopDiagno
 const callSetZapretQuic = rpc.declare({ object: 'oum', method: 'setZapretQuic', params: [ 'enabled' ], expect: { '': {} } });
 const callPrepareZapretManager = rpc.declare({ object: 'oum', method: 'prepareZapretManager', expect: { '': {} } });
 const callSystemJobStatus = rpc.declare({ object: 'oum', method: 'systemJobStatus', expect: { '': {} } });
+const callCheckPasswallRoute = rpc.declare({ object: 'oum', method: 'checkPasswallRoute', params: [ 'domain' ], expect: { '': {} } });
+const callUpdatePasswallGeoData = rpc.declare({ object: 'oum', method: 'updatePasswallGeoData', expect: { '': {} } });
 const sourceNames = { none: 'Не настроено', subscription: 'Subscription', awg: 'AWG Tunnel', proxy: 'Reality / Proxy', passwall: 'PassWall', podkop: 'Podkop + Zapret' };
 
 function appSidebar(active) {
@@ -353,6 +355,19 @@ return view.extend({
 								E('div', { 'class': 'oum-passwall-diagnostic' }, [ E('small', {}, 'Удалённый DNS'), E('strong', { id: 'passwall-diag-remote' }, '—') ]),
 								E('div', { 'class': 'oum-passwall-diagnostic' }, [ E('small', {}, 'Защита IPv6'), E('strong', { id: 'passwall-diag-ipv6' }, '—') ]),
 								E('div', { 'class': 'oum-passwall-diagnostic' }, [ E('small', {}, 'GeoSite / GeoIP'), E('strong', { id: 'passwall-diag-geo' }, '—') ])
+							]),
+							E('div', { 'class': 'oum-passwall-tools' }, [
+								E('h4', {}, 'Проверка маршрута'),
+								E('p', { 'class': 'oum-muted' }, 'Показывает, какое правило OUM будет применено к домену.'),
+								E('div', { 'class': 'oum-passwall-tool-row' }, [
+									E('input', { id: 'passwall-route-domain', type: 'text', placeholder: 'example.com', autocomplete: 'off' }),
+									E('button', { id: 'passwall-route-check', 'class': 'btn cbi-button' }, 'Проверить')
+								]),
+								E('p', { id: 'passwall-route-result', 'class': 'oum-muted', 'aria-live': 'polite' }, ''),
+								E('div', { 'class': 'oum-passwall-tool-row' }, [
+									E('button', { id: 'passwall-geodata-update', 'class': 'btn cbi-button' }, 'Обновить GeoSite / GeoIP'),
+									E('span', { id: 'passwall-geodata-result', 'class': 'oum-muted', 'aria-live': 'polite' }, 'Новые базы применяются только после проверки.')
+								])
 							])
 						])
 					]),
@@ -547,8 +562,49 @@ return view.extend({
 		const podkopDiagnosticRestart = root.querySelector('#podkop-diagnostic-restart');
 		const podkopQuicToggle = root.querySelector('#podkop-quic-toggle');
 		const zapretManagerPrepare = root.querySelector('#zapret-manager-prepare');
+		const passwallRouteInput = root.querySelector('#passwall-route-domain');
+		const passwallRouteButton = root.querySelector('#passwall-route-check');
+		const passwallRouteResult = root.querySelector('#passwall-route-result');
+		const passwallGeodataButton = root.querySelector('#passwall-geodata-update');
+		const passwallGeodataResult = root.querySelector('#passwall-geodata-result');
 		let podkopQuicDisabled = false;
 		let savedRoutingSignature = null;
+
+		passwallRouteButton.addEventListener('click', (event) => {
+			event.preventDefault();
+			passwallRouteButton.disabled = true;
+			passwallRouteResult.textContent = 'Проверяем…';
+			callCheckPasswallRoute(passwallRouteInput.value).then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Маршрут не определён.');
+				const route = result.route === 'direct' ? 'Напрямую' : 'Через VPN';
+				passwallRouteResult.textContent = `${result.domain}: ${route} · ${result.rule}`;
+				passwallRouteResult.dataset.route = result.route;
+			}).catch((error) => {
+				passwallRouteResult.textContent = error.message;
+				passwallRouteResult.dataset.route = 'error';
+			}).finally(() => { passwallRouteButton.disabled = false; });
+		});
+		passwallRouteInput.addEventListener('keydown', (event) => {
+			if (event.key === 'Enter') passwallRouteButton.click();
+		});
+		passwallGeodataButton.addEventListener('click', (event) => {
+			event.preventDefault();
+			passwallGeodataButton.disabled = true;
+			passwallGeodataResult.textContent = 'Загружаем и проверяем базы…';
+			callUpdatePasswallGeoData().then((result) => {
+				if (!result.ok) throw new Error(result.message || 'Обновление не запущено.');
+				let attempts = 0;
+				const watch = () => new Promise((resolve) => window.setTimeout(resolve, 1000)).then(callSystemJobStatus).then((job) => {
+					passwallGeodataResult.textContent = job.message || 'Обновляем…';
+					if (job.state === 'running' && attempts++ < 150) return watch();
+					if (job.state !== 'success') throw new Error(job.message || 'Geo-базы не обновлены.');
+					return callDashboardStatus().then(updateDashboard);
+				});
+				return watch();
+			}).catch((error) => {
+				passwallGeodataResult.textContent = error.message;
+			}).finally(() => { passwallGeodataButton.disabled = false; });
+		});
 
 		for (const tab of root.querySelectorAll('[data-podkop-tab]')) tab.addEventListener('click', (event) => {
 			event.preventDefault();

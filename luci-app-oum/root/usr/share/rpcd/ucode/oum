@@ -1742,6 +1742,42 @@ const methods = {
 		}
 	},
 
+	updatePasswallGeoData: {
+		call: function() {
+			if (!passwallInstalled())
+				return failure('passwall_missing', 'PassWall не установлен.');
+			if (!access('/usr/libexec/oum-passwall-geodata'))
+				return failure('runtime_missing', 'Компонент обновления Geo-баз не установлен.');
+			return startSystemJob('passwall_geodata', {});
+		}
+	},
+
+	checkPasswallRoute: {
+		args: { domain: '' },
+		call: function(request) {
+			let domain = lc(trim(request.args.domain ?? ''));
+			if (!passwallInstalled())
+				return failure('passwall_missing', 'PassWall не установлен.');
+			if (!match(domain, /^(?:https?:\/\/)?[A-Za-z0-9.-]+(?::[0-9]+)?(?:\/.*)?$/))
+				return failure('invalid_domain', 'Введите домен, например example.com.');
+			let raw = commandLine(`/usr/libexec/oum-passwall-route-check ${shellquote(domain)}`);
+			if (!length(raw))
+				return failure('route_check_failed', 'Не удалось определить маршрут домена.');
+			let result = {};
+			for (let line in split(raw, '\n')) {
+				let pair = match(line, /^(domain|route|rule|categories)=(.*)$/);
+				if (pair) result[pair[1]] = pair[2];
+			}
+			return {
+				ok: true,
+				domain: result.domain ?? domain,
+				route: result.route ?? 'vpn',
+				rule: result.rule ?? 'По умолчанию',
+				categories: result.categories ?? ''
+			};
+		}
+	},
+
 	configurePodkop: {
 		args: { interface: '' },
 		call: function(request) {

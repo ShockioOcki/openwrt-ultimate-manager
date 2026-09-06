@@ -8,8 +8,9 @@ shunt=oum_shunt
 [ "$(uci -q get "passwall.$node")" = nodes ] || exit 2
 
 # Recreate only OUM-owned rules so their evaluation order is deterministic:
-# game booster infra -> explicit proxy services -> private networks -> China -> international games -> Russia -> default VPN.
-for section in oum_gearup oum_ai oum_discord oum_private oum_cn oum_games oum_ru; do
+# game booster infra -> explicit proxy services -> BitTorrent/download bypasses ->
+# private networks -> China -> international games -> Russia -> default VPN.
+for section in oum_gearup oum_ai oum_discord oum_bittorrent oum_downloads oum_private oum_cn oum_games oum_ru; do
 	uci -q delete "passwall.$section" || true
 done
 uci -q delete "passwall.$shunt" || true
@@ -37,6 +38,20 @@ uci -q set passwall.oum_discord=shunt_rules
 uci -q set "passwall.oum_discord.remarks=Discord proxy"
 uci -q set "passwall.oum_discord.network=tcp,udp"
 uci -q set "passwall.oum_discord.domain_list=geosite:discord"
+
+uci -q set passwall.oum_bittorrent=shunt_rules
+uci -q set "passwall.oum_bittorrent.remarks=BitTorrent direct"
+uci -q set "passwall.oum_bittorrent.network=tcp,udp"
+uci -q set "passwall.oum_bittorrent.protocol=bittorrent"
+
+uci -q set passwall.oum_downloads=shunt_rules
+uci -q set "passwall.oum_downloads.remarks=Updates and downloads direct"
+uci -q set "passwall.oum_downloads.network=tcp,udp"
+uci -q set "passwall.oum_downloads.domain_list=geosite:apple-update
+geosite:google-play
+geosite:microsoft
+geosite:samsung
+geosite:xiaomi"
 
 uci -q set passwall.oum_private=shunt_rules
 uci -q set "passwall.oum_private.remarks=Private networks"
@@ -70,6 +85,8 @@ uci -q set "passwall.$shunt.protocol=_shunt"
 uci -q set "passwall.$shunt.oum_gearup=_direct"
 uci -q set "passwall.$shunt.oum_ai=_default"
 uci -q set "passwall.$shunt.oum_discord=_default"
+uci -q set "passwall.$shunt.oum_bittorrent=_direct"
+uci -q set "passwall.$shunt.oum_downloads=_direct"
 uci -q set "passwall.$shunt.oum_private=_direct"
 uci -q set "passwall.$shunt.oum_cn=_direct"
 uci -q set "passwall.$shunt.oum_games=_direct"

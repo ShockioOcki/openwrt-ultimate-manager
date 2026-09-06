@@ -1,0 +1,36 @@
+#!/bin/sh
+
+set -eu
+
+value="$(printf '%s' "${1:-}" | awk '{ print tolower($0) }')"
+value="${value#*://}"
+value="${value%%/*}"
+value="${value%%:*}"
+case "$value" in ''|*[!a-z0-9._-]*) exit 2 ;; esac
+
+matches="$(geoview -action lookup -input /usr/share/v2ray/geosite.dat -type geosite -value "$value" 2>/dev/null || true)"
+has() { printf '%s\n' "$matches" | grep -qx "$1"; }
+
+route=vpn
+rule='По умолчанию'
+case "$value" in
+	gearupbooster.com|*.gearupbooster.com|gearupportal.com|*.gearupportal.com|guinfra.com|*.guinfra.com|sdp.gg|*.sdp.gg)
+		route=direct; rule='GearUP direct' ;;
+esac
+if [ "$rule" = 'GearUP direct' ]; then
+	:
+elif has CATEGORY-AI-\!CN || has GOOGLE-GEMINI; then
+	rule='AI services'
+elif has DISCORD; then
+	rule='Discord proxy'
+elif has APPLE-UPDATE || has GOOGLE-PLAY || has MICROSOFT || has SAMSUNG || has XIAOMI; then
+	route=direct; rule='Updates and downloads direct'
+elif has CN; then
+	route=direct; rule='China direct'
+elif has CATEGORY-GAMES-\!CN; then
+	route=direct; rule='International games direct'
+elif has CATEGORY-RU || has TLD-RU; then
+	route=direct; rule='Russia direct'
+fi
+
+printf 'domain=%s\nroute=%s\nrule=%s\ncategories=%s\n' "$value" "$route" "$rule" "$(printf '%s' "$matches" | tr '\n' ', ' | sed 's/, $//')"
