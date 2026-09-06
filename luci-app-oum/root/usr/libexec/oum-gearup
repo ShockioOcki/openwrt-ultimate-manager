@@ -1,0 +1,149 @@
+#!/bin/sh
+# OUM GearUP manager: install / uninstall router plugin.
+# Activation ("Boost") stays in the GearUP mobile app; OUM only
+# automates install, reboot persistence and removal.
+set -u
+
+INSTALL_SH_URL="https://download.booster.gearupportal.com/guplugin-script/202211251220/install.sh"
+UNINSTALL_API="http://router.booster.gearupportal.com/api/script/uninstall?type=openwrt"
+PERSIST_DIR="/etc/gearup_persist"
+RESTORE_INIT="/etc/init.d/gearup_restore"
+
+log() {
+	printf '%s\n' "oum-gearup: $*" >&2
+}
+
+ensure_tun() {
+	[ -c /dev/net/tun ] && return 0
+	modprobe tun 2>/dev/null
+	[ -c /dev/net/tun ] && return 0
+	[ -x /usr/bin/apk ] || { log "no apk, cannot install kmod-tun"; return 1; }
+	attempt=0
+	while [ "$attempt" -lt 3 ]; do
+		attempt=$((attempt + 1))
+		if apk add kmod-tun >/dev/null 2>&1 && [ -c /dev/net/tun ]; then
+			return 0
+		fi
+		log "kmod-tun install attempt $attempt failed, retrying"
+		sleep 5
+	done
+	[ -c /dev/net/tun ] || { log "kmod-tun still missing"; return 1; }
+	return 0
+}
+
+write_restore_init() {
+	cat > "$RESTORE_INIT" <<'EOF'
+#!/bin/sh /etc/rc.common
+
+START=50
+
+start() {
+	echo "GearUp: restore binding files..."
+	sleep 10
+	if [ -d "/etc/gearup_persist/gu" ]; then
+		killall guplugin 2>/dev/null
+		sleep 3
+		rm -rf /tmp/gu
+		cp -r /etc/gearup_persist/gu /tmp/
+		chown -R 2969:2969 /tmp/gu 2>/dev/null
+		chmod +x /tmp/gu/guplugin 2>/dev/null
+		echo "GearUp: binding files restored"
+	fi
+}
+
+stop() {
+	return 0
+}
+EOF
+	chmod +x "$RESTORE_INIT"
+	"$RESTORE_INIT" enable >/dev/null 2>&1
+}
+
+save_persist() {
+	mkdir -p "$PERSIST_DIR"
+	[ -d /tmp/gu ] || { log "/tmp/gu missing, nothing to persist"; return 1; }
+	rm -rf "$PERSIST_DIR/gu"
+	cp -r /tmp/gu "$PERSIST_DIR/gu"
+}
+
+do_install() {
+	ensure_tun || return 1
+	arch="$(uname -m)"
+	tmp="$(mktemp -d /tmp/oum-gearup.XXXXXX)" || return 1
+	trap 'rm -rf "$tmp"' EXIT INT TERM
+	if ! curl -sL --max-time 60 -o "$tmp/install.sh" "$INSTALL_SH_URL" &&
+		! wget -q -O "$tmp/install.sh" "$INSTALL_SH_URL"; then
+		log "cannot download install.sh"
+		return 1
+	fi
+	[ -s "$tmp/install.sh" ] || { log "install.sh empty"; return 1; }
+	if ! /bin/sh "$tmp/install.sh" openwrt "$arch" >/tmp/oum-gearup-install.log 2>&1; then
+		log "vendor installer failed, see /tmp/oum-gearup-install.log"
+		return 1
+	fi
+	[ -x /tmp/gu/guplugin ] || { log "guplugin missing after install"; return 1; }
+	pidof guplugin >/dev/null 2>&1 || { log "guplugin not running"; return 1; }
+	write_restore_init
+	save_persist || return 1
+	log "installed, bind the router in the GearUP mobile app"
+	return 0
+}
+
+find_oum_acl() {
+	uci show passwall 2>/dev/null | while IFS= read -r line; do
+		case "$line" in
+			*=acl_rule) sec="${line%%=*}"; sec="${sec##*.}" ;;
+			*) continue ;;
+		esac
+		[ "$(uci -q get "passwall.$sec.remarks")" = "OUM GearUP bypass" ] && { printf '%s' "$sec"; return 0; }
+	done
+	return 1
+}
+
+do_uninstall() {
+	tmp="$(mktemp -d /tmp/oum-gearup.XXXXXX)" || return 1
+	trap 'rm -rf "$tmp"' EXIT INT TERM
+	if curl -sL --max-time 60 -o "$tmp/uninstall_info" "$UNINSTALL_API" >/dev/null 2>&1 ||
+		wget -q -O "$tmp/uninstall_info" "${UNINSTALL_API}&output=text" >/dev/null 2>&1; then
+		url="$(cut -d, -f1 "$tmp/uninstall_info" 2>/dev/null)"
+		if [ -n "$url" ]; then
+			if curl -sL --max-time 60 -o "$tmp/uninstall.sh" "$url" >/dev/null 2>&1 ||
+				wget -q -O "$tmp/uninstall.sh" "$url" >/dev/null 2>&1; then
+				chmod u+x "$tmp/uninstall.sh"
+				/bin/sh "$tmp/uninstall.sh" openwrt "$(uname -m)" >/dev/null 2>&1 || log "vendor uninstall returned error, continuing cleanup"
+			fi
+		fi
+	fi
+	killall guplugin xuplugin-guardian 2>/dev/null || true
+	sleep 2
+	rm -rf /tmp/gu /usr/sbin/gu
+	rm -f /etc/rc.d/S99guplugin /etc/rc.d/S50gearup_restore
+	rm -f "$RESTORE_INIT" /etc/init.d/gearup_restore
+	rm -rf "$PERSIST_DIR"
+	rm -f /etc/nftables.d/11-oum-gearup.nft
+	if [ -f /etc/rc.local ]; then
+		sed -i '/oum-gearup\.nft/d; /fwmark 0x119 table 119/d' /etc/rc.local
+	fi
+	ip rule del fwmark 0x119 table 119 priority 996 2>/dev/null || true
+	sec="$(find_oum_acl || true)"
+	if [ -n "$sec" ]; then
+		uci -q delete "passwall.$sec"
+		uci commit passwall
+	fi
+	uci -q delete network.gu119 || true
+	for z in $(uci show firewall 2>/dev/null | sed -n "s/^\(firewall\.[^.]*\)=zone$/\1/p"); do
+		uci -q del_list "$z.device=gu119" || true
+	done
+	uci commit network
+	uci commit firewall
+	/etc/init.d/firewall reload >/dev/null 2>&1 || true
+	/etc/init.d/passwall restart >/dev/null 2>&1 || true
+	log "uninstalled (engine direct-exclusions and kmod-tun kept)"
+	return 0
+}
+
+case "${1:-}" in
+	install) do_install ;;
+	uninstall) do_uninstall ;;
+	*) log "usage: $0 {install|uninstall}"; exit 2 ;;
+esac

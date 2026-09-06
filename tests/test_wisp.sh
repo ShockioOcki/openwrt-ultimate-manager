@@ -26,7 +26,10 @@ grep -Fq "'data-wan-type-btn': 'wisp'" "$SETTINGS"
 grep -Fq "id: 'wisp-settings'" "$SETTINGS"
 grep -Fq "id: 'wan-wired-actions'" "$SETTINGS"
 [ "$(grep -Fc "id: 'scan-wisp'" "$SETTINGS")" -eq 1 ]
-[ "$(grep -Fc "id: 'enable-wisp'" "$SETTINGS")" -eq 1 ]
+[ "$(grep -Fc "id: 'enable-wisp'" "$SETTINGS")" -eq 0 ]
+grep -Fq 'function openWispListSheet' "$SETTINGS"
+grep -Fq 'function openWispPasswordSheet' "$SETTINGS"
+grep -Fq 'start(callSetWisp(true, ssid, password, band))' "$SETTINGS"
 ! grep -Fq 'Интернет от другой Wi-Fi сети (WISP)' "$SETTINGS"
 grep -Fq "fresh.wan?.via === 'wifi'" "$DASHBOARD"
 grep -Fq '"wispStatus", "scanWifi"' "$ACL"

@@ -31,7 +31,7 @@
 		<link rel="stylesheet" href="{{ media }}/bootstrap-base.css?v={{ pkgs_update_time }}">
 		<link rel="stylesheet" media="only screen and (max-device-width: 854px)" href="{{ media }}/bootstrap-mobile.css?v={{ pkgs_update_time }}">
 		<link rel="stylesheet" href="{{ media }}/cascade.css?v={{ pkgs_update_time }}-20260903-act29">
-		{% if (ctx.request_path[0] == 'oum'): %}<link rel="stylesheet" href="{{ resource }}/oum/oum.css?v=20260905-quickping84">{% endif %}
+		{% if (ctx.request_path[0] == 'oum'): %}<link rel="stylesheet" href="{{ resource }}/oum/oum.css?v=20260906-parental05">{% endif %}
 		<style>
 			body.theme-oum[data-page^="oum-"] .oum-page-head #oum-theme-toggle,
 			body.theme-oum[data-page^="oum-"] .oum-page-head a[href*="/logout"] { display: none !important; }

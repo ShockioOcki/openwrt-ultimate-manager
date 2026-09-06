@@ -189,7 +189,7 @@ return view.extend({
 		const podkopRouting = data[3] || { catalog: [], proxy: {}, direct: {} };
 		if (!status.setup_complete) {
 			const page = E('main', { 'class': 'oum-main' }, [
-				E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260905-quickping84` }),
+				E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260906-parental05` }),
 				E('div', { 'class': 'oum-page-head' }, [
 					E('div', {}, [
 						E('h2', {}, 'Панель OUM'),
@@ -260,7 +260,7 @@ return view.extend({
 		]);
 
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260905-quickping84` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260906-parental05` }),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('div', {}, [ E('h2', {}, 'Панель OUM'), E('p', { 'class': 'oum-muted' }, 'Домашняя сеть и защищённое подключение') ]),
 				E('div', { 'class': 'oum-head-actions' }, [

@@ -38,7 +38,7 @@ return view.extend({
 	render(status) {
 		const days = [ [ '1', 'Пн' ], [ '2', 'Вт' ], [ '3', 'Ср' ], [ '4', 'Чт' ], [ '5', 'Пт' ], [ '6', 'Сб' ], [ '7', 'Вс' ] ];
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260905-quickping84` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260906-parental05` }),
 			E('div', { 'class': 'oum-parental-head' }, [ E('div', {}, [ E('h2', {}, 'Родительский контроль'), E('p', { 'class': 'oum-parental-help' }, 'Ограничивайте доступ в интернет по времени и выбирайте DNS-фильтр для всей сети или отдельного устройства.') ]), E('a', { 'class': 'btn', href: L.url('oum', 'settings') }, 'Настройки') ]),
 			E('details', { 'class': 'oum-parental-guide' }, [
 				E('summary', {}, 'Как работает родительский контроль'),
@@ -64,26 +64,18 @@ return view.extend({
 			E('section', { 'class': 'oum-parental-panel' }, [
 				E('h3', {}, 'Устройства'),
 				E('p', { 'class': 'oum-parental-help' }, 'Здесь показаны только устройства, которые вы добавили на главной странице. Для каждого можно выбрать DNS-фильтр, временно отключить интернет или настроить регулярную паузу.'),
-				...(status.devices?.length ? status.devices.map((device) => {
-					const selectedDays = new Set(String(device.sched_days || '').split(','));
-					return E('div', { 'class': 'oum-parental-device', 'data-device': device.mac }, [
-						E('div', { 'class': 'oum-parental-summary' }, [
-							E('div', { 'class': 'oum-parental-name' }, [ E('strong', {}, device.name), E('small', {}, `${device.online ? 'В сети' : 'Не в сети'} · ${device.mac}`), E('span', { 'class': 'oum-parental-state' }, device.schedule_paused ? ' · заблокировано расписанием' : (device.manual_paused ? ' · пауза включена' : '')) ]),
-							modeSelect(device.adblock || 'inherit', `adguard-${device.mac}`),
-							E('div', { 'class': 'oum-parental-controls' }, [ E('button', { 'class': 'btn', 'data-action': 'pause', 'data-paused': device.manual_paused ? '1' : '0' }, device.manual_paused ? 'Возобновить' : 'Пауза сейчас'), E('button', { 'class': 'btn', 'data-action': 'toggle-schedule' }, 'Расписание') ])
+			...(status.devices?.length ? status.devices.map((device) => {
+				const pauseState = device.schedule_paused ? ' · заблокировано расписанием' : (device.manual_paused ? ' · пауза включена' : '');
+				return E('div', { 'class': 'oum-parental-device', 'data-device': device.mac }, [
+					E('button', { type: 'button', 'class': 'oum-parental-row', 'data-action': 'open-device' }, [
+						E('span', { 'class': 'oum-parental-row-main' }, [
+							E('strong', {}, device.name),
+							E('small', {}, `${device.online ? 'В сети' : 'Не в сети'} · ${device.mac}${pauseState}`)
 						]),
-						E('div', { 'class': 'oum-parental-schedule', hidden: '' }, [
-							E('label', {}, [ E('input', { type: 'checkbox', 'data-schedule-enabled': '', checked: device.sched_enabled ? '' : null }), ' Включить расписание' ]),
-							E('p', { 'class': 'oum-parental-help' }, 'Выбранный день означает начало паузы. Например, Пн с 22:00 до 07:00 заблокирует интернет с вечера понедельника до утра вторника. Ручная пауза действует независимо от расписания.'),
-							E('div', { 'class': 'oum-parental-days' }, days.map(([ value, label ]) => E('label', { 'class': 'oum-parental-day' }, [ E('input', { type: 'checkbox', value, 'data-schedule-day': '', checked: selectedDays.has(value) ? '' : null }), label ]))),
-							E('div', { 'class': 'oum-parental-times' }, [
-								E('label', {}, [ 'Без интернета с', E('input', { type: 'time', 'data-schedule-start': '', value: device.start || '22:00' }) ]),
-								E('label', {}, [ 'до', E('input', { type: 'time', 'data-schedule-stop': '', value: device.stop || '07:00' }) ]),
-								E('button', { 'class': 'btn cbi-button-action', 'data-action': 'save-schedule' }, 'Сохранить')
-							])
-						])
-					]);
-				}) : [ E('div', { 'class': 'oum-parental-empty' }, 'Список пока пуст. Добавьте нужное устройство на главной странице — случайные лампы, телевизоры и другая техника сюда не попадут.') ])
+						E('span', { 'class': 'oum-parental-row-chev', 'aria-hidden': 'true' }, '›')
+					])
+				]);
+			}) : [ E('div', { 'class': 'oum-parental-empty' }, 'Список пока пуст. Добавьте нужное устройство на главной странице — случайные лампы, телевизоры и другая техника сюда не попадут.') ])
 			])
 		]);
 		const root = E('div', { 'class': 'oum-parental oum-app', 'data-theme': document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light' }, [ page ]);
@@ -105,18 +97,101 @@ return view.extend({
 			const row = event.target.closest('[data-device]');
 			callSetDeviceAdGuard(row.dataset.device, event.target.value).then((result) => { resultError(result, 'Не удалось сохранить фильтр.'); ui.addNotification(null, E('p', {}, result.message), 'info'); }).catch(notifyError);
 		});
+		const deviceSheet = (device) => {
+			const selectedDays = new Set(String(device.sched_days || '').split(','));
+			return E('div', { 'data-device': device.mac }, [
+				E('p', { 'class': 'oum-help oum-parental-sheet-status', style: 'margin:0 0 8px;' }, `${device.online ? 'В сети' : 'Не в сети'} · ${device.mac}${device.schedule_paused ? ' · заблокировано расписанием' : (device.manual_paused ? ' · пауза включена' : '')}`),
+				modeSelect(device.adblock || 'inherit', `adguard-${device.mac}`),
+				E('div', { 'class': 'oum-parental-controls', style: 'margin-top:10px;' }, [ E('button', { 'class': 'btn', 'data-action': 'pause', 'data-paused': device.manual_paused ? '1' : '0' }, device.manual_paused ? 'Возобновить' : 'Пауза сейчас'), E('button', { 'class': 'btn', 'data-action': 'toggle-schedule' }, 'Расписание') ]),
+				E('div', { 'class': 'oum-parental-schedule', hidden: '' }, [
+					E('label', {}, [ E('input', { type: 'checkbox', 'data-schedule-enabled': '', checked: device.sched_enabled ? '' : null }), ' Включить расписание' ]),
+					E('p', { 'class': 'oum-parental-help' }, 'Выбранный день означает начало паузы. Например, Пн с 22:00 до 07:00 заблокирует интернет с вечера понедельника до утра вторника. Ручная пауза действует независимо от расписания.'),
+					E('div', { 'class': 'oum-parental-days' }, days.map(([ value, label ]) => E('label', { 'class': 'oum-parental-day' }, [ E('input', { type: 'checkbox', value, 'data-schedule-day': '', checked: selectedDays.has(value) ? '' : null }), label ]))),
+					E('div', { 'class': 'oum-parental-times' }, [
+						E('label', {}, [ 'Без интернета с', E('input', { type: 'time', 'data-schedule-start': '', value: device.start || '22:00' }) ]),
+						E('label', {}, [ 'до', E('input', { type: 'time', 'data-schedule-stop': '', value: device.stop || '07:00' }) ]),
+						E('button', { 'class': 'btn cbi-button-action', 'data-action': 'save-schedule' }, 'Сохранить')
+					])
+				])
+			]);
+		};
+		const sheet = E('div', { 'class': 'oum-settings-sheet oum-parental-sheet', hidden: '', role: 'dialog', 'aria-modal': 'true' }, [
+			E('div', { 'class': 'oum-settings-sheet-panel' }, [
+				E('span', { 'class': 'oum-settings-sheet-handle', 'aria-hidden': 'true' }),
+				E('header', { 'class': 'oum-settings-sheet-head' }, [
+					E('h3', { id: 'oum-parental-sheet-title' }, ''),
+					E('button', { type: 'button', 'class': 'oum-settings-sheet-close', 'aria-label': 'Закрыть' }, '×')
+				]),
+				E('div', { 'class': 'oum-settings-sheet-content' })
+			])
+		]);
+		root.appendChild(sheet);
+		const sheetTitle = sheet.querySelector('#oum-parental-sheet-title');
+		const sheetContent = sheet.querySelector('.oum-settings-sheet-content');
+		const closeParentalSheet = () => {
+			sheetContent.innerHTML = '';
+			sheet.hidden = true;
+			document.documentElement.classList.remove('oum-settings-sheet-open');
+		};
+		const openParentalSheet = (title, node) => {
+			sheetContent.innerHTML = '';
+			sheetTitle.textContent = title;
+			sheetContent.appendChild(node);
+			sheet.hidden = false;
+			document.documentElement.classList.add('oum-settings-sheet-open');
+			try {
+				const panel = sheet.querySelector('.oum-settings-sheet-panel');
+				if (panel) {
+					if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
+					try { panel.style.setProperty('outline', 'none', 'important'); }
+					catch (_) { panel.style.outline = 'none'; }
+					if (panel.focus) panel.focus({ preventScroll: true });
+				}
+			} catch (_) {}
+		};
+		sheet.querySelector('.oum-settings-sheet-close').addEventListener('click', closeParentalSheet);
+		sheet.addEventListener('click', (event) => { if (event.target === sheet) closeParentalSheet(); });
+		document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !sheet.hidden) closeParentalSheet(); });
+		const sheetPanel = sheet.querySelector('.oum-settings-sheet-panel');
+		let sheetSy = 0, sheetCy = 0, sheetDrag = false;
+		sheetPanel.addEventListener('touchstart', (event) => {
+			if (event.touches.length !== 1) return;
+			sheetSy = event.touches[0].clientY;
+			sheetDrag = true;
+			try { for (let el = event.target; el; el = el.parentElement) { if (el.scrollHeight > el.clientHeight + 4 && el.scrollTop > 0) { sheetDrag = false; break; } if (el === sheetPanel) break; } } catch (_) {}
+			try { if (sheetSy - sheetPanel.getBoundingClientRect().top < 72) sheetDrag = true; } catch (_) {}
+			sheetPanel.style.transition = 'none';
+		}, { passive: true });
+		sheetPanel.addEventListener('touchmove', (event) => {
+			if (!sheetDrag || event.touches.length !== 1) return;
+			sheetCy = event.touches[0].clientY - sheetSy;
+			if (sheetCy > 0) sheetPanel.style.transform = `translateY(${sheetCy}px)`;
+		}, { passive: true });
+		sheetPanel.addEventListener('touchend', () => {
+			sheetDrag = false;
+			sheetPanel.style.transition = 'transform .2s';
+			if (sheetCy > 90) closeParentalSheet();
+			sheetPanel.style.transform = '';
+			sheetCy = 0;
+		});
 		root.addEventListener('click', (event) => {
-			const action = event.target.dataset.action;
+			const el = event.target.closest ? event.target.closest('[data-action]') : null;
+			const action = el && el.dataset.action;
 			if (!action) return;
 			event.preventDefault();
-			const row = event.target.closest('[data-device]');
+			const row = el.closest('[data-device]');
+			if (action === 'open-device') {
+				const device = (status.devices || []).find((d) => d.mac === row.dataset.device);
+				if (device) openParentalSheet(device.name || 'Устройство', deviceSheet(device));
+				return;
+			}
 			if (action === 'toggle-schedule') {
 				const panel = row.querySelector('.oum-parental-schedule');
 				panel.hidden = !panel.hidden;
 				return;
 			}
 			if (action === 'pause') {
-				const paused = event.target.dataset.paused !== '1';
+				const paused = el.dataset.paused !== '1';
 				callSetPaused(row.dataset.device, paused).then((result) => { resultError(result, 'Не удалось изменить паузу.'); reload(); }).catch(notifyError);
 				return;
 			}

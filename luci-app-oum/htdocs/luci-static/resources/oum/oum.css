@@ -3750,3 +3750,29 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
 
 /* quickping84: пинг в быстрых нодах по центру (был влево). */
 .oum-node.is-quick .oum-delay { text-align: center !important; }
+/* parental04: ряды устройств (тап -> шторка). */
+.oum-parental-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; background: none; border: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.oum-parental-row-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.oum-parental-row-main > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oum-parental-row-main > small { display: block; opacity: .65; }
+.oum-parental-row-chev { flex: none; color: #94a3b8; font-size: 20px; line-height: 1; }
+
+/* parental04: компакт вкладки на мобильных. */
+@media (max-width: 900px) {
+  .oum-parental.oum-app .oum-parental-panel { padding: 14px !important; margin: 12px 0 !important; }
+  .oum-parental.oum-app .oum-parental-guide { padding: 11px 13px !important; margin: 12px 0 !important; }
+  .oum-parental.oum-app .oum-parental-guide li + li { margin-top: 5px !important; }
+  .oum-parental.oum-app .oum-parental-device { margin: 8px 0 !important; }
+}
+/* parental05: шторка устройства — контент по центру, контролы во всю ширину. */
+.oum-parental-sheet .oum-settings-sheet-panel { margin-left: auto !important; margin-right: auto !important; }
+.oum-parental-sheet .oum-settings-sheet-head { position: relative; }
+.oum-parental-sheet .oum-settings-sheet-head h3 { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; margin: 0; padding: 0 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; }
+.oum-parental-sheet .oum-settings-sheet-close { position: relative; z-index: 1; margin-left: auto !important; }
+.oum-parental-sheet-status { text-align: center; }
+.oum-parental-sheet .oum-parental-filter > span { display: block; text-align: center; }
+.oum-parental-sheet .oum-parental-filter select { width: 100%; }
+.oum-parental-sheet .oum-parental-controls { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.oum-parental-sheet .oum-parental-controls > .btn { width: 100%; min-height: 44px; margin: 0; }
+.oum-parental-sheet .oum-parental-days { justify-content: center; }
+.oum-parental-sheet .oum-parental-times .btn { flex: 1 1 100%; min-height: 44px; }

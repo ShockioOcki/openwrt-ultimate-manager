@@ -44,6 +44,10 @@ MASS_RULE_PROVIDER_SOURCES = [
 ].freeze
 
 MASS_RULES = [
+  'DOMAIN-SUFFIX,gearupbooster.com,DIRECT',
+  'DOMAIN-SUFFIX,gearupportal.com,DIRECT',
+  'DOMAIN-SUFFIX,guinfra.com,DIRECT',
+  'DOMAIN-SUFFIX,sdp.gg,DIRECT',
   'RULE-SET,private-domains,DIRECT', 'RULE-SET,private-ips,DIRECT,no-resolve',
   'RULE-SET,win-spy,REJECT', 'RULE-SET,category-ads,REJECT',
   'RULE-SET,samsung,DIRECT', 'RULE-SET,google-play,DIRECT',

@@ -52,7 +52,7 @@ return view.extend({
 	render(status) {
 		if (status.setup_complete)
 			return E('div', { 'class': 'oum-shell' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260905-quickping84` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260906-parental05` }),
 				E('h2', {}, 'Роутер уже настроен'),
 				E('p', {}, 'Мастер первого запуска завершён. Откройте главную страницу OUM.'),
 				E('a', { 'class': 'btn cbi-button-action', 'href': L.url('oum', 'dashboard') }, 'Перейти на главную')
@@ -62,7 +62,7 @@ return view.extend({
 			'class': 'oum-shell oum-first-run',
 			'data-theme': document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
 		}, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260905-quickping84` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260906-parental05` }),
 			E('div', { 'class': 'oum-setup-head' }, [
 				E('div', {}, [
 					E('h2', {}, 'Добро пожаловать в OUM'),

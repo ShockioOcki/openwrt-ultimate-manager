@@ -57,6 +57,9 @@ ruby -ryaml -e '
   abort "mass rule providers missing" unless config.fetch("rule-providers").key?("ru-blocked-domains")
   abort "mass routing missing" unless config.fetch("rules").include?("RULE-SET,google-play,DIRECT")
   abort "Samsung must be direct" unless config.fetch("rules").include?("RULE-SET,samsung,DIRECT")
+  %w[gearupbooster.com gearupportal.com guinfra.com sdp.gg].each do |domain|
+    abort "GearUP must be direct: #{domain}" unless config.fetch("rules").include?("DOMAIN-SUFFIX,#{domain},DIRECT")
+  end
   abort "Meta must use its selector" unless config.fetch("rules").include?("RULE-SET,meta-domains,META")
   abort "unexpected torrent block" if config.fetch("rules").any? { |rule| rule.downcase.include?("torrent") }
 ' "$TMP/standalone.yaml"

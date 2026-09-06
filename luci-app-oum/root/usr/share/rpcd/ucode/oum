@@ -715,6 +715,24 @@ function upstreamData() {
 	return result;
 }
 
+function gearupStatusData() {
+	let installed = access('/tmp/gu/guplugin') || access('/usr/sbin/gu/guplugin_monitor.sh');
+	let binding = trim(readfile('/tmp/gu/activate_status') ?? '');
+	let uuid = trim(readfile('/tmp/gu/.uuplugin_uuid') ?? '');
+	let running = system('pidof guplugin >/dev/null 2>&1') == 0;
+	let monitor = system('pgrep -f guplugin_monitor >/dev/null 2>&1') == 0;
+	let boost = access('/sys/class/net/gu119') ? true : false;
+	return {
+		installed: installed ? true : false,
+		bound: length(binding) ? true : false,
+		binding: binding,
+		uuid: uuid,
+		running: running,
+		monitor: monitor,
+		boost: boost
+	};
+}
+
 function passwallCachePresent() {
 	let files = [
 		'chinadns-ng-2025.08.09-r1.apk', 'dns2socks-2.1-r2.apk', 'geoview-0.2.6-r1.apk',
@@ -1904,6 +1922,24 @@ const methods = {
 	resetFirstRun: {
 		call: function() {
 			return startSystemJob('reset_all', {});
+		}
+	},
+
+	gearupStatus: {
+		call: function() {
+			return gearupStatusData();
+		}
+	},
+
+	installGearup: {
+		call: function() {
+			return startSystemJob('gearup_install', {});
+		}
+	},
+
+	uninstallGearup: {
+		call: function() {
+			return startSystemJob('gearup_uninstall', {});
 		}
 	},
 

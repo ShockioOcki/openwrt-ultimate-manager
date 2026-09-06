@@ -243,7 +243,7 @@ return view.extend({
 		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
 		const initialVpnTab = status.pending_source !== 'none' && status.active_source === 'none' ? 'connection' : 'engine';
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260905-quickping84` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260906-parental05` }),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('div', {}, [ E('h2', {}, 'Настройки OUM'), E('p', { 'class': 'oum-muted' }, 'Сеть, Wi‑Fi и защищённое подключение') ])
 			]),
@@ -297,21 +297,17 @@ return view.extend({
 							E('strong', {}, 'Wi-Fi как интернет (WISP)'),
 							E('span', {}, 'Роутер подключится к чужой точке и раздаст интернет своим клиентам. Кабельный WAN останется сохранён.')
 						]),
-						E('div', { id: 'wisp-status', 'class': 'oum-wisp-status' }, wisp.connected ? `Подключено: ${wisp.ssid}${wisp.ip ? ` · ${wisp.ip}` : ''}${wisp.signal != null ? ` · ${wisp.signal} dBm` : ''}` : (wisp.enabled ? 'Настройка включена, но соединения нет.' : 'Выберите сеть и введите её пароль.')),
-						E('div', { 'class': 'oum-wisp-scan-row', style: 'grid-template-columns:minmax(112px,.62fr) minmax(0,1.38fr);gap:8px' }, [
+						E('div', { id: 'wisp-status', 'class': 'oum-wisp-status' }, wisp.connected ? `Подключено: ${wisp.ssid}${wisp.ip ? ` · ${wisp.ip}` : ''}${wisp.signal != null ? ` · ${wisp.signal} dBm` : ''}` : (wisp.enabled ? 'Настройка включена, но соединения нет.' : 'Выберите диапазон и нажмите «Найти сети».')),
+						E('div', { 'class': 'oum-wisp-scan-row', style: 'grid-template-columns:minmax(0,1fr) auto !important;' }, [
 							field('Диапазон', E('select', { id: 'wisp-band' }, [
 								E('option', { value: '2g', selected: wisp.band !== '5g' ? '' : null }, '2,4 ГГц'),
 								E('option', { value: '5g', selected: wisp.band === '5g' ? '' : null }, '5 ГГц')
 							])),
-							field('Исходная сеть', E('input', { id: 'wisp-ssid', maxlength: 32, value: wisp.ssid || '', placeholder: 'Имя исходной сети' })),
 							E('button', { 'class': 'btn oum-wisp-scan', id: 'scan-wisp', type: 'button' }, 'Найти сети')
 						]),
-						field('Пароль исходной сети', E('input', { id: 'wisp-password', type: 'password', minlength: 8, maxlength: 63, autocomplete: 'new-password', placeholder: wisp.enabled ? 'Введите для переподключения' : 'Пусто — если сеть открытая' })),
-						E('div', { id: 'wisp-results', 'class': 'oum-wisp-results', hidden: '' }),
+						E('p', { 'class': 'oum-help', style: 'margin:4px 0 0;' }, '5 ГГц — быстрее, но короче; 2,4 ГГц — дальше и стабильнее.'),
 						E('div', { 'class': 'oum-setting-actions oum-wisp-actions' }, [
-							E('button', { 'class': 'btn cbi-button-action', id: 'enable-wisp', 'data-system-action': '' }, 'Применить подключение'),
-							E('button', { 'class': 'btn oum-internet-secondary', id: 'disable-wisp', 'data-system-action': '', disabled: wisp.enabled ? null : '' }, 'Отключить'),
-							E('button', { 'class': 'btn oum-internet-secondary', id: 'rollback-wisp', 'data-system-action': '', disabled: wisp.rollback ? null : '' }, 'Вернуть'),
+							...(wisp.enabled ? [ E('button', { 'class': 'btn oum-internet-secondary', id: 'disable-wisp', 'data-system-action': '', style: 'grid-column:1/-1;' }, 'Отключить') ] : []),
 							E('button', { type: 'button', 'class': 'btn oum-mobile-sheet-cancel' }, 'Отмена')
 						])
 					]) ] : []),
@@ -846,7 +842,47 @@ return view.extend({
 			if (await confirmation('Отключить Mesh?', 'Будет удалён только управляемый интерфейс OUM Mesh. Обычный Wi-Fi останется включён.', 'Отключить', true))
 				start(callApplyMesh(0, '', '', mesh.band || '5g'));
 		});
-		const wispResults = root.querySelector('#wisp-results');
+		const wispScanCache = { band: null, networks: [] };
+		function wispBars(signal) {
+			const s = Number(signal);
+			const n = Number.isFinite(s) ? (s >= -55 ? 4 : s >= -67 ? 3 : s >= -77 ? 2 : 1) : 0;
+			return E('span', { style: 'display:inline-flex;align-items:flex-end;gap:1.5px;flex:none;', 'aria-hidden': 'true' }, [4, 6, 9, 12].map((h, i) => E('span', { style: `display:block;width:3px;height:${h}px;border-radius:1px;background:${i < n ? '#2563eb' : '#e2e8f0'};` })));
+		}
+		function openWispListSheet(networks, band) {
+			wispScanCache.band = band;
+			wispScanCache.networks = networks;
+			const rows = networks.length ? networks.map((network) => E('button', {
+				type: 'button',
+				'class': 'btn oum-wisp-result',
+				click: () => openWispPasswordSheet(network.ssid, network.signal)
+			}, [ E('span', {}, network.ssid), E('span', { style: 'display:inline-flex;align-items:center;gap:6px;flex:none;' }, [ wispBars(network.signal), E('small', { style: 'color:#64748b;white-space:nowrap;' }, `${network.signal} dBm`) ]) ])) : [ E('p', { 'class': 'oum-help' }, 'Сети не найдены. Попробуйте другой диапазон.') ];
+			openSheet(band === '5g' ? 'Сети 5 ГГц' : 'Сети 2,4 ГГц', E('div', { 'class': 'oum-settings-sheet-content' }, [
+				...(networks.length ? [ E('p', { 'class': 'oum-help', style: 'margin:0 0 8px;' }, `Найдено сетей: ${networks.length}. Выберите сеть для подключения.`) ] : []),
+				E('div', { 'class': 'oum-wisp-results', style: 'margin:0;' }, rows)
+			]));
+		}
+		function openWispPasswordSheet(ssid, signal) {
+			const input = E('input', { id: 'wisp-connect-password', type: 'password', minlength: 8, maxlength: 63, autocomplete: 'new-password', placeholder: 'Пусто — если сеть открытая' });
+			const connect = E('button', { 'class': 'btn cbi-button-action', 'data-system-action': '', style: 'grid-column:1/-1;' }, wisp.enabled ? 'Переподключить' : 'Подключить');
+			connect.addEventListener('click', async (event) => {
+				event.preventDefault();
+				const password = input.value || '';
+				if (password && (password.length < 8 || password.length > 63)) return ui.addNotification(null, E('p', {}, 'Пароль должен содержать от 8 до 63 символов.'), 'warning');
+				const band = value('#wisp-band');
+				const conflict = mesh.enabled && mesh.band === band ? ' Mesh использует тот же диапазон; скорость и устойчивость могут снизиться.' : '';
+				if (await confirmation('Подключить интернет по Wi-Fi?', `Роутер подключится к «${ssid}» и проверит получение интернета.${conflict} При ошибке прежняя сеть восстановится.`, wisp.enabled ? 'Переподключить' : 'Подключить', false))
+					start(callSetWisp(true, ssid, password, band));
+			});
+			const back = E('button', { type: 'button', 'class': 'btn oum-internet-secondary' }, '‹ Все сети');
+			back.addEventListener('click', (event) => { event.preventDefault(); openWispListSheet(wispScanCache.networks, wispScanCache.band || value('#wisp-band')); });
+			const cancel = E('button', { type: 'button', 'class': 'btn oum-mobile-sheet-cancel' }, 'Отмена');
+			cancel.addEventListener('click', (event) => { event.preventDefault(); closeSheet(); });
+			openSheet(ssid, E('div', { 'class': 'oum-settings-sheet-content' }, [
+				field('Пароль сети', input),
+				E('p', { 'class': 'oum-help', style: 'margin:4px 0 0;' }, signal != null ? `Сигнал: ${signal} dBm. Оставьте пустым, если сеть открытая.` : 'Оставьте пустым, если сеть открытая.'),
+				E('div', { 'class': 'oum-setting-actions oum-wisp-actions', style: 'display:grid;grid-template-columns:1fr 1fr;gap:8px;' }, [ connect, back, cancel ])
+			]));
+		}
 		const scanWispButton = root.querySelector('#scan-wisp');
 		if (scanWispButton) scanWispButton.addEventListener('click', (event) => {
 			event.preventDefault();
@@ -855,44 +891,17 @@ return view.extend({
 			scanWispButton.textContent = 'Ищем…';
 			callScanWifi(band).then((result) => {
 				resultError(result, 'Не удалось найти Wi-Fi сети.');
-				const networks = result.networks || [];
-				wispResults.hidden = false;
-				wispResults.replaceChildren(...(networks.length ? networks.map((network) => E('button', {
-					type: 'button',
-					'class': 'btn oum-wisp-result',
-					click: () => {
-						root.querySelector('#wisp-ssid').value = network.ssid;
-						wispResults.hidden = true;
-					}
-				}, [ E('span', {}, network.ssid), E('small', {}, `${network.signal} dBm · ${network.encryption}`) ])) : [ E('p', { 'class': 'oum-help' }, 'Сети не найдены. Можно ввести имя вручную.') ]));
+				openWispListSheet(result.networks || [], band);
 			}).catch((error) => ui.addNotification(null, E('p', {}, error.message), 'error')).finally(() => {
 				scanWispButton.disabled = false;
 				scanWispButton.textContent = 'Найти сети';
 			});
-		});
-		const enableWispButton = root.querySelector('#enable-wisp');
-		if (enableWispButton) enableWispButton.addEventListener('click', async (event) => {
-			event.preventDefault();
-			const ssid = rawValue('#wisp-ssid').trim();
-			const password = rawValue('#wisp-password');
-			const band = value('#wisp-band');
-			if (!ssid) return ui.addNotification(null, E('p', {}, 'Выберите или введите исходную Wi-Fi сеть.'), 'warning');
-			if (password && (password.length < 8 || password.length > 63)) return ui.addNotification(null, E('p', {}, 'Пароль должен содержать от 8 до 63 символов.'), 'warning');
-			const conflict = mesh.enabled && mesh.band === band ? ' Mesh использует тот же диапазон; скорость и устойчивость могут снизиться.' : '';
-			if (await confirmation('Подключить интернет по Wi-Fi?', `Роутер подключится к «${ssid}» и проверит получение интернета.${conflict} При ошибке прежняя сеть восстановится.`, wisp.enabled ? 'Переподключить' : 'Подключить', false))
-				start(callSetWisp(true, ssid, password, band));
 		});
 		const disableWispButton = root.querySelector('#disable-wisp');
 		if (disableWispButton) disableWispButton.addEventListener('click', async (event) => {
 			event.preventDefault();
 			if (await confirmation('Отключить интернет по Wi-Fi?', 'Управляемое WISP-подключение будет удалено; кабельный WAN останется без изменений.', 'Отключить', true))
 				start(callSetWisp(false, '', '', wisp.band || '2g'));
-		});
-		const rollbackWispButton = root.querySelector('#rollback-wisp');
-		if (rollbackWispButton) rollbackWispButton.addEventListener('click', async (event) => {
-			event.preventDefault();
-			if (await confirmation('Вернуть настройки WISP?', 'Будут восстановлены сеть, Wi-Fi и firewall до последнего изменения WISP.', 'Восстановить', true))
-				start(callRollback('wisp'));
 		});
 		const podkopButton = root.querySelector('#configure-podkop');
 		if (podkopButton) podkopButton.addEventListener('click', async (event) => {
@@ -1095,7 +1104,15 @@ return view.extend({
 			if (typeof prepare === 'function') prepare(node);
 			sheet.hidden = false;
 			document.documentElement.classList.add('oum-settings-sheet-open');
-			sheet.querySelector('.oum-settings-sheet-close').focus();
+			try {
+				const panel = sheet.querySelector('.oum-settings-sheet-panel');
+				if (panel) {
+					if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
+					try { panel.style.setProperty('outline', 'none', 'important'); }
+					catch (_) { panel.style.outline = 'none'; }
+					if (panel.focus) panel.focus({ preventScroll: true });
+				}
+			} catch (_) { sheet.querySelector('.oum-settings-sheet-close').focus(); }
 		};
 		sheet.querySelector('.oum-settings-sheet-close').addEventListener('click', closeSheet);
 		sheet.addEventListener('click', (event) => { if (event.target === sheet) closeSheet(); });

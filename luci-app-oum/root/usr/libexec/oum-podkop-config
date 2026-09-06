@@ -346,6 +346,9 @@ routing() {
 	mv "$tmp/proxy_lists.clean" "$tmp/proxy_lists"
 	mv "$tmp/direct_lists.clean" "$tmp/direct_lists"
 	if [ "$youtube_mode" = vpn ]; then printf '%s\n' youtube >> "$tmp/proxy_lists"; else printf '%s\n' youtube >> "$tmp/direct_lists"; fi
+	# GearUP infra всегда напрямую (игровой ускоритель).
+	printf '%s\n' gearupbooster.com gearupportal.com guinfra.com sdp.gg >> "$tmp/direct_domains"
+	sort -u "$tmp/direct_domains" -o "$tmp/direct_domains"
 	[ -s "$tmp/proxy_lists" ] || [ -s "$tmp/proxy_domains" ] || [ -s "$tmp/proxy_subnets" ] || {
 		echo 'At least one AWG routing rule is required' >&2; return 1
 	}

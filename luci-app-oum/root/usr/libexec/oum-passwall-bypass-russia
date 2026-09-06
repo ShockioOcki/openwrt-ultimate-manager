@@ -8,11 +8,19 @@ shunt=oum_shunt
 [ "$(uci -q get "passwall.$node")" = nodes ] || exit 2
 
 # Recreate only OUM-owned rules so their evaluation order is deterministic:
-# explicit AI services -> private networks -> Russian resources -> default VPN.
-for section in oum_ai oum_private oum_ru; do
+# game booster infra -> explicit AI services -> private networks -> Russian resources -> default VPN.
+for section in oum_gearup oum_ai oum_private oum_ru; do
 	uci -q delete "passwall.$section" || true
 done
 uci -q delete "passwall.$shunt" || true
+
+uci -q set passwall.oum_gearup=shunt_rules
+uci -q set "passwall.oum_gearup.remarks=GearUP direct"
+uci -q set "passwall.oum_gearup.network=tcp,udp"
+uci -q set "passwall.oum_gearup.domain_list=domain:gearupbooster.com
+domain:gearupportal.com
+domain:guinfra.com
+domain:sdp.gg"
 
 uci -q set passwall.oum_ai=shunt_rules
 uci -q set "passwall.oum_ai.remarks=AI services"
@@ -43,6 +51,7 @@ uci -q set "passwall.$shunt=nodes"
 uci -q set "passwall.$shunt.remarks=OUM Bypass Russia"
 uci -q set "passwall.$shunt.type=Xray"
 uci -q set "passwall.$shunt.protocol=_shunt"
+uci -q set "passwall.$shunt.oum_gearup=_direct"
 uci -q set "passwall.$shunt.oum_ai=_default"
 uci -q set "passwall.$shunt.oum_private=_direct"
 uci -q set "passwall.$shunt.oum_ru=_direct"

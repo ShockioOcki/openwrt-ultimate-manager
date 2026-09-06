@@ -322,6 +322,8 @@ case "$ACTION" in
 	zapret_restore) write_status running rollback 'Возвращаем предыдущую стратегию Zapret…'; /usr/libexec/oum-zapret-strategy restore || fail zapret_restore_failed 'Не удалось вернуть предыдущую стратегию.'; write_status success restored 'Предыдущая стратегия Zapret восстановлена.' ;;
 	restore) write_status running restoring 'Проверяем и восстанавливаем резервную копию…'; /usr/libexec/oum-backup restore || fail restore_failed 'Резервная копия отклонена; текущие настройки сохранены.'; write_status success restored 'Резервная копия восстановлена.' ;;
 	reset_vpn) write_status running resetting 'Удаляем настройки VPN…'; /usr/libexec/oum-reset-vpn || fail reset_failed 'Не удалось сбросить VPN.'; write_status success reset 'VPN сброшен. Можно добавить новый источник.' ;;
+	gearup_install) write_status running installing 'Ставим GearUP: TUN-модуль, плагин, persist…'; /usr/libexec/oum-gearup install || fail gearup_failed 'GearUP не установился; подробности в /tmp/oum-gearup-install.log.'; write_status success installed 'GearUP установлен. Привяжите роутер в мобильном приложении GearUP.' ;;
+	gearup_uninstall) write_status running removing 'Удаляем GearUP…'; /usr/libexec/oum-gearup uninstall || fail gearup_uninstall_failed 'Не удалось полностью удалить GearUP.'; write_status success removed 'GearUP удалён. Исключения доменов и kmod-tun оставлены.' ;;
 	reset_all) write_status running resetting 'Возвращаем мастер первого запуска…'; /usr/libexec/oum-reset-first-run || fail reset_failed 'Не удалось вернуть мастер первого запуска.'; write_status success reset 'Мастер первого запуска восстановлен.' ;;
 	*) fail invalid_action 'Неизвестная системная операция.' ;;
 esac
