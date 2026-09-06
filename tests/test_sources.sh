@@ -56,6 +56,11 @@ ruby -ryaml -e '
   abort "unexpected AWG node rename" unless config.fetch("proxies").first["name"] == "OUM-AWG"
   abort "mass rule providers missing" unless config.fetch("rule-providers").key?("ru-blocked-domains")
   abort "mass routing missing" unless config.fetch("rules").include?("RULE-SET,google-play,DIRECT")
+  abort "Chinese domains must be direct" unless config.fetch("rules").include?("RULE-SET,cn-domains,DIRECT")
+  abort "Chinese IPs must be direct" unless config.fetch("rules").include?("RULE-SET,cn-ips,DIRECT,no-resolve")
+  abort "Games must be direct" unless config.fetch("rules").include?("RULE-SET,category-games,DIRECT")
+  rules = config.fetch("rules")
+  abort "blocked services must take precedence over games" unless rules.index("RULE-SET,ru-blocked-domains,PROXY") < rules.index("RULE-SET,category-games,DIRECT")
   abort "Samsung must be direct" unless config.fetch("rules").include?("RULE-SET,samsung,DIRECT")
   %w[gearupbooster.com gearupportal.com guinfra.com sdp.gg].each do |domain|
     abort "GearUP must be direct: #{domain}" unless config.fetch("rules").include?("DOMAIN-SUFFIX,#{domain},DIRECT")

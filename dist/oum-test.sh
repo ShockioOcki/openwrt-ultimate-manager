@@ -240,6 +240,8 @@ SOURCE_GROUPS = {
 
 MASS_RULE_PROVIDER_SOURCES = [
   ['private-domains', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/private.mrs', 2_592_000],
+  ['cn-domains', 'domain', 'https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/cn.mrs'],
+  ['category-games', 'domain', 'https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-games.mrs'],
   ['category-ru', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/category-ru.mrs'],
   ['whitelist', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/whitelist.mrs'],
   ['microsoft', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/microsoft.mrs'],
@@ -255,6 +257,7 @@ MASS_RULE_PROVIDER_SOURCES = [
   ['pinterest', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/pinterest.mrs'],
   ['faceit', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/faceit.mrs'],
   ['private-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geoip@release/mihomo/private.mrs', 2_592_000],
+  ['cn-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/cn.mrs'],
   ['direct-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geoip@release/mihomo/direct.mrs'],
   ['github', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/github.mrs'],
   ['twitch-ads', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/twitch-ads.mrs'],
@@ -284,6 +287,8 @@ MASS_RULES = [
   'RULE-SET,telegram,PROXY', 'RULE-SET,telegram-ips,PROXY,no-resolve',
   'RULE-SET,discord-domains,PROXY', 'RULE-SET,discord-voice-ips,PROXY,no-resolve',
   'RULE-SET,ru-blocked-domains,PROXY', 'RULE-SET,ru-blocked-ips,PROXY,no-resolve',
+  'RULE-SET,category-games,DIRECT',
+  'RULE-SET,cn-domains,DIRECT', 'RULE-SET,cn-ips,DIRECT,no-resolve',
   'RULE-SET,category-ru,DIRECT', 'RULE-SET,whitelist,DIRECT',
   'RULE-SET,microsoft,DIRECT', 'RULE-SET,apple,DIRECT',
   'RULE-SET,epicgames,DIRECT', 'RULE-SET,riot,DIRECT',
