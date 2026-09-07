@@ -12,7 +12,7 @@
 			<h1 id="oum-login-title">Вход в систему</h1>
 			<p>Управление домашней сетью и защищённым подключением.</p>
 		</header>
-		<form method="post" class="oum-login-form">
+		<form method="post" action="{{ dispatcher.build_url('oum') }}" class="oum-login-form">
 			{% if (fuser): %}
 			<div class="oum-login-error" role="alert">
 				<strong>Не удалось войти</strong>
@@ -21,7 +21,7 @@
 			{% endif %}
 			<label class="oum-login-field" for="luci_username">
 				<span>Имя пользователя</span>
-				<input name="luci_username" id="luci_username" type="text" autocomplete="username" value="admin" spellcheck="false">
+				<input name="luci_username" id="luci_username" type="text" autocomplete="username" value="root" spellcheck="false">
 			</label>
 			<label class="oum-login-field" for="luci_password">
 				<span>Пароль</span>

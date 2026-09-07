@@ -4,7 +4,7 @@ import { access, basename, dirname, glob, open, popen, readfile } from 'fs';
 import { cursor } from 'uci';
 import { connect } from 'ubus';
 
-const CONFIGS = [ 'network', 'wireless', 'rpcd', 'oum' ];
+const CONFIGS = [ 'network', 'wireless', 'rpcd', 'dropbear', 'oum' ];
 const BACKUP_DIR = '/tmp/oum-setup-backup';
 const VPN_JOB_DIR = '/tmp/oum-vpn-job';
 const VPN_JOB_LOCK = '/tmp/oum-vpn-job.lock';
@@ -1366,11 +1366,9 @@ function validate(args) {
 	if (type(args.wifi_password) != 'string' || length(args.wifi_password) < 8 || length(args.wifi_password) > 63)
 		return failure('invalid_wifi_password', 'Пароль Wi-Fi должен содержать от 8 до 63 символов.');
 
-	if (type(args.admin_password) != 'string' || length(args.admin_password) < 6)
-		return failure('invalid_admin_password', args.admin_no_password ? 'Задайте пароль root минимум из 6 символов.' : 'Новый пароль панели должен содержать минимум 6 символов.');
-
-	if (type(args.admin_no_password) != 'bool')
-		return failure('invalid_admin_mode', 'Некорректный режим входа в панель.');
+	if (type(args.admin_password) != 'string' || length(args.admin_password) > 128 ||
+		(length(args.admin_password) > 0 && length(args.admin_password) < 6) || match(args.admin_password, /[\r\n]/))
+		return failure('invalid_root_password', 'Пароль root должен быть пустым либо содержать минимум 6 символов.');
 
 	if (!(args.vpn_type in [ 'none', 'subscription', 'awg', 'proxy' ]))
 		return failure('invalid_vpn', 'Неизвестный тип VPN.');
@@ -1397,39 +1395,29 @@ function restoreConfigs() {
 }
 
 function setRootPassword(password) {
+	if (!length(password))
+		return system('/bin/busybox passwd -d root >/dev/null 2>&1') == 0;
 	let quoted = shellquote(password);
 	return system(`(echo ${quoted}; sleep 1; echo ${quoted}) | /bin/busybox passwd root >/dev/null 2>&1`) == 0;
 }
 
-function setAdminPassword(uci, password) {
-	let hash = '';
-	if (length(password)) {
-		let proc = popen(`/usr/sbin/uhttpd -m ${shellquote(password)} 2>/dev/null`);
-		if (!proc) return false;
-		hash = trim(proc.read('all'));
-		let rc = proc.close();
-		if (rc != 0 || !match(hash, /^\$1\$/)) return false;
-	}
-	else if (system("id admin >/dev/null 2>&1 && /bin/busybox passwd -d admin >/dev/null 2>&1 || true") != 0)
-		return false;
-
-	let found = false;
+function configureRootAccess(uci) {
+	let rootSection = null;
+	let legacyAdmin = [];
 	uci.foreach('rpcd', 'login', (section) => {
-		if (section.username == 'admin') {
-			uci.set('rpcd', section['.name'], 'password', hash);
-			found = true;
-		}
+		if (section.username == 'root') rootSection = section['.name'];
+		if (section.username == 'admin') push(legacyAdmin, section['.name']);
 	});
-
-	if (!found) {
-		let section = uci.add('rpcd', 'login');
-		uci.set('rpcd', section, 'username', 'admin');
-		uci.set('rpcd', section, 'password', hash);
-		uci.set('rpcd', section, 'read', [ 'luci-app-oum' ]);
-		uci.set('rpcd', section, 'write', [ 'luci-app-oum' ]);
-	}
-
-	return true;
+	for (let section in legacyAdmin) uci.delete('rpcd', section);
+	if (!rootSection) rootSection = uci.add('rpcd', 'login');
+	uci.set('rpcd', rootSection, 'username', 'root');
+	uci.set('rpcd', rootSection, 'password', '$p$root');
+	uci.set('rpcd', rootSection, 'read', [ '*' ]);
+	uci.set('rpcd', rootSection, 'write', [ '*' ]);
+	uci.foreach('dropbear', 'dropbear', (section) => {
+		uci.set('dropbear', section['.name'], 'PasswordAuth', 'on');
+		uci.set('dropbear', section['.name'], 'RootPasswordAuth', 'on');
+	});
 }
 
 function configureWan(uci, args) {
@@ -2566,15 +2554,12 @@ const methods = {
 				uci.set('oum', 'main', 'setup_step', request.args.vpn_type == 'none' ? 'complete' : 'vpn');
 				uci.set('oum', 'main', 'setup_complete', '1');
 
-				phase = 'admin_password';
-				if (!setAdminPassword(uci, request.args.admin_no_password ? '' : request.args.admin_password)) {
-					restoreConfigs();
-					return failure('password_failed', 'Не удалось изменить пароль панели.');
-				}
+				phase = 'root_access';
 				if (!setRootPassword(request.args.admin_password)) {
 					restoreConfigs();
-					return failure('root_password_failed', 'Не удалось защитить системную учётную запись.');
+					return failure('root_password_failed', 'Не удалось изменить пароль root.');
 				}
+				configureRootAccess(uci);
 
 				phase = 'commit';
 				for (let name in CONFIGS) {
@@ -2584,7 +2569,7 @@ const methods = {
 					}
 				}
 
-				system("(sleep 2; /etc/init.d/network reload; /sbin/wifi reload; /etc/init.d/rpcd restart) >/tmp/oum-apply.log 2>&1 &");
+				system("(sleep 2; /usr/libexec/oum-dropbear-blank-password && /etc/init.d/network reload; /sbin/wifi reload; /etc/init.d/rpcd restart; /etc/init.d/dropbear restart) >/tmp/oum-apply.log 2>&1 &");
 				return { ok: true, reconnect: true };
 			}
 			catch (err) {

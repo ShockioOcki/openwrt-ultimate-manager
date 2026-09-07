@@ -2,23 +2,37 @@
 
 set -eu
 
-[ "$(uci -q get oum.main.setup_complete || echo 0)" = "1" ] && exit 0
+setup_complete="$(uci -q get oum.main.setup_complete || echo 0)"
 
-# A clean OpenWrt image commonly has an empty root password. Leaving it empty
-# would bypass the restricted OUM account through LuCI and SSH. Lock password
-# authentication until the wizard installs the user-selected final password.
-root_hash="$(awk -F: '$1 == "root" { print $2 }' /etc/shadow)"
-[ -n "$root_hash" ] || /bin/busybox passwd -l root >/dev/null
+# OUM uses the stock OpenWrt root account for LuCI and SSH. Remove the legacy
+# OUM login and keep root tied to the system password. A blank
+# root password is intentionally supported for trusted LAN-only installations.
+root_login=''
+for section in $(uci -q show rpcd | sed -n "s/^rpcd\.\([^.=]*\)=login$/\1/p"); do
+	case "$(uci -q get "rpcd.${section}.username" || true)" in
+		root) root_login="$section" ;;
+		admin) uci -q delete "rpcd.${section}" ;;
+	esac
+done
+[ -n "$root_login" ] || root_login="$(uci -q add rpcd login)"
+uci -q set "rpcd.${root_login}.username=root"
+uci -q set "rpcd.${root_login}.password=\$p\$root"
+uci -q delete "rpcd.${root_login}.read"
+uci -q add_list "rpcd.${root_login}.read=*"
+uci -q delete "rpcd.${root_login}.write"
+uci -q add_list "rpcd.${root_login}.write=*"
 
-uci -q batch <<'EOF'
-set rpcd.oum_admin=login
-set rpcd.oum_admin.username='admin'
-set rpcd.oum_admin.password='$1$$CoERg7ynjYLsj2j4glJ34.'
-delete rpcd.oum_admin.read
-add_list rpcd.oum_admin.read='luci-app-oum'
-delete rpcd.oum_admin.write
-add_list rpcd.oum_admin.write='luci-app-oum'
-EOF
+for section in $(uci -q show dropbear | sed -n "s/^dropbear\.\([^.=]*\)=dropbear$/\1/p"); do
+	uci -q set "dropbear.${section}.PasswordAuth=on"
+	uci -q set "dropbear.${section}.RootPasswordAuth=on"
+done
+
+uci commit rpcd
+uci commit dropbear
+/usr/libexec/oum-dropbear-blank-password
+/etc/init.d/rpcd restart
+/etc/init.d/dropbear restart
+[ "$setup_complete" = "1" ] && exit 0
 
 for radio in $(uci -q show wireless | sed -n "s/^wireless\.\([^.=]*\)=wifi-device$/\1/p"); do
 	uci -q set "wireless.${radio}.country=US"
@@ -38,8 +52,6 @@ done
 uci -q set network.lan.ipaddr='192.168.5.1'
 uci -q set network.lan.netmask='255.255.255.0'
 
-uci commit rpcd
 uci commit wireless
 uci commit network
-/etc/init.d/rpcd restart
 (sleep 2; /etc/init.d/network reload; wifi reload) >/tmp/oum-firstboot-network.log 2>&1 &

@@ -40,6 +40,7 @@ sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-zapret-quic"
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-zapret-manager"
 OUM_ZAPRET_CATALOG="$ROOT/luci-app-oum/root/usr/share/oum/zapret-youtube-strategies" "$ROOT/luci-app-oum/root/usr/libexec/oum-zapret-strategy" validate
 sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-login-default"
+sh -n "$ROOT/luci-app-oum/root/usr/libexec/oum-dropbear-blank-password"
 sh -n "$ROOT/tests/test_subscription_info.sh"
 sh -n "$ROOT/tests/test_login_default.sh"
 sh -n "$ROOT/tests/test_contracts.sh"
@@ -64,8 +65,11 @@ if command -v node >/dev/null 2>&1; then
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/first-run-v2.js"
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v43.js"
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v56.js"
+	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/dashboard-v57.js"
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/settings-v43.js"
+	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/settings-v58.js"
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/parental-v3.js"
+	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/parental-v5.js"
 	node --check "$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/help-v3.js"
 fi
 printf 'syntax tests: OK\n'

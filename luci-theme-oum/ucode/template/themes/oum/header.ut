@@ -7,6 +7,9 @@
 {%
 	import { getuid, getspnam } from 'luci.core';
 	const boardinfo = ubus.call('system', 'board') || {};
+	const oum_setup = ubus.call('uci', 'get', { config: 'oum', section: 'main' })?.values || {};
+	const oum_setup_complete = oum_setup.setup_complete == '1';
+	const oum_setup_path = ctx.request_path?.[0] == 'oum' && ctx.request_path?.[1] == 'setup';
 	http.prepare_content('text/html; charset=UTF-8');
 -%}
 
@@ -28,9 +31,13 @@
 				document.documentElement.setAttribute('data-darkmode', mode === 'dark' ? 'true' : 'false');
 			})();
 		</script>
+		{% if (ctx.authuser && !oum_setup_complete && !oum_setup_path): %}
+		<style>html { visibility: hidden !important; }</style>
+		<script>window.location.replace({{ jsonify(dispatcher.build_url('oum/setup')) }});</script>
+		{% endif %}
 		<link rel="stylesheet" href="{{ media }}/bootstrap-base.css?v={{ pkgs_update_time }}">
 		<link rel="stylesheet" media="only screen and (max-device-width: 854px)" href="{{ media }}/bootstrap-mobile.css?v={{ pkgs_update_time }}">
-		<link rel="stylesheet" href="{{ media }}/cascade.css?v={{ pkgs_update_time }}-20260903-act29">
+		<link rel="stylesheet" href="{{ media }}/cascade.css?v={{ pkgs_update_time }}-20260907-04">
 		{% if (ctx.request_path[0] == 'oum'): %}<link rel="stylesheet" href="{{ resource }}/oum/oum.css?v=20260906-parental05">{% endif %}
 		<style>
 			body.theme-oum[data-page^="oum-"] .oum-page-head #oum-theme-toggle,
@@ -108,7 +115,7 @@
 
 				<div id="oum-menu-overlay" hidden></div>
 				<main id="maincontent" class="container">
-					{% if (getuid() == 0 && getspnam('root')?.pwdp === ''): %}
+					{% if (ctx.request_path[0] == 'admin' && getuid() == 0 && getspnam('root')?.pwdp === ''): %}
 					<div class="alert-message warning">
 						<h4>{{ _('No password set!') }}</h4>
 						<p>{{ _('There is no password set on this router. Please configure a root password to protect the web interface.') }}</p>

@@ -1747,15 +1747,6 @@ body.dark .oum-help-page {
   color: var(--oum-subtle);
   font-size: .78rem;
 }
-.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node:first-child {
-  border-color: var(--oum-action);
-  background: var(--oum-action-soft);
-}
-.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node:first-child .btn {
-  border-color: var(--oum-action);
-  color: var(--oum-paper-strong);
-  background: var(--oum-action);
-}
 .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-all {
   margin-top: 12px;
   overflow: hidden;
@@ -3788,3 +3779,48 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
   .oum-passwall-tool-row { align-items: stretch; flex-direction: column; }
   .oum-passwall-tool-row .btn { width: 100%; }
 }
+/* dark11: тёмная тема — захардкоженные светлые места (пилюли, Все ноды, навбар). */
+.oum-app[data-theme="dark"] .oum-system-pill { background: var(--oum-field) !important; border-color: var(--oum-line) !important; color: var(--oum-ink) !important; }
+.oum-app[data-theme="dark"] .oum-system-pill.good { background: var(--oum-good-soft) !important; border-color: #1f5c4d !important; color: #34d399 !important; }
+.oum-app[data-theme="dark"] .oum-node-controls[data-engine="openclash"] .oum-all-nodes-btn,
+.oum-app[data-theme="dark"] .oum-node-controls[data-engine="passwall"] .oum-all-nodes-btn { background: var(--oum-field) !important; border-color: var(--oum-line) !important; color: var(--oum-ink) !important; }
+html[data-theme="dark"] .oum-bottom-nav { background: #0f172a !important; border-top-color: var(--oum-line) !important; }
+html[data-theme="dark"] .oum-bottom-nav button { color: var(--oum-faint) !important; }
+html[data-theme="dark"] .oum-bottom-nav button.active { color: #60a5fa !important; }
+/* dark12: тёмная тема — выбранные карточки, сегменты, меню, кастомные белые карты. */
+.oum-app[data-theme="dark"] .oum-engine-choice:has(input:checked),
+.oum-app[data-theme="dark"] .oum-source-choice:has(input:checked),
+.oum-app[data-theme="dark"] .oum-setting-choice:has(input:checked) { color: var(--oum-ink) !important; }
+.oum-app[data-theme="dark"] .oum-engine-choice:has(input:checked) .oum-ver { background: rgba(96,165,250,.16) !important; color: #93c5fd !important; }
+html[data-theme="dark"] .oum-apple-segment, html[data-theme="dark"] .oum-mobile-menu-seg { background: #1c2942 !important; }
+html[data-theme="dark"] .oum-apple-seg.is-active, html[data-theme="dark"] .oum-mobile-menu-seg button.is-active { background: #0f172a !important; color: #edf2fb !important; box-shadow: 0 1px 3px rgba(0,0,0,.4) !important; }
+html[data-theme="dark"] .oum-apple-seg:not(.is-active), html[data-theme="dark"] .oum-mobile-menu-seg button:not(.is-active) { background: transparent !important; color: #8c99ad !important; box-shadow: none !important; }
+html[data-theme="dark"] .oum-mobile-menu-panel { background: #131c2d !important; color: var(--oum-ink) !important; }
+html[data-theme="dark"] .oum-mobile-menu-panel > header.oum-mobile-menu-head { background: transparent !important; color: var(--oum-ink) !important; }
+html[data-theme="dark"] .oum-mobile-menu-head h3 { color: var(--oum-ink) !important; }
+html[data-theme="dark"] .oum-mobile-menu-close { background: transparent !important; border-color: transparent !important; color: #94a3b8 !important; }
+html[data-theme="dark"] .oum-mobile-menu-luci { background: #18243a !important; border-color: var(--oum-line) !important; color: var(--oum-ink) !important; }
+html[data-theme="dark"] .oum-mobile-menu-luci b { color: #8c99ad !important; }
+html[data-theme="dark"] .oum-mobile-menu-theme > span { color: var(--oum-ink) !important; }
+html[data-theme="dark"] .oum-mobile-menu-btn { background: #18243a !important; border-color: var(--oum-line) !important; color: var(--oum-ink) !important; }
+html[data-theme="dark"] .oum-mobile-menu-btn.is-danger, html[data-theme="dark"] .oum-mobile-menu-btn.is-danger-text { border-color: #7f2d2d !important; color: #f87171 !important; background: rgba(220,38,38,.08) !important; }
+html[data-theme="dark"] .oum-mobile-menu-foot { color: #8c99ad !important; }
+html[data-theme="dark"] .oum-sheet-card { background: var(--oum-paper) !important; border-color: var(--oum-line) !important; }
+html[data-theme="dark"] .oum-sheet-card input, html[data-theme="dark"] .oum-sheet-card select, html[data-theme="dark"] .oum-sheet-card textarea { background: #0f172a !important; border-color: var(--oum-line) !important; color: var(--oum-ink) !important; }
+/* pwdiag13: диагностика passwall компактно 2-в-ряд на телефонах. */
+@media (max-width: 700px) {
+  .oum-dashboard.oum-app .oum-passwall-diagnostic-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; gap: 6px !important; }
+  .oum-dashboard.oum-app .oum-passwall-diagnostic { padding: 8px 10px !important; min-width: 0; }
+  .oum-dashboard.oum-app .oum-passwall-diagnostic strong { overflow-wrap: anywhere; }
+}
+/* pwtools14: поле проверки маршрута — фикс гигантской высоты в столбике. */
+@media (max-width: 650px) {
+  .oum-passwall-tool-row input { flex: 0 0 auto; width: 100%; min-height: 42px; box-sizing: border-box; }
+}
+/* dark13: шторка нод дашборда. */
+html[data-theme="dark"] .oum-bottom-sheet { background: #131c2d !important; color: var(--oum-ink) !important; }
+html[data-theme="dark"] .oum-sheet-x { background: transparent !important; border-color: transparent !important; color: #94a3b8 !important; }
+html[data-theme="dark"] .oum-node.oum-pick { background: #18243a !important; border-color: var(--oum-line) !important; color: var(--oum-ink) !important; }
+html[data-theme="dark"] .oum-node.oum-pick.is-current { background: rgba(52,211,153,.12) !important; border-color: #1f5c4d !important; }
+html[data-theme="dark"] .oum-node.oum-pick.is-selected { background: rgba(96,165,250,.14) !important; border-color: #3b82f6 !important; box-shadow: 0 0 0 1px #3b82f6 !important; }
+html[data-theme="dark"] .oum-node.oum-pick .oum-delay { color: var(--oum-subtle) !important; }

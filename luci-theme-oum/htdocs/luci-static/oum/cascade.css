@@ -580,32 +580,15 @@ body.theme-oum[data-page="admin-status-processes"] .cbi-section-actions button {
   line-height: 1.2;
   white-space: nowrap;
 }
-
-/* Overview port status: replace LuCI's legacy 70px iface boxes with OUM cards. */
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) > .cbi-title h3 {
-  align-items: center;
-  margin-bottom: 14px;
-}
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) > .cbi-title .label {
-  min-width: 0 !important;
-  min-height: 32px;
-  padding: 6px 11px;
-  border: 1px solid var(--oum-line);
-  border-radius: 9px;
-  background: var(--oum-field-soft);
-  color: var(--oum-muted);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  text-transform: none;
-}
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) > div:nth-child(2) > div {
+/* Overview port status: replace LuCI's legacy 70px iface boxes with OUM cards.
+   Anchor: inline auto-fit grid (no :has — also works in older browsers). */
+body.theme-oum div[style*="auto-fit"] {
   display: grid !important;
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   gap: 12px;
   margin: 0 !important;
 }
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) .ifacebox {
+body.theme-oum div[style*="auto-fit"] .ifacebox {
   display: grid;
   grid-template-rows: auto 1fr 4px auto;
   min-width: 0 !important;
@@ -618,7 +601,7 @@ body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img
   background: var(--oum-paper);
   box-shadow: none;
 }
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) .ifacebox > .ifacebox-head:first-child {
+body.theme-oum div[style*="auto-fit"] .ifacebox > .ifacebox-head:first-child {
   padding: 9px 12px;
   border: 0;
   border-bottom: 1px solid var(--oum-line);
@@ -629,7 +612,7 @@ body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img
   text-align: center;
   text-shadow: none;
 }
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) .ifacebox > .ifacebox-body:nth-child(2) {
+body.theme-oum div[style*="auto-fit"] .ifacebox > .ifacebox-body:nth-child(2) {
   display: flex;
   min-height: 88px;
   padding: 13px 10px 10px;
@@ -638,13 +621,11 @@ body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img
   justify-content: center;
   gap: 5px;
   color: var(--oum-ink);
-  font-size: 13px;
-  text-align: center;
 }
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) .ifacebox > .ifacebox-body:nth-child(2) br {
+body.theme-oum div[style*="auto-fit"] .ifacebox > .ifacebox-body:nth-child(2) br {
   display: none;
 }
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) .ifacebox > .ifacebox-body:nth-child(2) img {
+body.theme-oum div[style*="auto-fit"] .ifacebox > .ifacebox-body:nth-child(2) img {
   width: 34px;
   height: 34px;
   padding: 7px;
@@ -652,24 +633,25 @@ body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img
   background: var(--oum-field-soft);
   object-fit: contain;
 }
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) .ifacebox:has(img[src$="/port_up.svg"]) > .ifacebox-body:nth-child(2) img {
+body.theme-oum div[style*="auto-fit"] img[src$="/port_up.svg"] {
   background: rgba(48, 185, 128, .13);
 }
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_down.svg"]) .ifacebox:has(img[src$="/port_down.svg"]) > .ifacebox-body:nth-child(2) {
-  color: var(--oum-muted);
+body.theme-oum div[style*="auto-fit"] img[src$="/port_down.svg"] {
+  filter: saturate(.35);
+  opacity: .7;
 }
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) .ifacebox > .ifacebox-head:nth-child(3) {
+body.theme-oum div[style*="auto-fit"] .ifacebox > .ifacebox-head:nth-child(3) {
   height: 4px;
   min-height: 4px;
   padding: 0;
   border: 0;
   background: transparent;
 }
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) .ifacebox > .ifacebox-head:nth-child(3) > .zonebadge {
+body.theme-oum div[style*="auto-fit"] .ifacebox > .ifacebox-head:nth-child(3) > .zonebadge {
   height: 4px !important;
   border-radius: 0;
 }
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) .ifacebox > .ifacebox-body:last-child {
+body.theme-oum div[style*="auto-fit"] .ifacebox > .ifacebox-body:last-child {
   padding: 9px 12px 10px;
   border: 0;
   background: var(--oum-field-soft);
@@ -677,11 +659,10 @@ body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img
   font-size: 12px;
   line-height: 1.5;
 }
-body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) .ifacebox > .ifacebox-body:last-child > div {
+body.theme-oum div[style*="auto-fit"] .ifacebox > .ifacebox-body:last-child > div {
   font-size: 12px !important;
   text-align: left !important;
 }
-
 /* OUM device alias editor must remain usable even when LuCI retains an older view module. */
 body.theme-oum[data-page="oum-dashboard"] .oum-device-alias-form {
   display: grid !important;
@@ -709,7 +690,7 @@ body.theme-oum[data-page="oum-dashboard"] .oum-device-alias-form > .oum-device-r
   white-space: nowrap !important;
 }
 @media (max-width: 760px) {
-  body.theme-oum[data-page="admin-status-overview"] .cbi-section:has(.ifacebox img[src$="/port_up.svg"], .ifacebox img[src$="/port_down.svg"]) > div:nth-child(2) > div {
+  body.theme-oum div[style*="auto-fit"] {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
@@ -1028,3 +1009,11 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
 .oum-act-result[data-state="failed"] { background: #fef2f2; border: 1px solid #fca5a5; color: #dc2626; }
 #oum-activation-sheet .oum-act-hide { border: none !important; background: transparent !important; font-size: 11px !important; min-height: 44px !important; }
 body.oum-act-open { overflow: hidden !important; }
+
+/* menux: sidebar accordion plus — icons, chevron, bright active. */
+#topmenu > li > a .oum-mode-ico { display: inline-flex; width: 18px; height: 18px; margin-right: 10px; flex: none; color: var(--oum-faint); }
+#topmenu > li > a .oum-mode-ico svg { width: 18px; height: 18px; }
+#topmenu > li.open > a .oum-mode-ico, #topmenu > li.active > a .oum-mode-ico { color: var(--oum-action); }
+#topmenu > li.dropdown > a::after { content: '›'; margin-left: auto; padding-left: 8px; color: var(--oum-faint); font-size: 17px; font-weight: 400; line-height: 1; transition: transform .16s ease; }
+#topmenu > li.dropdown.open > a::after { transform: rotate(90deg); color: var(--oum-action); }
+#topmenu .dropdown-menu li.active > a { box-shadow: inset 2px 0 0 var(--oum-action); font-weight: 700; }

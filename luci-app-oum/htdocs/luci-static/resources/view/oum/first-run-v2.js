@@ -14,7 +14,7 @@ const callApplySetup = rpc.declare({
 	method: 'applySetup',
 	params: [
 		'wan_type', 'pppoe_user', 'pppoe_password', 'wifi_mode',
-		'ssid_24', 'ssid_5', 'wifi_password', 'admin_password', 'vpn_type', 'admin_no_password'
+		'ssid_24', 'ssid_5', 'wifi_password', 'admin_password', 'vpn_type'
 	],
 	expect: { '': {} }
 });
@@ -52,7 +52,7 @@ return view.extend({
 	render(status) {
 		if (status.setup_complete)
 			return E('div', { 'class': 'oum-shell' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260906-parental05` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260907-quick14` }),
 				E('h2', {}, 'Роутер уже настроен'),
 				E('p', {}, 'Мастер первого запуска завершён. Откройте главную страницу OUM.'),
 				E('a', { 'class': 'btn cbi-button-action', 'href': L.url('oum', 'dashboard') }, 'Перейти на главную')
@@ -62,7 +62,7 @@ return view.extend({
 			'class': 'oum-shell oum-first-run',
 			'data-theme': document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
 		}, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260906-parental05` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260907-quick14` }),
 			E('div', { 'class': 'oum-setup-head' }, [
 				E('div', {}, [
 					E('h2', {}, 'Добро пожаловать в OUM'),
@@ -111,13 +111,13 @@ return view.extend({
 			]),
 
 			E('section', { 'class': 'oum-step', 'data-step': 4, 'hidden': '' }, [
-				E('h3', {}, '4. Защита панели'),
-				E('p', {}, 'Защитите полный системный доступ root. Для упрощённой панели admin можно отдельно разрешить вход без пароля.'),
-				E('label', { 'class': 'oum-choice' }, [ E('input', { type: 'checkbox', name: 'admin_no_password' }), E('span', {}, [ E('strong', {}, 'Вход admin без пароля'), E('small', {}, 'Только для доверенной домашней сети. Не публикуйте панель в интернет.') ]) ]),
+				E('h3', {}, '4. Доступ к роутеру'),
+				E('p', {}, 'Для OUM, стандартного LuCI и SSH используется одна системная учётная запись root.'),
 				E('div', { 'class': 'oum-grid' }, [
-					E('div', { 'class': 'oum-field' }, [E('label', { id: 'admin-password-label' }, 'Новый пароль admin и root'), E('input', { 'name': 'admin_password', 'type': 'password', 'minlength': 6, 'autocomplete': 'new-password' })]),
-					E('div', { 'class': 'oum-field' }, [E('label', { id: 'admin-confirm-label' }, 'Повторите пароль'), E('input', { 'name': 'admin_password_confirm', 'type': 'password', 'minlength': 6, 'autocomplete': 'new-password' })])
+					E('div', { 'class': 'oum-field' }, [E('label', {}, 'Пароль root (необязательно)'), E('input', { 'name': 'admin_password', 'type': 'password', 'maxlength': 128, 'autocomplete': 'new-password' })]),
+					E('div', { 'class': 'oum-field' }, [E('label', {}, 'Повторите пароль'), E('input', { 'name': 'admin_password_confirm', 'type': 'password', 'maxlength': 128, 'autocomplete': 'new-password' })])
 				]),
+				E('p', { 'class': 'oum-note oum-warn' }, 'Если оставить поля пустыми, вход root в OUM, LuCI и SSH останется без пароля. Используйте этот вариант только в доверенной локальной сети без доступа извне.'),
 				E('p', { 'class': 'oum-note' }, status.usb_present ? 'USB-накопитель обнаружен. Настройку NAS предложим после завершения базового мастера.' : 'USB-накопитель не обнаружен, поэтому шаг NAS сейчас пропущен.')
 			]),
 
@@ -149,8 +149,8 @@ return view.extend({
 			}
 			if (step === 3 && !selected('vpn_type')) return 'Выберите тип подключения или «Пропустить».';
 			if (step === 4) {
-				if (value('admin_password').length < 6) return field('admin_no_password').checked ? 'Пароль root должен содержать минимум 6 символов.' : 'Пароль панели должен содержать минимум 6 символов.';
-				if (value('admin_password') !== value('admin_password_confirm')) return 'Пароли панели не совпадают.';
+				if (value('admin_password').length > 0 && value('admin_password').length < 6) return 'Пароль root должен содержать минимум 6 символов либо оставаться пустым.';
+				if (value('admin_password') !== value('admin_password_confirm')) return 'Пароли root не совпадают.';
 			}
 			return null;
 		};
@@ -160,10 +160,6 @@ return view.extend({
 			if (ev.target.name === 'wifi_mode') {
 				show('#ssid5-wrap', ev.target.value === 'separate');
 				root.querySelector('#ssid24-label').textContent = ev.target.value === 'separate' ? 'Имя сети 2,4 ГГц' : 'Имя Wi-Fi';
-			}
-			if (ev.target.name === 'admin_no_password') {
-				root.querySelector('#admin-password-label').textContent = ev.target.checked ? 'Пароль root' : 'Новый пароль admin и root';
-				root.querySelector('#admin-confirm-label').textContent = ev.target.checked ? 'Повторите пароль root' : 'Повторите пароль';
 			}
 		});
 
@@ -181,12 +177,12 @@ return view.extend({
 				callApplySetup(
 					selected('wan_type'), value('pppoe_user'), value('pppoe_password'), selected('wifi_mode'),
 					value('ssid_24'), smart ? value('ssid_24') : value('ssid_5'), value('wifi_password'),
-					value('admin_password'), selected('vpn_type'), field('admin_no_password').checked
+					value('admin_password'), selected('vpn_type')
 				).then((result) => {
 					if (!result.ok) throw new Error(result.message || 'Не удалось применить настройки.');
 					ui.showModal('Настройка завершена', [
 						E('p', {}, `Подключитесь к новой Wi-Fi сети ${networkNames}.`),
-						E('p', {}, field('admin_no_password').checked ? 'Затем снова откройте 192.168.5.1 и войдите как admin без пароля.' : 'Затем снова откройте 192.168.5.1 и войдите как admin с новым паролем панели.'),
+						E('p', {}, value('admin_password') ? 'Затем снова откройте 192.168.5.1 и войдите как root с новым паролем.' : 'Затем снова откройте 192.168.5.1 и войдите как root без пароля.'),
 						E('a', { 'class': 'btn cbi-button-action', 'href': L.url('oum', 'dashboard') }, 'Открыть OUM после подключения')
 					]);
 				}).catch((err) => ui.showModal('Ошибка', [ E('p', {}, err.message), E('button', { 'class': 'btn', 'click': ui.hideModal }, 'Закрыть') ]));

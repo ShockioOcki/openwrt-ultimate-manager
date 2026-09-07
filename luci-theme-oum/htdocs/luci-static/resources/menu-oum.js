@@ -2,6 +2,14 @@
 'require baseclass';
 'require ui';
 
+var MODE_ICONS = {
+	status: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+	system: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>',
+	services: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
+	network: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+	vpn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'
+};
+
 return baseclass.extend({
 	__init__: function() {
 		ui.menu.load().then(L.bind(this.render, this));
@@ -62,9 +70,18 @@ return baseclass.extend({
 			var li = E('li', { 'class': (hasChildren ? 'dropdown ' : '') + (active ? 'active open' : '') }, [ link, submenu ]);
 
 			if (!nested && hasChildren) {
+				if (MODE_ICONS[child.name]) {
+					var ico = E('span', { 'class': 'oum-mode-ico', 'aria-hidden': 'true' });
+					ico.innerHTML = MODE_ICONS[child.name];
+					link.insertBefore(ico, link.firstChild);
+				}
 				link.addEventListener('click', function(event) {
 					event.preventDefault();
-					li.classList.toggle('open');
+					var willOpen = !li.classList.contains('open');
+					var sibs = ul.querySelectorAll(':scope > li.dropdown.open');
+					for (var i = 0; i < sibs.length; i++)
+						if (sibs[i] !== li) sibs[i].classList.remove('open');
+					li.classList.toggle('open', willOpen);
 				});
 			}
 

@@ -42,6 +42,8 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-strategy" /usr/libexec/oum-zapret-st
 cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-quic" /usr/libexec/oum-zapret-quic
 cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-manager" /usr/libexec/oum-zapret-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-login-default" /usr/libexec/oum-login-default
+cp "$SOURCE_DIR/root/usr/libexec/oum-dropbear-blank-password" /usr/libexec/oum-dropbear-blank-password
+cp "$SOURCE_DIR/root/usr/libexec/oum-gearup" /usr/libexec/oum-gearup
 cp "$SOURCE_DIR/root/usr/libexec/oum-upstream-check" /usr/libexec/oum-upstream-check
 cp "$REPO_DIR/dist/oum-test.sh" /usr/libexec/oum-runtime.sh
 cp "$REPO_DIR/helpers/source_converter.rb" /usr/libexec/oum/source_converter.rb
@@ -52,9 +54,9 @@ rm -f /www/luci-static/resources/view/oum/first-run.js \
 	/www/luci-static/resources/view/oum/settings-v2.js \
 	/www/luci-static/resources/view/oum/settings-v3.js
 cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/first-run-v2.js" /www/luci-static/resources/view/oum/first-run-v2.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/dashboard-v43.js" /www/luci-static/resources/view/oum/dashboard-v43.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/settings-v43.js" /www/luci-static/resources/view/oum/settings-v43.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/parental-v3.js" /www/luci-static/resources/view/oum/parental-v3.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/dashboard-v57.js" /www/luci-static/resources/view/oum/dashboard-v57.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/settings-v58.js" /www/luci-static/resources/view/oum/settings-v58.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/parental-v5.js" /www/luci-static/resources/view/oum/parental-v5.js
 cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/help-v3.js" /www/luci-static/resources/view/oum/help-v3.js
 cp "$SOURCE_DIR/htdocs/luci-static/resources/oum/oum.css" /www/luci-static/resources/oum/oum.css
 
@@ -76,6 +78,8 @@ chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/ou
 	/usr/libexec/oum-zapret-quic \
 	/usr/libexec/oum-zapret-manager \
 	/usr/libexec/oum-login-default \
+	/usr/libexec/oum-dropbear-blank-password \
+	/usr/libexec/oum-gearup \
 	/usr/libexec/oum-upstream-check \
 	/usr/libexec/oum-runtime.sh
 chmod 600 /usr/libexec/oum/source_converter.rb
@@ -87,8 +91,8 @@ chmod 644 /usr/share/oum/zapret-youtube-strategies
 find /usr/share/oum/packages -type f -exec chmod 600 {} \;
 chmod 644 /usr/share/luci/menu.d/luci-app-oum.json /usr/share/ucode/luci/controller/oum.uc /usr/share/rpcd/acl.d/luci-app-oum.json \
 	/usr/share/rpcd/ucode/oum /www/luci-static/resources/view/oum/first-run-v2.js \
-	/www/luci-static/resources/view/oum/dashboard-v43.js /www/luci-static/resources/view/oum/settings-v43.js \
-	/www/luci-static/resources/view/oum/parental-v3.js /www/luci-static/resources/view/oum/help-v3.js \
+	/www/luci-static/resources/view/oum/dashboard-v57.js /www/luci-static/resources/view/oum/settings-v58.js \
+	/www/luci-static/resources/view/oum/parental-v5.js /www/luci-static/resources/view/oum/help-v3.js \
 	/www/luci-static/resources/oum/oum.css
 
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true

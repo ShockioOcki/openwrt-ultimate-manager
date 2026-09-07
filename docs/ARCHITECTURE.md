@@ -96,11 +96,10 @@ in [EXPANSION.md](EXPANSION.md).
 
 ## LuCI first-run architecture
 
-The first prototype uses a top-level `/cgi-bin/luci/oum` tree, separate from
-the full root administration tree. The temporary `admin` account receives
-only the `luci-app-oum` rpcd access group. That group can read OUM status and
-invoke the narrowly scoped setup transaction; it cannot call the generic file
-executor or edit `network`, `wireless`, `rpcd`, or OpenClash UCI directly.
+OUM uses a top-level `/cgi-bin/luci/oum` tree alongside the full root
+administration tree. Both trees authenticate with the stock OpenWrt `root`
+account. The OUM RPC surface remains narrowly scoped, while the owner can open
+standard LuCI from the sidebar for unrestricted administration.
 
 The first-run view remains a direct recovery route but is not shown as a
 persistent navigation tab. A clean router reaches it from the dashboard setup
@@ -108,28 +107,23 @@ gate, and an already configured router can deliberately return to it only with
 the Settings page's destructive «Первый запуск» action. Routine WAN and Wi-Fi
 changes therefore have one home instead of being duplicated in the wizard.
 
-LuCI normally pre-fills `root` on every login form. OUM applies a validated,
-idempotent dispatcher adjustment that pre-fills `admin` only when the requested
-path belongs to `/oum`. Full LuCI administration and SSH retain `root`; the
-change affects a form default and does not alter authentication or privileges.
+The OUM login form pre-fills `root` and posts to `/oum`, so a successful login
+opens the simplified interface first. OUM does not patch the LuCI dispatcher;
+the migration helper removes the obsolete admin-prefill patch when upgrading.
 
 The `oum` ucode rpcd object validates the complete request before writing,
-backs up all affected UCI files, applies WAN and Wi-Fi changes, updates the
-restricted login hash and commits the transaction. A runtime failure restores
-the backup. Network, Wi-Fi and rpcd reload only after all commits succeed.
+backs up all affected UCI files and `/etc/shadow`, applies WAN and Wi-Fi
+changes, ensures the full-access root rpcd login, updates the system root
+password and commits the transaction. A runtime failure restores the backup.
+Network, Wi-Fi and rpcd reload only after all commits succeed.
 
 Until setup is complete, `oum-firstboot` provides the temporary dual-band
 `FirstRun` network with WPA2/WPA3 mixed encryption, password `admin123` and
-country code `US`. The temporary panel login is `admin/admin`; the wizard
-requires replacing it with a six-character-or-longer password before it can
-finish. The final Wi-Fi password is also at least eight characters because
-shorter keys are invalid for WPA2/WPA3 Personal.
-
-An empty OpenWrt root password is locked during bootstrap so it cannot bypass
-the restricted OUM account through LuCI or SSH. Completing the wizard sets the
-same user-selected management password for both the restricted `admin` login
-and the emergency `root` account. SSH public-key authentication remains usable
-while the password is locked.
+country code `US`. The wizard uses `root` throughout. The owner may set a
+six-character-or-longer root password or deliberately leave it empty; this
+choice affects OUM, standard LuCI and SSH together. The final Wi-Fi password is
+always at least eight characters because shorter keys are invalid for
+WPA2/WPA3 Personal.
 
 The wizard records the selected VPN source and applies WAN and Wi-Fi first.
 Before committing the transaction, it displays the exact destination SSID or
@@ -155,9 +149,9 @@ the configured LAN. Client names come from DHCP/OUM state; unknown names are
 displayed explicitly rather than guessed from MAC vendors.
 
 `oum-reset-first-run` is a test and recovery helper. It clears OUM-managed
-profiles and device policies, disables the installed VPN engine, locks root
-password authentication and restores the temporary FirstRun network and
-restricted admin login. A PassWall reset keeps a private one-step copy and does
+profiles and device policies, disables the installed VPN engine and restores
+the temporary FirstRun network without changing the current root password. A
+PassWall reset keeps a private one-step copy and does
 not destroy its imported nodes or shunt. It does not factory-reset OpenWrt or
 change the LAN address.
 
@@ -186,13 +180,13 @@ nodes live in an isolated `OUM` group; a private snapshot of the complete
 PassWall UCI file is restored if parsing, Xray startup or nftables readiness
 fails. A minimal dedicated shunt is selected only after at least one valid node
 exists. VLESS Reality is handled by Xray as a native direct proxy source and is
-labelled `Reality / Proxy` in the restricted UI. AWG is rejected in PassWall
+labelled `Reality / Proxy` in the OUM UI. AWG is rejected in PassWall
 mode because it is an independent network interface used by Podkop rather than
 an Xray-compatible proxy node.
 
 Subscription traffic and expiry are fetched on the router from the provider's
 `Subscription-Userinfo` response header. OUM stores only the parsed numeric
-values in `/tmp` for 30 minutes; the restricted browser session never receives
+values in `/tmp` for 30 minutes; the browser session never receives
 the subscription URL. Manual refresh uses the same lock-protected helper.
 
 Device routing policies are stored in anonymous `oum` UCI sections and paired
@@ -285,12 +279,12 @@ The complete upstream Zapret Manager is not embedded in the admin LuCI session.
 `189abafd50aed17f8c7414695d0d47d129a6b0dd`, verifies its SHA-256, pins the
 manager's own resource URLs to the same revision and exposes it through the
 interactive root-only `oum-zapret-manager` command. A configuration backup is
-created immediately before execution. This preserves the OUM admin/root
-security boundary while retaining the full upstream maintenance interface.
+created immediately before execution while retaining the full upstream
+maintenance interface.
 
 ## Settings and recovery
 
-The restricted `/oum/settings` page uses dedicated RPC methods rather than
+The `/oum/settings` page uses dedicated RPC methods rather than
 generic UCI access. Wi-Fi, WAN, restore and reset requests share one atomic
 system-job lock and are mutually exclusive with VPN import and device-policy
 updates. Password fields are write-only: status responses show
