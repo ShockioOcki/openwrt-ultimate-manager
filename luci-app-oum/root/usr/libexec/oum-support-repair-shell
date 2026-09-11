@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+echo 'OUM repair support session. Exit closes remote access.'
+/bin/ash -l
+(sleep 1; /usr/libexec/oum-support stop remote) >/dev/null 2>&1 &

@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+case "${SSH_ORIGINAL_COMMAND:-summary}" in
+	''|summary)
+		echo 'OUM diagnostic support session'
+		ubus call oum dashboardStatus 2>/dev/null || true
+		;;
+	services)
+		for service in network dnsmasq rpcd uhttpd; do
+			printf '%s: ' "$service"
+			"/etc/init.d/$service" status 2>/dev/null || true
+		done
+		;;
+	logs)
+		logread 2>/dev/null | tail -n 120 | sed -E 's#(vless|ss|trojan|hysteria2?)://[^ ]+#<redacted>#g'
+		;;
+	stop)
+		(sleep 1; /usr/libexec/oum-support stop remote) >/dev/null 2>&1 &
+		echo 'Сеанс удалённой поддержки завершается.'
+		;;
+	*) echo 'Разрешены только команды: summary, services, logs, stop.' >&2; exit 2 ;;
+esac

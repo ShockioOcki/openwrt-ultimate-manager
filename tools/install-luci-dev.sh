@@ -9,7 +9,7 @@ REPO_DIR="$(CDPATH= cd -- "$SOURCE_DIR/.." && pwd)"
 [ -f "$REPO_DIR/helpers/source_converter.rb" ] || { echo "Converter source not found" >&2; exit 1; }
 
 mkdir -p /etc/config /usr/share/luci/menu.d /usr/share/ucode/luci/controller /usr/share/rpcd/acl.d /usr/share/rpcd/ucode \
-	/usr/libexec/oum /www/luci-static/resources/view/oum /www/luci-static/resources/oum
+	/usr/libexec/oum /www/luci-static/resources/view/oum /www/luci-static/resources/oum /etc/init.d
 
 [ -f /etc/config/oum ] || cp "$SOURCE_DIR/root/etc/config/oum" /etc/config/oum
 cp "$SOURCE_DIR/root/usr/share/luci/menu.d/luci-app-oum.json" /usr/share/luci/menu.d/luci-app-oum.json
@@ -45,6 +45,9 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-login-default" /usr/libexec/oum-login-defau
 cp "$SOURCE_DIR/root/usr/libexec/oum-dropbear-blank-password" /usr/libexec/oum-dropbear-blank-password
 cp "$SOURCE_DIR/root/usr/libexec/oum-gearup" /usr/libexec/oum-gearup
 cp "$SOURCE_DIR/root/usr/libexec/oum-upstream-check" /usr/libexec/oum-upstream-check
+cp "$SOURCE_DIR/root/usr/libexec/oum-support" /usr/libexec/oum-support
+cp "$SOURCE_DIR/root/usr/libexec/oum-support-shell" /usr/libexec/oum-support-shell
+cp "$SOURCE_DIR/root/etc/init.d/oum-support" /etc/init.d/oum-support
 cp "$REPO_DIR/dist/oum-test.sh" /usr/libexec/oum-runtime.sh
 cp "$REPO_DIR/helpers/source_converter.rb" /usr/libexec/oum/source_converter.rb
 rm -f /www/luci-static/resources/view/oum/first-run.js \
@@ -81,6 +84,7 @@ chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/ou
 	/usr/libexec/oum-dropbear-blank-password \
 	/usr/libexec/oum-gearup \
 	/usr/libexec/oum-upstream-check \
+	/usr/libexec/oum-support /usr/libexec/oum-support-shell /etc/init.d/oum-support \
 	/usr/libexec/oum-runtime.sh
 chmod 600 /usr/libexec/oum/source_converter.rb
 mkdir -p /usr/share/oum
@@ -104,6 +108,8 @@ elif [ -e /usr/lib/opkg/status ]; then
 	touch /usr/lib/opkg/status 2>/dev/null || true
 fi
 /usr/libexec/oum-login-default
+/etc/init.d/oum-support enable >/dev/null 2>&1 || true
+/usr/libexec/oum-support cleanup-boot >/dev/null 2>&1 || true
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart
 

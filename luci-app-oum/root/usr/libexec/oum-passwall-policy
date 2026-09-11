@@ -47,35 +47,35 @@ append_word() {
 	fi
 }
 
-find_shunt_rule() {
-	local section="$1" remarks
-	config_get remarks "$section" remarks ''
-	case "$remarks" in
-		full_exception) DIRECT_RULE="$section" ;;
-		full_redirection) VPN_RULE="$section" ;;
-	esac
-}
+# Per-device routing rides on an OUM-owned passwall acl_rule (remarks marker):
+# sources are `ip:<addr>` entries with all-ports no_redir, i.e. a full bypass
+# that survives passwall restarts. Default stays VPN, so the vpn policy only
+# needs bookkeeping. NOTE: sources must be ONE space-joined string via
+# `uci set` — add_list breaks passwall's eval parser (findings 2026-09-06).
+ACL_REMARKS='OUM device direct'
+GAME_ACL_REMARKS='OUM gaming direct'
+GAME_TCP_PORTS='3074,3478-3480,5222-5223,27014-27050'
+GAME_UDP_PORTS='88,500,3074,3478-3479,3544,3658,4379-4380,4500,27000-27200'
 
-DIRECT_RULE=''
-VPN_RULE=''
-config_load passwall
-config_foreach find_shunt_rule shunt_rules
-[ -n "$DIRECT_RULE" ] && [ -n "$VPN_RULE" ] || {
-	printf '%s\n' 'PassWall shunt rules full_exception/full_redirection were not found.' > "$PASSWALL_LOG"
-	exit 1
+find_oum_acl() {
+	local remarks="$1" line sec
+	uci -q show passwall 2>/dev/null | while IFS= read -r line; do
+		case "$line" in
+			*=acl_rule) sec="${line%%=*}"; sec="${sec##*.}" ;;
+			*) continue ;;
+		esac
+		[ "$(uci -q get "passwall.$sec.remarks")" = "$remarks" ] && { printf '%s' "$sec"; return 0; }
+	done
+	return 1
 }
-
 cp /etc/config/passwall "$PASSWALL_BACKUP"
 cp /etc/config/dhcp "$DHCP_BACKUP"
 cp /etc/config/oum "$OUM_BACKUP"
 chmod 600 "$PASSWALL_BACKUP" "$DHCP_BACKUP" "$OUM_BACKUP"
 
-old_direct="$(uci -q get oum.main.managed_passwall_direct_ips || true)"
-old_vpn="$(uci -q get oum.main.managed_passwall_vpn_ips || true)"
-direct_source="$(without_words "$(uci -q get "passwall.$DIRECT_RULE.source" || true)" "$old_direct")"
-vpn_source="$(without_words "$(uci -q get "passwall.$VPN_RULE.source" || true)" "$old_vpn")"
-direct_ips=''
 vpn_ips=''
+direct_ips=''
+gaming_ips=''
 
 for section in $(uci -q show dhcp | sed -n "s/^dhcp\.\(oum_[A-Za-z0-9_]*\)=host$/\1/p"); do
 	uci -q delete "dhcp.$section" || true
@@ -94,11 +94,12 @@ apply_device() {
 	case "$policy" in
 		direct)
 			direct_ips="$(append_word "$direct_ips" "$ip")"
-			direct_source="$(append_word "$direct_source" "$ip")"
+			;;
+		gaming)
+			gaming_ips="$(append_word "$gaming_ips" "$ip")"
 			;;
 		vpn)
 			vpn_ips="$(append_word "$vpn_ips" "$ip")"
-			vpn_source="$(append_word "$vpn_source" "$ip")"
 			;;
 		*) return 0 ;;
 	esac
@@ -112,17 +113,6 @@ apply_device() {
 config_load oum
 config_foreach apply_device device
 
-if [ -n "$direct_source" ]; then
-	uci -q set "passwall.$DIRECT_RULE.source=$direct_source"
-else
-	uci -q delete "passwall.$DIRECT_RULE.source" || true
-fi
-if [ -n "$vpn_source" ]; then
-	uci -q set "passwall.$VPN_RULE.source=$vpn_source"
-else
-	uci -q delete "passwall.$VPN_RULE.source" || true
-fi
-
 if [ -n "$direct_ips" ]; then
 	uci -q set "oum.main.managed_passwall_direct_ips=$direct_ips"
 else
@@ -133,10 +123,79 @@ if [ -n "$vpn_ips" ]; then
 else
 	uci -q delete oum.main.managed_passwall_vpn_ips || true
 fi
+if [ -n "$gaming_ips" ]; then
+	uci -q set "oum.main.managed_passwall_gaming_ips=$gaming_ips"
+else
+	uci -q delete oum.main.managed_passwall_gaming_ips || true
+fi
 
-uci -q commit passwall
 uci -q commit dhcp
 uci -q commit oum
+# Legacy key from the short-lived shunt-based attempt (2026-09-07): drop it.
+uci -q delete oum.main.bypass_direct_ips 2>/dev/null || true
+uci commit oum 2>/dev/null || true
+# Sync the OUM acl_rule (anonymous, remarks marker) with direct-policy IPs.
+# Sources must be BARE IPs (no `ip:` prefix — acl_app adds it itself;
+# only `ipset:` keeps a prefix). Single space-joined string via `uci set`.
+# Acls must be anonymous: passwall's gate matches @acl_rule only.
+acl_sources=''
+for ip in $direct_ips; do
+	acl_sources="${acl_sources:+$acl_sources }$ip"
+done
+acl_sec="$(find_oum_acl "$ACL_REMARKS" || true)"
+if [ -n "$acl_sources" ]; then
+	if [ -z "$acl_sec" ]; then
+		acl_sec="$(uci add passwall acl_rule)" || {
+			cp "$PASSWALL_BACKUP" /etc/config/passwall
+			cp "$DHCP_BACKUP" /etc/config/dhcp
+			cp "$OUM_BACKUP" /etc/config/oum
+			chmod 600 /etc/config/passwall /etc/config/dhcp /etc/config/oum
+			printf '%s\n' 'Cannot create passwall acl_rule.' > "$PASSWALL_LOG"
+			rm -f "$PASSWALL_BACKUP" "$DHCP_BACKUP" "$OUM_BACKUP"
+			exit 1
+		}
+	fi
+	uci -q set "passwall.$acl_sec.enabled=1"
+	uci -q set "passwall.$acl_sec.remarks=$ACL_REMARKS"
+	uci -q set "passwall.$acl_sec.sources=$acl_sources"
+	uci -q set "passwall.$acl_sec.tcp_no_redir_ports=1-65535"
+	uci -q set "passwall.$acl_sec.udp_no_redir_ports=1-65535"
+	uci -q set "passwall.@global[0].acl_enable=1"
+	uci commit passwall
+else
+	if [ -n "$acl_sec" ]; then
+		uci -q delete "passwall.$acl_sec"
+		uci commit passwall
+	fi
+fi
+
+# A gaming device keeps normal OUM routing for web traffic, while common
+# Steam/console transport ports bypass the transparent proxy. Domain-based
+# game routing is owned by oum_games in the shunt profile.
+game_acl_sec="$(find_oum_acl "$GAME_ACL_REMARKS" || true)"
+if [ -n "$gaming_ips" ]; then
+	if [ -z "$game_acl_sec" ]; then
+		game_acl_sec="$(uci add passwall acl_rule)" || {
+			cp "$PASSWALL_BACKUP" /etc/config/passwall
+			cp "$DHCP_BACKUP" /etc/config/dhcp
+			cp "$OUM_BACKUP" /etc/config/oum
+			chmod 600 /etc/config/passwall /etc/config/dhcp /etc/config/oum
+			printf '%s\n' 'Cannot create passwall gaming acl_rule.' > "$PASSWALL_LOG"
+			rm -f "$PASSWALL_BACKUP" "$DHCP_BACKUP" "$OUM_BACKUP"
+			exit 1
+		}
+	fi
+	uci -q set "passwall.$game_acl_sec.enabled=1"
+	uci -q set "passwall.$game_acl_sec.remarks=$GAME_ACL_REMARKS"
+	uci -q set "passwall.$game_acl_sec.sources=$gaming_ips"
+	uci -q set "passwall.$game_acl_sec.tcp_no_redir_ports=$GAME_TCP_PORTS"
+	uci -q set "passwall.$game_acl_sec.udp_no_redir_ports=$GAME_UDP_PORTS"
+	uci -q set passwall.@global[0].acl_enable=1
+	uci commit passwall
+elif [ -n "$game_acl_sec" ]; then
+	uci -q delete "passwall.$game_acl_sec"
+	uci commit passwall
+fi
 /etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
 
 # Updating an intentionally disabled PassWall instance does not require Xray

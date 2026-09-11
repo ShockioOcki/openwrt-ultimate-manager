@@ -1,0 +1,12 @@
+#!/bin/sh /etc/rc.common
+
+START=12
+STOP=88
+
+start() {
+	[ ! -x /usr/libexec/oum-support ] || /usr/libexec/oum-support cleanup-boot >/dev/null 2>&1
+}
+
+stop() {
+	[ ! -x /usr/libexec/oum-support ] || /usr/libexec/oum-support stop boot >/dev/null 2>&1
+}

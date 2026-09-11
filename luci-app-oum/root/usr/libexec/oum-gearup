@@ -85,7 +85,36 @@ do_install() {
 	pidof guplugin >/dev/null 2>&1 || { log "guplugin not running"; return 1; }
 	write_restore_init
 	save_persist || return 1
+	ensure_firewall_env || log "firewall env incomplete, see log"
 	log "installed, bind the router in the GearUP mobile app"
+	return 0
+}
+
+ensure_firewall_env() {
+	cat > /etc/nftables.d/11-oum-gearup.nft <<'EOF'
+chain oum_gearup_out_mark {
+	type route hook output priority -149; policy accept;
+	ip protocol udp udp dport 1100 meta mark set 0x119 comment "OUM GearUP relay probes via tunnel"
+}
+EOF
+	if [ -f /etc/rc.local ]; then
+		grep -q "fwmark 0x119 table 119" /etc/rc.local || sed -i '/^exit 0$/i ip rule add fwmark 0x119 table 119 priority 996 2>/dev/null' /etc/rc.local
+	fi
+	ip rule add fwmark 0x119 table 119 priority 996 2>/dev/null || true
+	uci -q set network.gu119=interface
+	uci -q set network.gu119.proto="none"
+	uci -q set network.gu119.device="gu119"
+	uci commit network
+	local z found=0
+	for z in $(uci show firewall 2>/dev/null | sed -n "s/^\(firewall\.[^.]*\)=zone$/\1/p"); do
+		if [ "$(uci -q get "$z.name")" = "lan" ]; then
+			uci -q add_list "$z.device=gu119"
+			uci commit firewall
+			found=1
+		fi
+	done
+	[ "$found" = 1 ] || { log "lan zone not found"; return 1; }
+	/etc/init.d/firewall reload >/dev/null 2>&1 || true
 	return 0
 }
 
@@ -114,8 +143,19 @@ do_uninstall() {
 			fi
 		fi
 	fi
-	killall guplugin xuplugin-guardian 2>/dev/null || true
+	kill_gearup_procs() {
+		local pids pid
+		pids="$(ps 2>/dev/null | grep -v 'awk' | awk '/guplugin_monitor\.sh|xuplugin-guardian|guplugin /{print $1}')"
+		for pid in $pids; do kill "$pid" 2>/dev/null || true; done
+	}
+	kill_gearup_procs
+	sleep 3
+	kill_gearup_procs
 	sleep 2
+	for pid in $(ps 2>/dev/null | grep -v 'awk' | awk '/guplugin_monitor\.sh|xuplugin-guardian|guplugin /{print $1}'); do
+		kill -9 "$pid" 2>/dev/null || true
+	done
+	sleep 1
 	rm -rf /tmp/gu /usr/sbin/gu
 	rm -f /etc/rc.d/S99guplugin /etc/rc.d/S50gearup_restore
 	rm -f "$RESTORE_INIT" /etc/init.d/gearup_restore

@@ -19,6 +19,8 @@ const ZAPRET_STRATEGY_STATE = '/etc/oum/zapret-strategy-state';
 const TRAFFIC_CURRENT = '/tmp/oum-traffic-current.tsv';
 const TRAFFIC_HISTORY = '/tmp/oum-traffic-history.tsv';
 const TRAFFIC_TIMESTAMP = '/tmp/oum-traffic-timestamp';
+const SUPPORT_DIR = '/tmp/oum-support';
+const SUPPORT_AUDIT = '/etc/oum/support/audit.log';
 
 function shellquote(value) {
 	return `'${replace(value ?? '', "'", "'\\''")}'`;
@@ -90,6 +92,32 @@ function clearSystemJobStatus(action, code) {
 	if (system(`rm -f ${SYSTEM_JOB_DIR}/status`) != 0)
 		return failure('status_clear_failed', 'Не удалось очистить завершённое уведомление.');
 	return { ok: true };
+}
+
+function supportStatusData() {
+	if (!access('/usr/libexec/oum-support'))
+		return { available: false, state: 'unavailable', message: 'Компонент удалённой поддержки не установлен.' };
+	let process = popen('/usr/libexec/oum-support status 2>/dev/null');
+	if (process) {
+		process.read('all');
+		process.close();
+	}
+	let value = readKeyValues(`${SUPPORT_DIR}/status`, [ 'state', 'mode', 'hostname', 'port', 'connect_command', 'provider', 'started_at', 'expires_at', 'message', 'backup_available' ]);
+	return {
+		available: true,
+		client_ready: system("ssh -V 2>&1 | grep -qi OpenSSH") == 0,
+		state: value.state ?? 'idle',
+		mode: value.mode ?? '',
+		hostname: value.hostname ?? '',
+		port: +(value.port ?? 0),
+		connect_command: value.connect_command ?? '',
+		provider: value.provider ?? 'pinggy',
+		started_at: +(value.started_at ?? 0),
+		expires_at: +(value.expires_at ?? 0),
+		message: value.message ?? 'Удалённая поддержка выключена.',
+		backup_available: value.backup_available == '1',
+		audit: readfile(SUPPORT_AUDIT) ?? ''
+	};
 }
 
 function zapretOptions() {
@@ -1486,6 +1514,65 @@ const methods = {
 		}
 	},
 
+	supportStatus: {
+		call: function() {
+			return supportStatusData();
+		}
+	},
+
+	startSupportSession: {
+		args: { mode: '', duration: 0, consent: false },
+		call: function(request) {
+			let args = request.args;
+			if (supportStatusData().state == 'active')
+				return failure('support_already_active', 'Сеанс удалённой поддержки уже активен.');
+			if (!(args.mode in [ 'diagnostic', 'repair' ]))
+				return failure('invalid_mode', 'Выберите режим удалённой поддержки.');
+			if (!(args.duration in [ 15, 30, 60 ]))
+				return failure('invalid_duration', 'Выберите срок 15, 30 или 60 минут.');
+			if (args.consent != true)
+				return failure('consent_required', 'Подтвердите временный удалённый доступ.');
+			if (!supportStatusData().client_ready)
+				return failure('openssh_missing', 'Для Pinggy нужен пакет openssh-client. Обновите OUM или установите пакет.');
+			if (!access('/etc/oum/support/support_key.pub'))
+				return failure('support_key_missing', 'Публичный ключ поддержки отсутствует в комплекте OUM.');
+			if (system(`mkdir -p ${SUPPORT_DIR} && chmod 700 ${SUPPORT_DIR}`) != 0)
+				return failure('support_prepare_failed', 'Не удалось подготовить временный сеанс.');
+			let now = time();
+			let requestData = `mode=${args.mode}\nstarted_at=${now}\nexpires_at=${now + args.duration * 60}\n`;
+			if (!writePrivate(`${SUPPORT_DIR}/request`, requestData)) {
+				system(`rm -f ${SUPPORT_DIR}/request`);
+				return failure('support_prepare_failed', 'Не удалось сохранить временные параметры сеанса.');
+			}
+			if (system('/usr/libexec/oum-support start >/tmp/oum-support-start.log 2>&1') != 0)
+				return failure('support_start_failed', supportStatusData().message ?? 'Не удалось открыть удалённый доступ.');
+			return { ok: true, ...supportStatusData() };
+		}
+	},
+
+	stopSupportSession: {
+		call: function() {
+			if (!access('/usr/libexec/oum-support'))
+				return failure('runtime_missing', 'Компонент удалённой поддержки не установлен.');
+			if (system('/usr/libexec/oum-support stop >/tmp/oum-support-stop.log 2>&1') != 0)
+				return failure('support_stop_failed', 'Не удалось завершить сеанс.');
+			return { ok: true, ...supportStatusData() };
+		}
+	},
+
+	restoreSupportBackup: {
+		call: function() {
+			let status = supportStatusData();
+			if (status.state == 'active')
+				return failure('support_active', 'Сначала завершите сеанс удалённой поддержки.');
+			if (!status.backup_available)
+				return failure('backup_missing', 'Страховочная копия недоступна.');
+			if (system('/usr/libexec/oum-support restore >/tmp/oum-support-restore-start.log 2>&1') != 0)
+				return failure('restore_failed', 'Не удалось запустить восстановление.');
+			return { ok: true, message: 'Настройки восстанавливаются; роутер будет перезагружен.' };
+		}
+	},
+
 	clearSystemJobStatus: {
 		args: { action: '', code: '' },
 		call: function(request) {
@@ -2141,8 +2228,10 @@ const methods = {
 			let policy = request.args.policy ?? 'default';
 			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
 				return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
-			if (!(policy in [ 'default', 'direct', 'vpn' ]))
+			if (!(policy in [ 'default', 'direct', 'gaming', 'vpn' ]))
 				return failure('invalid_policy', 'Неизвестный режим маршрутизации.');
+			if (policy == 'gaming' && !passwallInstalled())
+				return failure('gaming_requires_passwall', 'Режим «Игры напрямую» пока поддерживается только PassWall.');
 
 			const uci = cursor();
 			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];

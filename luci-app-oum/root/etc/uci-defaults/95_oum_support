@@ -1,0 +1,6 @@
+#!/bin/sh
+
+/etc/init.d/oum-support enable >/dev/null 2>&1 || true
+/usr/libexec/oum-support cleanup-boot >/dev/null 2>&1 || true
+
+exit 0

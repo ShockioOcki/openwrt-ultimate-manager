@@ -235,6 +235,7 @@ body.theme-oum h2 { margin: 0 0 18px; font-size: 22px; }
 .cbi-value:last-child { border-bottom: 0; }
 .cbi-value-title { width: auto; padding: 9px 0 0; color: var(--oum-ink); font-weight: 650; }
 .cbi-value-field { width: auto; min-width: 0; }
+body.theme-oum .cbi-value > .cbi-section, body.theme-oum .cbi-value > .cbi-tblsection { grid-column: 1 / -1; min-width: 0; }
 
 input, select, textarea, .cbi-input-select, .cbi-dropdown {
   min-height: 42px;
@@ -758,7 +759,7 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
 body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:first-child > .cbi-section-node > .cbi-value:nth-child(4) > .cbi-section {
   border-color: #efd09f;
 }
-@media (max-width: 900px) {
+@media (max-width: 650px) {
   body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:first-child > .cbi-section-node {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -810,18 +811,117 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
   .oum-system-sidebar-actions .btn, .oum-system-sidebar-foot .oum-luci-admin { min-height: 44px; }
 }
 
-@media (max-width: 650px) {
+@media (max-width: 900px) {
+  html, body.theme-oum, #oum-system-shell, #oum-system-stage { width: 100%; max-width: 100%; overflow-x: clip; }
   #oum-system-header {
+    position: sticky;
+    min-height: 56px;
     padding-top: max(8px, env(safe-area-inset-top));
     padding-right: max(12px, env(safe-area-inset-right));
     padding-bottom: 8px;
     padding-left: max(12px, env(safe-area-inset-left));
   }
   .oum-system-title small, .oum-system-indicators { display: none; }
+  .oum-system-title strong { font-size: 17px; }
   #maincontent.container {
-    padding: 16px max(12px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 14px max(12px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   }
-  .cbi-section, .panel { padding: 16px; border-radius: 12px; }
+  body.theme-oum #maincontent > h2,
+  body.theme-oum #maincontent > .cbi-map > h2 { margin: 2px 0 14px; font-size: 20px; line-height: 1.25; }
+  .cbi-map, .cbi-section, .cbi-section-node, .panel, .table { min-width: 0; max-width: 100%; }
+  .cbi-section, .panel { margin-bottom: 12px; padding: 14px; border-radius: 12px; }
+  .cbi-section > h3, .panel > h3 { margin-top: 0; font-size: 17px; }
+  .cbi-section-descr, .cbi-value-description, .help-block { font-size: 12px; line-height: 1.45; }
+  .cbi-value { display: grid; width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 11px 0; }
+  .cbi-value-title { display: block; width: 100% !important; margin: 0; padding: 0; font-size: 13px; }
+  .cbi-value-field { display: block; width: 100% !important; min-width: 0; margin: 0 !important; }
+  .cbi-value-field > input:not([type="checkbox"]):not([type="radio"]),
+  .cbi-value-field > select,
+  .cbi-value-field > textarea,
+  .cbi-value-field > .cbi-dropdown,
+  .cbi-value-field > .cbi-dynlist { width: 100% !important; max-width: 100% !important; }
+  body.theme-oum .cbi-page-actions,
+  body.theme-oum .cbi-section-actions > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  body.theme-oum .cbi-page-actions .btn,
+  body.theme-oum .cbi-page-actions .cbi-button { flex: 1 1 140px; margin: 0 !important; }
+
+  /* Stock LuCI records become touch-friendly cards instead of a clipped desktop grid. */
+  body.theme-oum .table:not(.assoclist),
+  body.theme-oum .table:not(.assoclist) > tbody { display: block; width: 100% !important; min-width: 0 !important; }
+  body.theme-oum .table:not(.assoclist) > .tr,
+  body.theme-oum .table:not(.assoclist) > tbody > .tr,
+  body.theme-oum .table:not(.assoclist) > tbody > tr { display: grid; width: 100% !important; min-width: 0 !important; margin: 0 0 10px; padding: 5px 0; grid-template-columns: minmax(0, 1fr); border: 1px solid var(--oum-line); border-radius: 11px; background: var(--oum-paper); overflow: hidden; }
+  body.theme-oum .table:not(.assoclist) > .tr.table-titles,
+  body.theme-oum .table:not(.assoclist) > tbody > .tr.table-titles { display: none !important; }
+  body.theme-oum .table:not(.assoclist) .td,
+  body.theme-oum .table:not(.assoclist) td { display: grid; width: 100% !important; min-width: 0 !important; padding: 9px 11px; grid-template-columns: minmax(96px, 38%) minmax(0, 1fr); gap: 10px; align-items: center; border: 0; border-bottom: 1px solid var(--oum-line); background: transparent; overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+  body.theme-oum .table:not(.assoclist) .td:last-child,
+  body.theme-oum .table:not(.assoclist) td:last-child { border-bottom: 0; }
+  body.theme-oum .table:not(.assoclist) .td[data-title]::before,
+  body.theme-oum .table:not(.assoclist) td[data-title]::before { content: attr(data-title); display: block; color: var(--oum-faint); font-size: 10px; font-weight: 750; letter-spacing: .04em; line-height: 1.25; text-transform: uppercase; }
+  body.theme-oum .table:not(.assoclist) .td.cbi-section-actions,
+  body.theme-oum .table:not(.assoclist) td.cbi-section-actions { display: flex; padding: 10px 11px; flex-wrap: wrap; gap: 8px; }
+  body.theme-oum .table:not(.assoclist) .td.cbi-section-actions::before,
+  body.theme-oum .table:not(.assoclist) td.cbi-section-actions::before { flex: 0 0 100%; }
+  body.theme-oum .table:not(.assoclist) .td.cbi-section-actions .btn,
+  body.theme-oum .table:not(.assoclist) td.cbi-section-actions .btn { flex: 1 1 120px; margin: 0 !important; }
+  body.theme-oum .table .placeholder { min-height: 48px; place-items: center; color: var(--oum-subtle); }
+
+  /* Overview system facts are one compact key/value list, not nine record cards. */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent > div > .cbi-section:first-child .table,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent > div > .cbi-section:first-child .table > tbody {
+    display: table;
+    width: 100% !important;
+    table-layout: fixed;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent > div > .cbi-section:first-child .table .tr,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent > div > .cbi-section:first-child .table tr {
+    display: table-row;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent > div > .cbi-section:first-child .table .td,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent > div > .cbi-section:first-child .table td {
+    display: table-cell;
+    width: auto !important;
+    padding: 10px 8px;
+    border: 0;
+    border-bottom: 1px solid var(--oum-line);
+    background: transparent;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent > div > .cbi-section:first-child .table tr:last-child td { border-bottom: 0; }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent > div > .cbi-section:first-child .table td:first-child {
+    width: 38% !important;
+    padding-left: 0;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent > div > .cbi-section:first-child .table td:last-child {
+    padding-right: 0;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* Dense live tables keep their information and scroll only inside the card. */
+  body.theme-oum table.assoclist,
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table,
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent table { display: block; width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+  body.theme-oum table.assoclist > tbody,
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table > tbody { display: table; min-width: 680px; }
+  body.theme-oum .tabs, body.theme-oum .cbi-tabmenu { width: 100%; gap: 4px; padding: 3px; border: 0; border-radius: 11px; background: var(--oum-paper-soft); scrollbar-width: none; }
+  body.theme-oum .tabs::-webkit-scrollbar, body.theme-oum .cbi-tabmenu::-webkit-scrollbar { display: none; }
+  body.theme-oum .tabs > li > a, body.theme-oum .cbi-tabmenu > li > a { min-height: 40px; padding: 9px 11px; border: 0; border-radius: 8px; white-space: nowrap; }
+  body.theme-oum .tabs > li.active > a, body.theme-oum .cbi-tabmenu > li.cbi-tab > a { background: var(--oum-paper); color: var(--oum-action); box-shadow: 0 1px 3px rgba(23,35,31,.08); }
   .oum-system-footer {
     display: grid;
     padding: 16px max(14px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
@@ -831,6 +931,51 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
   .oum-login-brand { margin-bottom: 26px; }
   .oum-login-local { top: 27px; right: 22px; }
   .oum-login-form { padding: 24px 22px 20px; }
+  /* stock LuCI modal (wireless etc.): fullscreen-ish sheet, stacked tabs, 42px targets. */
+  body.theme-oum #modal_overlay > .modal.cbi-modal {
+    width: calc(100vw - 24px);
+    max-width: none;
+    margin: 12px auto;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+  body.theme-oum #modal_overlay .cbi-tabmenu {
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+    border-bottom: 0;
+    overflow-x: visible;
+  }
+  body.theme-oum #modal_overlay .cbi-tabmenu > li { max-width: none; flex: 0 0 auto; }
+  body.theme-oum #modal_overlay .cbi-tabmenu > li > a {
+    white-space: normal;
+    overflow: visible;
+    font-size: 14px;
+    padding: 11px 12px;
+    border: 1px solid var(--oum-line);
+    border-radius: 10px;
+  }
+  body.theme-oum #modal_overlay .cbi-tabmenu > li.cbi-tab > a {
+    border-color: var(--oum-action);
+    background: rgba(37, 99, 235, .08);
+  }
+  body.theme-oum #modal_overlay .cbi-value-field label[style*="float"] {
+    float: none !important;
+    display: block;
+    margin: 0 0 10px !important;
+  }
+  body.theme-oum #modal_overlay .cbi-value-field label[style*="float"] > select { width: 100% !important; }
+  body.theme-oum #modal_overlay .modal.cbi-modal button,
+  body.theme-oum #modal_overlay .modal.cbi-modal select { min-height: 42px; }
+  body.theme-oum #modal_overlay .modal.cbi-modal .cbi-checkbox { min-height: 42px; }
+  body.theme-oum #modal_overlay .ifacebadge.large { min-width: 0; width: 100%; box-sizing: border-box; }
+  /* stock wireless list: 42px targets, wrapping action rows, scrolling assoc table. */
+  body.theme-oum .btn, body.theme-oum .cbi-button, body.theme-oum button { min-height: 42px; }
+  body.theme-oum #cbi-wireless .td.cbi-section-actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
+  body.theme-oum #cbi-wireless .td.cbi-section-actions .cbi-button { flex: 1 1 auto; white-space: nowrap; }
+  body.theme-oum #cbi-wireless table.assoclist { display: block; overflow-x: auto; }
+  /* processes: wide table scrolls inside viewport instead of stretching layout. */
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table { display: block; overflow-x: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -859,8 +1004,8 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
   gap: 10px;
   overflow: auto;
   border-radius: 22px 22px 0 0;
-  background: #fff !important;
-  color: #0f172a;
+  background: var(--oum-paper) !important;
+  color: var(--oum-ink);
   box-shadow: 0 -20px 56px rgba(15, 23, 42, .2);
 }
 .oum-mobile-menu-handle {
@@ -869,7 +1014,7 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
   height: 4px;
   margin: 0 auto 8px;
   border-radius: 99px;
-  background: #e5e7eb;
+  background: var(--oum-line-strong);
 }
 .oum-mobile-menu-head {
   display: flex;
@@ -881,7 +1026,7 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
 }
 .oum-mobile-menu-head h3 {
   margin: 0;
-  color: #0f172a;
+  color: var(--oum-ink);
   font-size: 16px;
   font-weight: 750;
   letter-spacing: -.015em;
@@ -895,10 +1040,10 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
   margin: 0 !important;
   padding: 0 !important;
   place-items: center;
-  border: 1px solid #e5e7eb !important;
+  border: 1px solid var(--oum-line) !important;
   border-radius: 10px !important;
-  background: #f8fafc !important;
-  color: #64748b !important;
+  background: var(--oum-paper-soft) !important;
+  color: var(--oum-subtle) !important;
   font-size: 16px !important;
   font-weight: 400 !important;
   line-height: 1 !important;
@@ -910,24 +1055,24 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--oum-line);
   border-radius: 12px;
-  background: #fff;
-  color: #0f172a !important;
+  background: var(--oum-paper);
+  color: var(--oum-ink) !important;
   font-size: 13px;
   font-weight: 600;
   text-decoration: none !important;
 }
 .oum-mobile-menu-luci b {
-  color: #9ca3af;
+  color: var(--oum-faint);
   font-size: 20px;
   font-weight: 400;
   line-height: 1;
 }
 .oum-mobile-menu-theme { display: grid; gap: 6px; }
-.oum-mobile-menu-theme > span { font-size: 11px; font-weight: 700; color: #0f172a; }
+.oum-mobile-menu-theme > span { font-size: 11px; font-weight: 700; color: var(--oum-ink); }
 .oum-mobile-menu-seg {
-  background: #f1f5f9 !important;
+  background: var(--oum-paper-soft) !important;
   padding: 3px !important;
   border-radius: 12px !important;
   display: grid !important;
@@ -942,20 +1087,20 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
   border-radius: 8px !important;
   border: none !important;
   background: transparent !important;
-  color: #64748b !important;
+  color: var(--oum-subtle) !important;
 }
 .oum-mobile-menu-seg button.is-active {
-  background: #fff !important;
-  color: #0f172a !important;
+  background: var(--oum-paper) !important;
+  color: var(--oum-ink) !important;
   box-shadow: 0 1px 3px rgba(0,0,0,.08) !important;
 }
 .oum-mobile-menu-btn {
   min-height: 44px !important;
   width: 100% !important;
-  border: 1px solid #e5e7eb !important;
+  border: 1px solid var(--oum-line) !important;
   border-radius: 12px !important;
-  background: #fff !important;
-  color: #0f172a !important;
+  background: var(--oum-paper) !important;
+  color: var(--oum-ink) !important;
   font-size: 13px !important;
   font-weight: 600 !important;
 }
@@ -965,7 +1110,7 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
   color: #dc2626 !important;
 }
 .oum-mobile-menu-btn:disabled { opacity: .5; }
-.oum-mobile-menu-foot { text-align: center; color: #9ca3af; font-size: 11px; margin-top: 2px; }
+.oum-mobile-menu-foot { text-align: center; color: var(--oum-faint); font-size: 11px; margin-top: 2px; }
 
 /* override bootstrap dark header inside mobile menu sheet */
 .oum-mobile-menu-panel > header.oum-mobile-menu-head {
@@ -974,10 +1119,58 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
   margin: 0 !important;
   padding: 0 !important;
   overflow: visible !important;
-  background: #fff !important;
+  background: var(--oum-paper) !important;
   background-image: none !important;
   box-shadow: none !important;
-  color: #0f172a !important;
+  color: var(--oum-ink) !important;
+}
+
+/* Standard LuCI mobile: four destinations, subpages in a bottom sheet. */
+#oum-luci-section-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 145;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(15, 23, 42, .52);
+  backdrop-filter: blur(2px);
+}
+#oum-luci-section-menu[hidden] { display: none !important; }
+.oum-luci-section-panel { gap: 8px; transition: transform .22s cubic-bezier(.2,.8,.2,1); }
+#oum-luci-section-menu .oum-mobile-menu-head,
+#oum-luci-section-menu .oum-mobile-menu-head h3 { color: var(--oum-ink) !important; }
+.oum-luci-section-links { display: grid; gap: 7px; }
+.oum-luci-section-links a {
+  display: flex;
+  min-height: 44px;
+  padding: 0 13px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--oum-line, #e5e7eb);
+  border-radius: 12px;
+  background: var(--oum-paper);
+  color: var(--oum-ink, #0f172a) !important;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none !important;
+}
+.oum-luci-section-links a::after { content: '›'; color: var(--oum-faint); font-size: 19px; font-weight: 400; }
+.oum-luci-section-links a.is-active { border-color: var(--oum-action); background: var(--oum-action-soft); color: var(--oum-action) !important; }
+:root[data-theme="dark"] .oum-luci-section-links a.is-active,
+:root[data-darkmode="true"] .oum-luci-section-links a.is-active { border-color: #5d8ee8; color: #93b7ff !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .oum-luci-section-panel { transition: none; }
+}
+
+@media (max-width: 900px) {
+  body.theme-oum.oum-has-mobile-nav #maincontent { padding-bottom: 72px !important; }
+  body.theme-oum:not([data-page="oum"]):not([data-page^="oum-"]) #oum-system-sidebar.is-open,
+  body.theme-oum:not([data-page="oum"]):not([data-page^="oum-"]) #oum-menu-overlay { display: none !important; }
+  .oum-luci-bottom-nav { box-shadow: 0 -5px 18px rgba(15, 23, 42, .07); }
+  .oum-luci-bottom-nav button { min-width: 0 !important; }
+  .oum-luci-bottom-nav button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 /* bare hub header must not inherit bootstrap sticky header (z-800 bleeds through sheets) */
@@ -1017,3 +1210,2215 @@ body.oum-act-open { overflow: hidden !important; }
 #topmenu > li.dropdown > a::after { content: '›'; margin-left: auto; padding-left: 8px; color: var(--oum-faint); font-size: 17px; font-weight: 400; line-height: 1; transition: transform .16s ease; }
 #topmenu > li.dropdown.open > a::after { transform: rotate(90deg); color: var(--oum-action); }
 #topmenu .dropdown-menu li.active > a { box-shadow: inset 2px 0 0 var(--oum-action); font-weight: 700; }
+
+/* sheets V3 compact (mobile19): hairline list instead of cards. */
+.oum-mobile-menu-panel{border-radius:20px 20px 0 0!important;padding:8px 12px calc(12px + env(safe-area-inset-bottom))!important;gap:4px!important;}
+.oum-mobile-menu-head{min-height:40px!important;}
+.oum-mobile-menu-head h3{font-size:16px!important;}
+.oum-mobile-menu-close{width:44px!important;height:44px!important;min-height:44px!important;border:none!important;background:transparent!important;}
+.oum-luci-section-links{gap:0!important;}
+.oum-luci-section-links a{border:none!important;border-radius:0!important;min-height:46px!important;padding:8px 4px!important;}
+.oum-luci-section-links a + a{border-top:1px solid var(--oum-line)!important;}
+.oum-mobile-menu-luci{border:none!important;border-radius:0!important;min-height:48px!important;padding:8px 4px!important;}
+.oum-mobile-menu-btn{min-height:46px!important;}
+
+/* Overview fact tables (mobile21): same compact native rows as System for every
+   fact table; leases/assoc keep their scroll. Plain hide label (no pill). */
+body.theme-oum[data-page="admin-status-overview"] h3 > span.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  margin: 0;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--oum-faint);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+body.theme-oum[data-page="admin-status-overview"] h3 > span.label::before {
+  content: '\203A';
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform .16s ease;
+}
+body.theme-oum[data-page="admin-status-overview"] h3 > span.label.notice::before {
+  transform: rotate(0deg);
+}
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr {
+    display: grid;
+    grid-template-columns: 124px minmax(0, 1fr);
+    gap: 4px 12px;
+    align-items: center;
+    margin: 0;
+    padding: 9px 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > .td,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow-wrap: anywhere;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr + tr {
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > .td:first-child,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > td:first-child {
+    padding-left: 0;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > .td:last-child,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > td:last-child {
+    padding-right: 0;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.leases,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.leases6 {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-progressbar {
+    height: 6px;
+    margin-top: 6px;
+    border: 0;
+    border-radius: 99px;
+    background: var(--oum-line);
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-progressbar::before {
+    position: static;
+    display: block;
+    margin-bottom: 3px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--oum-ink);
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-progressbar > div { border-radius: 99px; }
+}
+/* STAGING mobile25: Memory/Storage fact rows as per-row cards (like System cards
+   on screenshot 1), OUM-style content: label top, numbers + thick bar below.
+   NOTE: :not-chain repeated to beat generic mobile24 specificity (1,6,2). */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr {
+    display: block;
+    margin: 0 0 8px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--oum-line);
+    border-radius: 10px;
+    background: transparent;
+    overflow: visible;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr + tr {
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:first-child,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:first-child {
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--oum-line);
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:last-child,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:last-child {
+    padding-top: 8px;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar {
+    height: 8px;
+    margin-top: 8px;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar::before {
+    margin-bottom: 2px;
+  }
+}
+/* STAGING mobile26: Memory/Storage as flat OUM-mirror rows (supersedes mobile25 cards):
+   label left + numbers right on one line, thick full-width bar below, no cards.
+   Chain: tr(grid) > td + td(display:contents) > .cbi-progressbar(display:contents)
+   > ::before(numbers, row1) + div(fill, row2). Gray track rebuilt via tr::after
+   behind the fill (inline width:X% unreadable by CSS). :not-chain kept to beat
+   generic mobile24 specificity. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "label numbers" "bar bar";
+    column-gap: 10px;
+    margin: 0;
+    padding: 8px 2px 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr + tr {
+    border-top: 0;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr::after {
+    content: "";
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    bottom: 12px;
+    z-index: 0;
+    height: 10px;
+    border-radius: 99px;
+    background: var(--oum-line);
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:first-child,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:first-child {
+    grid-area: label;
+    align-self: baseline;
+    padding: 0;
+    border: 0;
+    color: var(--oum-subtle);
+    font-size: 13px;
+    font-weight: 600;
+    overflow-wrap: normal;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:last-child,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:last-child {
+    display: contents;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar {
+    display: contents;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar::before {
+    position: static;
+    display: block;
+    grid-area: numbers;
+    align-self: baseline;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.6;
+    color: var(--oum-ink);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar > div {
+    position: relative;
+    z-index: 1;
+    grid-area: bar;
+    height: 10px;
+    margin-top: 8px;
+    border-radius: 99px;
+  }
+}
+/* mobile27: Port status minimal — flat rows instead of 2x2 cards.
+   Row: status dot + name left, speed right; stats (RX/TX) second line small.
+   Down ports: dimmed single line, zero-stats hidden. Zone strip + icons removed
+   (status carried by dot + text). Scoped to sections containing .ifacebox. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) > div > div {
+    display: block !important;
+    margin: 0 !important;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name speed" "stats stats";
+    column-gap: 10px;
+    align-items: baseline;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 8px 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox + .ifacebox {
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(1) {
+    grid-area: name;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(1)::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    vertical-align: baseline;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) > div:nth-child(1)::before {
+    background: var(--oum-line-strong);
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) {
+    grid-area: speed;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: right;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) img,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) br {
+    display: none;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(3) {
+    display: none !important;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) {
+    grid-area: stats;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) br,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) .cbi-tooltip {
+    display: none;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) {
+    opacity: .55;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) > div:nth-child(4) {
+    display: none;
+  }
+}
+/* mobile28: ports beauty on top of mobile27 rows.
+   Scope excludes .network-status-table (mobile27 leak fix lives in repo). */
+@media (max-width: 900px) {
+  /* speed pill for live ports (down ports carry bare text, untouched) */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) span {
+    display: inline-block;
+    padding: 2px 10px;
+    border: 1px solid var(--oum-line-strong);
+    border-radius: 99px;
+    background: transparent;
+    color: var(--oum-ink);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    white-space: nowrap;
+  }
+  /* soft glow on live dot */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:not(:has(img[src*="port_down"])) > div:nth-child(1)::before {
+    box-shadow: 0 0 6px rgba(34, 197, 94, .6);
+  }
+  /* stats: two airy lines instead of merged run */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) br {
+    display: inline;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) .cbi-tooltip {
+    display: none;
+  }
+  /* dead-port rows tighter */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+}
+/* mobile29: kill Codex leftovers inflating port rows
+   (min-height:88px + flex on speed cell, 4-row template on card). */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox {
+    grid-template-rows: auto auto;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) {
+    display: block;
+    min-height: 0;
+  }
+}
+/* mobile30: connection card as bento mini-grid (all widths).
+   Facts: label small-caps above value, 2 cols mobile / 3 cols desktop. */
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox {
+  overflow: hidden;
+  border: 1px solid var(--oum-line);
+  border-radius: 14px;
+  background: var(--oum-paper);
+  box-shadow: none;
+}
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox > .ifacebox-head:first-child {
+  padding: 12px 14px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--oum-line);
+  background: transparent;
+  text-align: left !important;
+  text-shadow: none;
+  color: var(--oum-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox > .ifacebox-head:first-child::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, .6);
+  vertical-align: baseline;
+}
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox > .ifacebox-body {
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+}
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px 10px;
+}
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > br {
+  display: none;
+}
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > span.nowrap {
+  display: block;
+  min-width: 0;
+  white-space: normal;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > span.nowrap > strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--oum-faint);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > span.nowrap {
+  color: var(--oum-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > div {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--oum-line);
+}
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox span.ifacebadge {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--oum-subtle);
+  font-size: 12px;
+}
+body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox span.ifacebadge img {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  vertical-align: -4px;
+}
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+/* mobile31: clients card in bento language (mobile only).
+   Card grid: host + signal pill on top line, net line, RX/TX 2-col, button.
+   RX/TX caps generated via ::before (page lang is ru). Desktop untouched. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist > tbody {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100%;
+    overflow: visible;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr.table-titles {
+    display: none !important;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "host signal" "net net" "speed speed" "btn btn";
+    column-gap: 10px;
+    margin: 0 0 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--oum-line);
+    border-radius: 14px;
+    background: var(--oum-paper);
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow-wrap: anywhere;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title]::before {
+    display: none;
+  }
+  /* host: card title */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Хост"] {
+    grid-area: host;
+    align-self: center;
+    color: var(--oum-ink);
+    font-size: 15px;
+    font-weight: 700;
+  }
+  /* signal: right pill */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сигнал / Шум"] {
+    grid-area: signal;
+    align-self: center;
+    justify-self: end;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сигнал / Шум"] span.ifacebadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--oum-line-strong);
+    border-radius: 99px;
+    background: transparent;
+    box-shadow: none;
+    padding: 3px 10px 3px 8px;
+    color: var(--oum-ink);
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сигнал / Шум"] span.ifacebadge img {
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0;
+  }
+  /* net: quiet subline */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сеть"] {
+    grid-area: net;
+    margin-top: 4px;
+    color: var(--oum-subtle);
+    font-size: 12px;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сеть"] span.ifacebadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    color: var(--oum-subtle);
+    font-size: 12px;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сеть"] span.ifacebadge img {
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0;
+  }
+  /* speed: RX/TX 2-col with generated caps */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] {
+    grid-area: speed;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 10px;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > br {
+    display: none;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > span {
+    display: block;
+    min-width: 0;
+    color: var(--oum-ink);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > span:first-child::before {
+    content: "Приём";
+    display: block;
+    margin-bottom: 2px;
+    color: var(--oum-faint);
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > span:last-child::before {
+    content: "Передача";
+    display: block;
+    margin-bottom: 2px;
+    color: var(--oum-faint);
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  /* disconnect: quiet full-width outline */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions {
+    grid-area: btn;
+    padding-top: 10px;
+  }
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid rgba(220, 80, 80, .45);
+    border-radius: 10px;
+    background: transparent;
+    color: #e06868;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: none;
+  }
+}
+/* mobile32: nftables rules as stacked bento cards.
+   Beats the generic .table card layer (which squeezes badges into a
+   label/value grid) by higher specificity + later position.
+   No tbody in DOM — direct child selectors only. Desktop untouched. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules {
+    display: block;
+    width: 100% !important;
+    max-width: 100%;
+    overflow: visible;
+  }
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr:not(.table-titles) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    margin: 0 0 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--oum-line);
+    border-radius: 14px;
+    background: var(--oum-paper);
+  }
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr:not(.table-titles) > td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow-wrap: anywhere;
+  }
+  /* action cell: hairline divider, badges flow full width */
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr:not(.table-titles) > td + td {
+    margin-top: 10px;
+    padding-top: 10px !important;
+    border-top: 1px solid var(--oum-line);
+  }
+  /* conditions badges wrap as whole units, not mid-word */
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr:not(.table-titles) > td:first-child .ifacebadge {
+    flex-wrap: wrap;
+    gap: 2px 8px;
+  }
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr:not(.table-titles) > td:first-child .ifacebadge > var,
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr:not(.table-titles) > td:first-child .ifacebadge > strong {
+    flex: 0 0 auto;
+  }
+  /* upstream glues set items without spaces (establishedилиrelated) — breathe */
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr:not(.table-titles) > td:first-child .ifacebadge span > strong {
+    margin-left: 3px;
+    margin-right: 3px;
+  }
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr:not(.table-titles) > td + td .ifacebadge {
+    display: block;
+  }
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr:not(.table-titles) > td + td .ifacebadge > var,
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr:not(.table-titles) > td + td .ifacebadge > strong {
+    display: inline;
+  }
+}
+/* mobile33: syslog/dmesg viewer wraps long lines instead of a 2000px+
+   horizontal scroll inside the textarea. Read-only viewer only;
+   editable textareas untouched. Desktop untouched. */
+@media (max-width: 900px) {
+  /* filter form: label row + full-width control, one filter per block */
+  body.theme-oum[data-page^="admin-status-logs"] #logFacilitySelect,
+  body.theme-oum[data-page^="admin-status-logs"] #logSeveritySelect,
+  body.theme-oum[data-page^="admin-status-logs"] #logTextFilter,
+  body.theme-oum[data-page^="admin-status-logs"] #logMaxRows {
+    display: block;
+    width: 100% !important;
+    min-height: 42px;
+    margin: 4px 0 12px !important;
+  }
+  body.theme-oum[data-page^="admin-status-logs"] #content_syslog > div label,
+  body.theme-oum[data-page^="admin-status-logs"] #content_dmesg > div label {
+    margin-left: 0 !important;
+    margin-right: 5px !important;
+    color: var(--oum-subtle);
+    font-size: 13px;
+  }
+  /* scroll-to-end button: full-width thumb-friendly */
+  body.theme-oum[data-page^="admin-status-logs"] #scrollDownButton {
+    width: 100%;
+    min-height: 44px;
+  }
+  /* log viewer: wrapped lines in a compact box with its own scroll */
+  body.theme-oum[data-page^="admin-status-logs"] #syslog,
+  body.theme-oum[data-page^="admin-status-logs"] #dmesg {
+    display: block;
+    width: 100% !important;
+    max-width: 100%;
+    height: 60vh;
+    white-space: pre-wrap;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+    font-size: 11.5px;
+    line-height: 1.55;
+  }
+}
+
+/* ==========================================================================
+   OUM MINIMALIST DESIGN SYSTEM — REFINED TABS & FORMS (CBI / SYSTEM PROPERTIES)
+   ========================================================================== */
+
+/* 1. Sleek un-truncated tabs */
+body.theme-oum .tabs,
+body.theme-oum .cbi-tabmenu {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin: 0 0 22px 0 !important;
+  padding: 5px !important;
+  border: 1px solid var(--oum-line) !important;
+  border-radius: 12px !important;
+  background: var(--oum-paper-soft) !important;
+  overflow-x: auto !important;
+}
+
+[data-darkmode="true"] body.theme-oum .tabs,
+[data-darkmode="true"] body.theme-oum .cbi-tabmenu {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+body.theme-oum .tabs > li,
+body.theme-oum .cbi-tabmenu > li {
+  flex: 0 0 auto !important;
+  max-width: none !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  list-style: none !important;
+}
+
+body.theme-oum .tabs > li > a,
+body.theme-oum .cbi-tabmenu > li > a {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 8px 16px !important;
+  min-height: 38px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: var(--oum-subtle) !important;
+  font-size: 13px !important;
+  font-weight: 550 !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  background: transparent !important;
+  transition: all 0.15s ease !important;
+}
+
+body.theme-oum .tabs > li:hover > a,
+body.theme-oum .cbi-tabmenu > li:hover > a {
+  color: var(--oum-ink) !important;
+  background: rgba(125, 125, 125, 0.08) !important;
+}
+
+body.theme-oum .tabs > li.active > a,
+body.theme-oum .cbi-tabmenu > li.cbi-tab > a {
+  background: var(--oum-paper) !important;
+  color: var(--oum-action) !important;
+  font-weight: 650 !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-darkmode="true"] body.theme-oum .tabs > li.active > a,
+[data-darkmode="true"] body.theme-oum .cbi-tabmenu > li.cbi-tab > a {
+  background: #1f2839 !important;
+  color: #38bdf8 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* 2. Fix right-aligned labels -> Minimalist clean top/left layout */
+body.theme-oum .cbi-value {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+  padding: 16px 0 !important;
+  border-bottom: 1px solid var(--oum-line) !important;
+  margin: 0 !important;
+}
+
+[data-darkmode="true"] body.theme-oum .cbi-value {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+body.theme-oum .cbi-value:last-child {
+  border-bottom: 0 !important;
+}
+
+body.theme-oum .cbi-value label.cbi-value-title,
+body.theme-oum .cbi-value-title {
+  display: block !important;
+  width: 100% !important;
+  flex: none !important;
+  text-align: left !important;
+  padding: 0 !important;
+  margin: 0 0 2px 0 !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  color: var(--oum-ink) !important;
+  letter-spacing: 0.01em !important;
+}
+
+[data-darkmode="true"] body.theme-oum .cbi-value label.cbi-value-title,
+[data-darkmode="true"] body.theme-oum .cbi-value-title {
+  color: #cbd5e1 !important;
+}
+
+body.theme-oum .cbi-value-field {
+  width: 100% !important;
+  max-width: 680px !important;
+  margin-left: 0 !important;
+  flex: none !important;
+}
+
+/* 3. Inputs, Selects & Textareas */
+body.theme-oum .cbi-value-field input[type="text"]:not([type="checkbox"]):not([type="radio"]),
+body.theme-oum .cbi-value-field input[type="password"],
+body.theme-oum .cbi-value-field select,
+body.theme-oum .cbi-value-field textarea {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 42px !important;
+  padding: 10px 14px !important;
+  border-radius: 10px !important;
+  border: 1px solid var(--oum-line-strong) !important;
+  background: var(--oum-paper) !important;
+  color: var(--oum-ink) !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  outline: none !important;
+  box-sizing: border-box !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+[data-darkmode="true"] body.theme-oum .cbi-value-field input[type="text"]:not([type="checkbox"]):not([type="radio"]),
+[data-darkmode="true"] body.theme-oum .cbi-value-field input[type="password"],
+[data-darkmode="true"] body.theme-oum .cbi-value-field select,
+[data-darkmode="true"] body.theme-oum .cbi-value-field textarea {
+  background: #141a26 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #f1f5f9 !important;
+}
+
+body.theme-oum .cbi-value-field input:focus,
+body.theme-oum .cbi-value-field select:focus,
+body.theme-oum .cbi-value-field textarea:focus {
+  border-color: var(--oum-action) !important;
+  box-shadow: 0 0 0 3px var(--oum-action-ring) !important;
+}
+
+/* 4. Local Time widget styling */
+body.theme-oum .cbi-value-field input#localtime {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  background: var(--oum-paper-soft) !important;
+  margin-bottom: 8px !important;
+}
+
+[data-darkmode="true"] body.theme-oum .cbi-value-field input#localtime {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #38bdf8 !important;
+}
+
+body.theme-oum .cbi-value-field .control-group {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  margin-top: 6px !important;
+}
+
+body.theme-oum .cbi-value-field .control-group button.cbi-button,
+body.theme-oum .cbi-value-field .control-group .btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 38px !important;
+  padding: 0 16px !important;
+  font-size: 13px !important;
+  font-weight: 550 !important;
+  border-radius: 8px !important;
+  background: var(--oum-paper) !important;
+  border: 1px solid var(--oum-line-strong) !important;
+  color: var(--oum-ink) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+[data-darkmode="true"] body.theme-oum .cbi-value-field .control-group button.cbi-button,
+[data-darkmode="true"] body.theme-oum .cbi-value-field .control-group .btn {
+  background: #1e2638 !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #e2e8f0 !important;
+}
+
+body.theme-oum .cbi-value-field .control-group button.cbi-button:hover,
+body.theme-oum .cbi-value-field .control-group .btn:hover {
+  border-color: var(--oum-action) !important;
+  color: var(--oum-action) !important;
+  background: var(--oum-action-soft) !important;
+}
+
+[data-darkmode="true"] body.theme-oum .cbi-value-field .control-group button.cbi-button:hover,
+[data-darkmode="true"] body.theme-oum .cbi-value-field .control-group .btn:hover {
+  background: rgba(56, 189, 248, 0.12) !important;
+  color: #38bdf8 !important;
+  border-color: #38bdf8 !important;
+}
+
+/* 5. Minimalist description & helper notes */
+body.theme-oum .cbi-value-description {
+  font-size: 12.5px !important;
+  line-height: 1.5 !important;
+  color: var(--oum-subtle) !important;
+  margin-top: 6px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+[data-darkmode="true"] body.theme-oum .cbi-value-description {
+  color: #94a3b8 !important;
+}
+
+/* 6. Section Card Polish */
+body.theme-oum .cbi-section {
+  background: var(--oum-paper) !important;
+  border: 1px solid var(--oum-line) !important;
+  border-radius: 16px !important;
+  padding: 24px !important;
+  margin-bottom: 20px !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-darkmode="true"] body.theme-oum .cbi-section {
+  background: #111722 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* 7. Action Buttons Bar (.cbi-page-actions) - Remove foreign grey background */
+body.theme-oum .cbi-page-actions,
+body.theme-oum .actions,
+.cbi-page-actions {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 10px 0 28px 0 !important;
+  margin-top: 14px !important;
+  margin-bottom: 24px !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 12px !important;
+  align-items: center !important;
+}
+
+[data-darkmode="true"] body.theme-oum .cbi-page-actions,
+[data-darkmode="true"] body.theme-oum .actions,
+[data-darkmode="true"] .cbi-page-actions {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Page action buttons styling */
+body.theme-oum .cbi-page-actions .btn,
+body.theme-oum .cbi-page-actions .cbi-button {
+  flex: 0 1 auto !important;
+  min-width: 120px !important;
+  height: 38px !important;
+  border-radius: 9px !important;
+  font-size: 13.5px !important;
+  font-weight: 550 !important;
+  padding: 0 16px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+/* Combo button group */
+body.theme-oum .cbi-page-actions .btn-group {
+  display: inline-flex !important;
+  align-items: stretch !important;
+  border-radius: 9px !important;
+  overflow: hidden !important;
+}
+
+body.theme-oum .cbi-page-actions .btn-group > .btn:first-child {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+body.theme-oum .cbi-page-actions .btn-group > .dropdown-toggle {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.15) !important;
+  padding: 0 10px !important;
+  min-width: 36px !important;
+}
+
+/* Save button (Primary Blue) */
+body.theme-oum .cbi-page-actions .cbi-button-save,
+body.theme-oum .cbi-button-save {
+  background: #2563eb !important;
+  border: 1px solid #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.25) !important;
+}
+
+body.theme-oum .cbi-page-actions .cbi-button-save:hover,
+body.theme-oum .cbi-button-save:hover {
+  background: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
+}
+
+/* Reset button (Clean secondary / ghost) */
+body.theme-oum .cbi-page-actions .cbi-button-reset,
+body.theme-oum .cbi-button-reset {
+  background: transparent !important;
+  border: 1px solid var(--oum-line-strong) !important;
+  color: var(--oum-ink) !important;
+}
+
+[data-darkmode="true"] body.theme-oum .cbi-page-actions .cbi-button-reset,
+[data-darkmode="true"] body.theme-oum .cbi-button-reset {
+  background: #161c28 !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #cbd5e1 !important;
+}
+
+body.theme-oum .cbi-page-actions .cbi-button-reset:hover,
+body.theme-oum .cbi-button-reset:hover {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: #ef4444 !important;
+}
+
+/* Apply button in dark mode */
+[data-darkmode="true"] body.theme-oum .cbi-page-actions .cbi-button-apply,
+[data-darkmode="true"] body.theme-oum .cbi-button-apply {
+  background: #192131 !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #f1f5f9 !important;
+}
+
+[data-darkmode="true"] body.theme-oum .cbi-page-actions .cbi-button-apply:hover,
+[data-darkmode="true"] body.theme-oum .cbi-button-apply:hover {
+  border-color: #38bdf8 !important;
+  color: #38bdf8 !important;
+}
+
+
+/* Fix for mobile tabs: strictly one line, thin */
+@media (max-width: 900px) {
+  body.theme-oum .tabs, body.theme-oum .cbi-tabmenu {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    gap: 4px !important;
+  }
+  body.theme-oum .tabs::-webkit-scrollbar, body.theme-oum .cbi-tabmenu::-webkit-scrollbar {
+    display: none !important;
+  }
+  body.theme-oum .tabs > li > a, body.theme-oum .cbi-tabmenu > li > a {
+    min-height: 32px !important;
+    height: 32px !important;
+    padding: 0 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    white-space: nowrap !important;
+    font-size: 13px !important;
+  }
+  /* Fix modal tabs as well (General / Advanced) */
+  body.theme-oum .modal .cbi-tabmenu {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+  }
+}
+
+/* Fix for add button in dynamic lists (double plus issue) */
+body.theme-oum .cbi-dynlist .cbi-button-add::before {
+  display: none !important;
+}
+
+/* Fix QoS description alignment */
+body.theme-oum .cbi-value-description {
+  align-items: flex-start !important;
+}
+@media (max-width: 900px) {
+  /* Override generic table padding for the card */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .cbi-section-table-row,
+  body.theme-oum #cbi-network-device .tr.cbi-section-table-row {
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .td,
+  body.theme-oum #cbi-network-device .td {
+    display: flex !important;
+    padding: 8px 14px !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    gap: 8px !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .td:last-child,
+  body.theme-oum #cbi-network-device .td:last-child {
+    border-bottom: 0 !important;
+  }
+
+  /* Make the title area a nice header */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .td[data-name="name"],
+  body.theme-oum #cbi-network-device .td[data-name="name"] {
+    background: var(--oum-paper-soft) !important;
+    border-bottom: 1px solid var(--oum-line-strong) !important;
+    padding: 10px 14px !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .td[data-name="name"]::before,
+  body.theme-oum #cbi-network-device .td[data-name="name"]::before {
+    display: none !important;
+  }
+
+  /* Badge styling */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .ifacebadge,
+  body.theme-oum #cbi-network-device .ifacebadge {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  /* For type, mac, mtu - hide generic titles and display inline */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .td[data-name="type"],
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .td[data-name="macaddr"],
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .td[data-name="mtu"],
+  body.theme-oum #cbi-network-device .td[data-name="type"],
+  body.theme-oum #cbi-network-device .td[data-name="macaddr"],
+  body.theme-oum #cbi-network-device .td[data-name="mtu"] {
+    justify-content: space-between !important;
+    align-items: center !important;
+  }
+
+  /* Compact actions */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .td.cbi-section-actions,
+  body.theme-oum #cbi-network-device .td.cbi-section-actions {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    padding: 12px 14px !important;
+    background: transparent !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .td.cbi-section-actions::before,
+  body.theme-oum #cbi-network-device .td.cbi-section-actions::before {
+    display: none !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .td.cbi-section-actions .btn,
+  body.theme-oum #cbi-network-device .td.cbi-section-actions .btn,
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-device .td.cbi-section-actions .cbi-button,
+  body.theme-oum #cbi-network-device .td.cbi-section-actions .cbi-button {
+    flex: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    height: 32px !important; min-height: 32px !important;
+    border-radius: 8px !important;
+  }
+}
+
+/* ==========================================================================
+   Network Interfaces Section (Desktop Table + Mobile Cards)
+   ========================================================================== */
+
+/* Common styles for #cbi-network-interface container */
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface,
+body.theme-oum #cbi-network-interface {
+  border: 1px solid var(--oum-line) !important;
+  border-radius: var(--oum-radius) !important;
+  background: var(--oum-paper) !important;
+  box-shadow: none !important;
+}
+
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface > h3,
+body.theme-oum #cbi-network-interface > h3 {
+  margin: 0 0 14px 0 !important;
+  font-size: 16.5px !important;
+  font-weight: 650 !important;
+  color: var(--oum-ink) !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* Common Presentable "Add new interface..." bar & button */
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-create,
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-tblsection-create,
+body.theme-oum #cbi-network-interface .cbi-section-create,
+body.theme-oum #cbi-network-interface .cbi-tblsection-create,
+body.theme-oum .cbi-tblsection-create {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  margin: 14px 0 0 0 !important;
+  padding: 14px 0 0 0 !important;
+  border-top: 1px dashed var(--oum-line) !important;
+}
+
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-button-add,
+body.theme-oum #cbi-network-interface .cbi-button-add,
+body.theme-oum .cbi-section-create .cbi-button-add,
+body.theme-oum .cbi-button-add {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 18px !important;
+  border-radius: 9px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  background: var(--oum-action-soft) !important;
+  border: 1px solid var(--oum-action) !important;
+  color: var(--oum-action-dark) !important;
+  box-shadow: 0 1px 3px rgba(40, 104, 215, 0.12) !important;
+}
+
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-button-add::before,
+body.theme-oum #cbi-network-interface .cbi-button-add::before,
+body.theme-oum .cbi-section-create .cbi-button-add::before,
+body.theme-oum .cbi-button-add::before {
+  content: "" !important;
+  display: inline-block !important;
+  width: 14px !important;
+  height: 14px !important;
+  background-color: currentColor !important;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='5' x2='12' y2='19'%3E%3C/line%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain !important;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='5' x2='12' y2='19'%3E%3C/line%3E%3Cline x1='5' y1='12' x2='19' y2='12'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain !important;
+}
+
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-button-add:hover,
+body.theme-oum #cbi-network-interface .cbi-button-add:hover,
+body.theme-oum .cbi-section-create .cbi-button-add:hover,
+body.theme-oum .cbi-button-add:hover {
+  background: var(--oum-action) !important;
+  border-color: var(--oum-action) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(40, 104, 215, 0.35) !important;
+  transform: translateY(-1px) !important;
+}
+
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-button-add:active,
+body.theme-oum #cbi-network-interface .cbi-button-add:active,
+body.theme-oum .cbi-section-create .cbi-button-add:active,
+body.theme-oum .cbi-button-add:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 1px 3px rgba(40, 104, 215, 0.2) !important;
+}
+
+/* Dark mode for Add Button */
+[data-darkmode="true"] body.theme-oum #cbi-network-interface .cbi-button-add,
+[data-darkmode="true"] body.theme-oum .cbi-section-create .cbi-button-add,
+[data-darkmode="true"] body.theme-oum .cbi-button-add {
+  background: rgba(56, 189, 248, 0.08) !important;
+  border: 1px solid rgba(56, 189, 248, 0.35) !important;
+  color: #38bdf8 !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-darkmode="true"] body.theme-oum #cbi-network-interface .cbi-button-add:hover,
+[data-darkmode="true"] body.theme-oum .cbi-section-create .cbi-button-add:hover,
+[data-darkmode="true"] body.theme-oum .cbi-button-add:hover {
+  background: #0284c7 !important;
+  border-color: #0284c7 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.45) !important;
+}
+
+/* Common button hover & active styling */
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .cbi-button-edit:hover,
+body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-edit:hover,
+body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(3):hover {
+  background: var(--oum-action, #0284c7) !important;
+  color: #ffffff !important;
+}
+
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .cbi-button-remove:hover,
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .cbi-button-negative:hover,
+body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-remove:hover,
+body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-negative:hover,
+body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(4):hover {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .reconnect:hover,
+body.theme-oum #cbi-network-interface .td.cbi-section-actions .reconnect:hover,
+body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(1):hover {
+  background: var(--oum-paper-soft) !important;
+  border-color: var(--oum-ink) !important;
+}
+
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .down:hover,
+body.theme-oum #cbi-network-interface .td.cbi-section-actions .down:hover,
+body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(2):hover {
+  background: #d97706 !important;
+  color: #ffffff !important;
+}
+
+/* Common Dark mode button overrides */
+[data-darkmode="true"] body.theme-oum #cbi-network-interface .ifacebox {
+  background: #111622 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+[data-darkmode="true"] body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-edit {
+  background: #192233 !important;
+  border-color: rgba(56, 189, 248, 0.4) !important;
+  color: #38bdf8 !important;
+}
+
+[data-darkmode="true"] body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-edit:hover {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+}
+
+[data-darkmode="true"] body.theme-oum #cbi-network-interface .td.cbi-section-actions .reconnect {
+  background: #192233 !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #e2e8f0 !important;
+}
+
+[data-darkmode="true"] body.theme-oum #cbi-network-interface .td.cbi-section-actions .reconnect:hover {
+  background: #232d42 !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+[data-darkmode="true"] body.theme-oum #cbi-network-interface .td.cbi-section-actions .down {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  color: #fbbf24 !important;
+}
+
+[data-darkmode="true"] body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-remove,
+[data-darkmode="true"] body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-negative {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: #f87171 !important;
+}
+
+/* Page actions spacing refinement */
+body.theme-oum[data-page="admin-network-network"] .cbi-page-actions {
+  margin-top: 14px !important;
+  padding: 8px 0 22px 0 !important;
+}
+
+/* ==========================================================================
+   DESKTOP VERSION (min-width: 901px): Classic Table with Refined Visuals
+   ========================================================================== */
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface,
+  body.theme-oum #cbi-network-interface {
+    padding: 20px !important;
+    margin-bottom: 18px !important;
+  }
+
+  /* Table structure */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table,
+  body.theme-oum #cbi-network-interface .cbi-section-table {
+    display: table !important;
+    width: 100% !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table > tbody,
+  body.theme-oum #cbi-network-interface .cbi-section-table > tbody {
+    display: table-row-group !important;
+  }
+
+  /* Table Headers */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-titles,
+  body.theme-oum #cbi-network-interface .cbi-section-table-titles {
+    display: table-row !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-titles th,
+  body.theme-oum #cbi-network-interface .cbi-section-table-titles th {
+    display: table-cell !important;
+    padding: 10px 14px !important;
+    font-size: 11px !important;
+    font-weight: 750 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    color: var(--oum-subtle) !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    background: var(--oum-paper-soft) !important;
+    vertical-align: middle !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-titles th:first-child,
+  body.theme-oum #cbi-network-interface .cbi-section-table-titles th:first-child {
+    border-top-left-radius: 8px !important;
+    border-bottom-left-radius: 8px !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-titles th:last-child,
+  body.theme-oum #cbi-network-interface .cbi-section-table-titles th:last-child {
+    border-top-right-radius: 8px !important;
+    border-bottom-right-radius: 8px !important;
+    text-align: right !important;
+  }
+
+  /* Table Rows */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-row,
+  body.theme-oum #cbi-network-interface .tr.cbi-section-table-row {
+    display: table-row !important;
+    flex-direction: row !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    transition: background 0.15s ease !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-row:hover td,
+  body.theme-oum #cbi-network-interface .tr.cbi-section-table-row:hover td {
+    background: color-mix(in srgb, var(--oum-action-soft) 35%, transparent) !important;
+  }
+
+  [data-darkmode="true"] body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-row:hover td,
+  [data-darkmode="true"] body.theme-oum #cbi-network-interface .tr.cbi-section-table-row:hover td {
+    background: rgba(255, 255, 255, 0.025) !important;
+  }
+
+  /* Table Cells */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td,
+  body.theme-oum #cbi-network-interface .td {
+    display: table-cell !important;
+    vertical-align: middle !important;
+    padding: 13px 14px !important;
+    border: none !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    background: transparent !important;
+    box-sizing: border-box !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-row:last-child .td,
+  body.theme-oum #cbi-network-interface .tr.cbi-section-table-row:last-child .td {
+    border-bottom: none !important;
+  }
+
+  /* Column 1: Interface Badge */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacebox"],
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacebox"] {
+    width: 200px !important;
+    min-width: 180px !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox,
+  body.theme-oum #cbi-network-interface .ifacebox {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    border: 1px solid var(--oum-line-strong) !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    background: var(--oum-paper) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+    margin: 0 !important;
+    min-height: 32px !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-head,
+  body.theme-oum #cbi-network-interface .ifacebox-head {
+    display: flex !important;
+    align-items: center !important;
+    padding: 4px 10px !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.02em !important;
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35) !important;
+    border: 0 !important;
+    min-height: 32px !important;
+    box-sizing: border-box !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body,
+  body.theme-oum #cbi-network-interface .ifacebox-body {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 4px 10px !important;
+    background: transparent !important;
+    border: 0 !important;
+    color: var(--oum-ink) !important;
+    font-size: 12px !important;
+    min-height: 32px !important;
+    box-sizing: border-box !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body br,
+  body.theme-oum #cbi-network-interface .ifacebox-body br {
+    display: none !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body img,
+  body.theme-oum #cbi-network-interface .ifacebox-body img {
+    width: 16px !important;
+    height: 16px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Column 2: Status & Stats in clean multi-column grid */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"],
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacestat"] {
+    width: auto !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] > div,
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacestat"] > div {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)) !important;
+    gap: 5px 18px !important;
+    width: 100% !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] span.nowrap,
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacestat"] span.nowrap {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: baseline !important;
+    gap: 10px !important;
+    padding: 2px 0 !important;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+    white-space: nowrap !important;
+    color: var(--oum-ink) !important;
+    border-bottom: 1px dashed rgba(125, 125, 125, 0.15) !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] span.nowrap > strong,
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacestat"] span.nowrap > strong {
+    color: var(--oum-subtle) !important;
+    font-size: 11.5px !important;
+    font-weight: 550 !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Column 3: Actions in clean 2x2 grid */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions {
+    width: 230px !important;
+    min-width: 220px !important;
+    text-align: right !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions > div,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions > div {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    grid-template-rows: auto auto !important;
+    gap: 6px !important;
+    width: 220px !important;
+    margin-left: auto !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 31px !important;
+    min-height: 31px !important;
+    margin: 0 !important;
+    padding: 0 8px !important;
+    font-size: 12px !important;
+    font-weight: 550 !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    word-break: normal !important;
+    hyphens: none !important;
+    -webkit-hyphens: none !important;
+    border-radius: 7px !important;
+    box-sizing: border-box !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+  }
+
+  /* Two-column button assignment on desktop:
+     Col 1: Edit, Delete
+     Col 2: Restart, Stop
+  */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .cbi-button-edit,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-edit,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(3) {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    background: var(--oum-paper) !important;
+    border: 1px solid var(--oum-action, #0284c7) !important;
+    color: var(--oum-action, #0284c7) !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .cbi-button-remove,
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .cbi-button-negative,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-remove,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-negative,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(4) {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    background: rgba(239, 68, 68, 0.08) !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    color: #ef4444 !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .reconnect,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions .reconnect,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(1) {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    background: var(--oum-paper) !important;
+    border: 1px solid var(--oum-line-strong) !important;
+    color: var(--oum-ink) !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .down,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions .down,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(2) {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    background: rgba(245, 158, 11, 0.08) !important;
+    border: 1px solid rgba(245, 158, 11, 0.3) !important;
+    color: #d97706 !important;
+  }
+}
+
+/* ==========================================================================
+   MOBILE VERSION (max-width: 900px): Clean Compact Cards
+   ========================================================================== */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface,
+  body.theme-oum #cbi-network-interface {
+    padding: 14px !important;
+    margin-bottom: 14px !important;
+  }
+
+  /* Hide table headers on mobile */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-titles,
+  body.theme-oum #cbi-network-interface .cbi-section-table-titles,
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-descr,
+  body.theme-oum #cbi-network-interface .cbi-section-table-descr,
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-footer:empty,
+  body.theme-oum #cbi-network-interface .cbi-section-table-footer:empty {
+    display: none !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table,
+  body.theme-oum #cbi-network-interface .cbi-section-table {
+    border: none !important;
+    background: transparent !important;
+    display: block !important;
+    width: 100% !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table > tbody,
+  body.theme-oum #cbi-network-interface .cbi-section-table > tbody {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Each interface is a card */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table-row,
+  body.theme-oum #cbi-network-interface .tr.cbi-section-table-row {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    margin: 0 0 10px 0 !important;
+    padding: 0 !important;
+    border: 1px solid var(--oum-line) !important;
+    border-radius: 12px !important;
+    background: var(--oum-paper) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+    overflow: hidden !important;
+  }
+
+  /* Card Header: Interface Badge Area */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacebox"],
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacebox"] {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
+    padding: 7px 12px !important;
+    background: var(--oum-paper-soft) !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    box-sizing: border-box !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacebox"]::before,
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacebox"]::before {
+    display: none !important;
+    content: none !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox,
+  body.theme-oum #cbi-network-interface .ifacebox {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    border: 1px solid var(--oum-line-strong) !important;
+    border-radius: 7px !important;
+    overflow: hidden !important;
+    background: var(--oum-paper) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+    margin: 0 !important;
+    min-height: 28px !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-head,
+  body.theme-oum #cbi-network-interface .ifacebox-head {
+    display: flex !important;
+    align-items: center !important;
+    padding: 3px 10px !important;
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.02em !important;
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35) !important;
+    border: 0 !important;
+    min-height: 28px !important;
+    box-sizing: border-box !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body,
+  body.theme-oum #cbi-network-interface .ifacebox-body {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 3px 10px !important;
+    background: transparent !important;
+    border: 0 !important;
+    color: var(--oum-ink) !important;
+    font-size: 12px !important;
+    min-height: 28px !important;
+    box-sizing: border-box !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body br,
+  body.theme-oum #cbi-network-interface .ifacebox-body br {
+    display: none !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body img,
+  body.theme-oum #cbi-network-interface .ifacebox-body img {
+    width: 15px !important;
+    height: 15px !important;
+    flex-shrink: 0 !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body small,
+  body.theme-oum #cbi-network-interface .ifacebox-body small {
+    font-size: 11.5px !important;
+    font-weight: 550 !important;
+    color: var(--oum-subtle) !important;
+  }
+
+  /* Card Body: Compact Status Details */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"],
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacestat"] {
+    display: block !important;
+    width: 100% !important;
+    padding: 10px 14px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    background: transparent !important;
+    box-sizing: border-box !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"]::before,
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacestat"]::before {
+    display: none !important;
+    content: none !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] > div,
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacestat"] > div {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+    gap: 5px 16px !important;
+    width: 100% !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] br,
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacestat"] br {
+    display: none !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] span.nowrap,
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacestat"] span.nowrap {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 3px 0 !important;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+    white-space: nowrap !important;
+    color: var(--oum-ink) !important;
+    border-bottom: 1px dashed var(--oum-line) !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] span.nowrap > strong,
+  body.theme-oum #cbi-network-interface .td[data-name="_ifacestat"] span.nowrap > strong {
+    color: var(--oum-subtle) !important;
+    font-size: 11px !important;
+    font-weight: 550 !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Card Actions: Two-column layout */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions {
+    display: block !important;
+    width: 100% !important;
+    padding: 10px 12px !important;
+    border: 0 !important;
+    background: var(--oum-paper-soft) !important;
+    box-sizing: border-box !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions::before,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions::before {
+    display: none !important;
+    content: none !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions > div,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions > div {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-rows: auto auto !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    margin: 0 !important;
+    padding: 0 8px !important;
+    font-size: 12.5px !important;
+    font-weight: 550 !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    word-break: normal !important;
+    hyphens: none !important;
+    -webkit-hyphens: none !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+  }
+
+  /* Two-column button assignment on mobile */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .cbi-button-edit,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-edit,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(3) {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    background: var(--oum-paper) !important;
+    border: 1px solid var(--oum-action, #0284c7) !important;
+    color: var(--oum-action, #0284c7) !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .cbi-button-remove,
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .cbi-button-negative,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-remove,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions .cbi-button-negative,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(4) {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    background: rgba(239, 68, 68, 0.08) !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    color: #ef4444 !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .reconnect,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions .reconnect,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(1) {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    background: var(--oum-paper) !important;
+    border: 1px solid var(--oum-line-strong) !important;
+    color: var(--oum-ink) !important;
+  }
+
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions .down,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions .down,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button:nth-child(2) {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    background: rgba(245, 158, 11, 0.08) !important;
+    border: 1px solid rgba(245, 158, 11, 0.3) !important;
+    color: #d97706 !important;
+  }
+}
+
+
+/* mobile34: interfaces desktop — two-line ifacebox-body.
+   Gemini's single-row flex (br hidden) crams bridge sub-devices and the
+   name into icon soup on rows like lan. Restore the stock line break
+   inside the pill. Desktop only (min-width:901), mobile untouched. */
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body br {
+    display: block !important;
+    flex: 0 0 100%;
+    height: 0;
+  }
+  /* port-icon sub-lists never wrap mid-row; the device name keeps its own line */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body > span {
+    white-space: nowrap !important;
+  }
+  /* stats cells overflow into the actions column on narrower desktops:
+     nowrap + space-between lets long values spill over the cell.
+     Allow wrapping, keep the label/value split. */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] span.nowrap {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+  }
+  /* stock structure: facts as a single list, buttons in one row.
+     (Gemini's auto-fit grid + 2x2 buttons.) Row wraps when tight. */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] > div {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions {
+    width: auto !important;
+    min-width: 0 !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions > div {
+    display: flex !important;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px !important;
+    width: auto !important;
+    margin-left: 0 !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button {
+    flex: 0 0 auto;
+    width: auto !important;
+    min-width: 104px;
+  }
+}
+/* mobile36: interfaces pills — two-line body on ALL widths.
+   Extends the mobile34 desktop fix: bridge sub-device icons + name no longer
+   cram into one row on mobile either. Page-scoped, nothing else touched. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body br {
+    display: block !important;
+    flex: 0 0 100%;
+    height: 0;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body > span {
+    white-space: nowrap !important;
+  }
+}
+/* mobile37: globals descriptions flow as text, not squeezed flex rows.
+   The global minimalist rule makes .cbi-value-description a flex row
+   everywhere; long help texts overflow into columns. Point fix for
+   #cbi-network-globals on mobile. Desktop untouched. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-value-description {
+    display: block !important;
+  }
+}
+/* mobile38: globals flags — presentable checkbox + "?" popover.
+   Long help texts hide behind "?", tap opens a popup card. */
+
+/* Presentable checkbox (all widths, page-scoped). The empty <label>
+   is the visual box, the real input stays functional for a11y. */
+body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-checkbox {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+}
+body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-checkbox input[type="checkbox"] {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  opacity: 0;
+  cursor: pointer;
+}
+body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-checkbox input[type="checkbox"] + label {
+  position: absolute;
+  inset: 0;
+  display: block;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1.5px solid var(--oum-line-strong);
+  border-radius: 9px;
+  background: var(--oum-paper);
+  pointer-events: none;
+}
+body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-checkbox input[type="checkbox"]:checked + label {
+  border-color: var(--oum-action);
+  background: var(--oum-action);
+}
+body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-checkbox input[type="checkbox"]:checked + label::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 4px;
+  width: 6px;
+  height: 12px;
+  border: solid #fff;
+  border-width: 0 2.5px 2.5px 0;
+  transform: rotate(45deg);
+}
+body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-checkbox input[type="checkbox"]:focus-visible + label {
+  outline: 2px solid var(--oum-action);
+  outline-offset: 2px;
+}
+@media (max-width: 900px) {
+  /* flag row: [checkbox] title+? on one line — saves vertical space */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-value[data-widget="CBI.FlagValue"].oum-help-ready {
+    display: flex;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    gap: 10px;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-value[data-widget="CBI.FlagValue"].oum-help-ready .cbi-value-field {
+    order: -1;
+    flex: 0 0 auto;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-value[data-widget="CBI.FlagValue"].oum-help-ready .cbi-value-title {
+    display: flex;
+    flex: 1 1 0 !important;
+    width: auto !important;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  /* neat uniform "?" — right-aligned column (beats global 42px touch min-height) */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .oum-help-btn {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px !important;
+    min-height: 22px !important;
+    margin-left: auto !important;
+    border: 1px solid var(--oum-line-strong);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--oum-faint);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .oum-help-btn:active {
+    border-color: var(--oum-action);
+    color: var(--oum-action);
+  }
+  /* wired rows hide the inline text (JS moves it into the popup) */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-value[data-widget="CBI.FlagValue"].oum-help-ready .cbi-value-description {
+    display: none !important;
+  }
+  /* popup bubble near the "?" — NOT a bottom sheet */
+  body.theme-oum .oum-help-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    background: transparent;
+  }
+  body.theme-oum .oum-help-backdrop[hidden] {
+    display: none !important;
+  }
+  body.theme-oum .oum-help-pop {
+    position: fixed;
+    z-index: 1201;
+    max-width: min(280px, calc(100vw - 24px));
+    padding: 10px 12px 12px;
+    border: 1px solid var(--oum-line-strong);
+    border-radius: 12px;
+    background: var(--oum-paper);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    color: var(--oum-subtle);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  body.theme-oum .oum-help-pop[hidden] {
+    display: none !important;
+  }
+  body.theme-oum .oum-help-pop a,
+  body.theme-oum .oum-help-pop abbr,
+  body.theme-oum .oum-help-pop code {
+    color: var(--oum-ink);
+  }
+}
+/* mobile39: globals rows compact (top/bottom air).
+   The minimalist base layer sets every .cbi-value to padding:16px 0.
+   Point fix for #cbi-network-globals on mobile: 10px 0. Desktop untouched,
+   other pages untouched. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-value {
+    padding: 10px 0 !important;
+  }
+}
+/* mobile40: hide inactive tab stubs on the network page.
+   Stock tab logic collapses inactive panes to their H3 header (~50px +
+   card padding/margins each) — pure dead space on mobile, e.g. a ~170px
+   gap between "add interface" and page actions. Hide them outright;
+   switching tabs re-adds data-tab-active and the pane shows again.
+   Page-scoped, mobile only, desktop untouched. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-network-network"] .cbi-section[data-tab]:not([data-tab-active]) {
+    display: none !important;
+  }
+}

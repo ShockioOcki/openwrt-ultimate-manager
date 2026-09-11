@@ -29,15 +29,16 @@
 					mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 				document.documentElement.setAttribute('data-theme', mode === 'dark' ? 'dark' : 'light');
 				document.documentElement.setAttribute('data-darkmode', mode === 'dark' ? 'true' : 'false');
+				document.querySelector('meta[name="theme-color"]').setAttribute('content', mode === 'dark' ? '#0f1622' : '#eef0ea');
 			})();
 		</script>
 		{% if (ctx.authuser && !oum_setup_complete && !oum_setup_path): %}
 		<style>html { visibility: hidden !important; }</style>
-		<script>window.location.replace({{ jsonify(dispatcher.build_url('oum/setup')) }});</script>
+		<script>window.location.replace({{ sprintf('%J', dispatcher.build_url('oum/setup')) }});</script>
 		{% endif %}
 		<link rel="stylesheet" href="{{ media }}/bootstrap-base.css?v={{ pkgs_update_time }}">
-		<link rel="stylesheet" media="only screen and (max-device-width: 854px)" href="{{ media }}/bootstrap-mobile.css?v={{ pkgs_update_time }}">
-		<link rel="stylesheet" href="{{ media }}/cascade.css?v={{ pkgs_update_time }}-20260907-04">
+		<link rel="stylesheet" media="only screen and (max-width: 854px)" href="{{ media }}/bootstrap-mobile.css?v={{ pkgs_update_time }}-oum-mobile2">
+		<link rel="stylesheet" href="{{ media }}/cascade.css?v={{ pkgs_update_time }}-20260908-mobile40">
 		{% if (ctx.request_path[0] == 'oum'): %}<link rel="stylesheet" href="{{ resource }}/oum/oum.css?v=20260906-parental05">{% endif %}
 		<style>
 			body.theme-oum[data-page^="oum-"] .oum-page-head #oum-theme-toggle,

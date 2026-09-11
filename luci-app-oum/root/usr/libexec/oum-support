@@ -1,0 +1,262 @@
+#!/bin/sh
+set -eu
+umask 077
+
+STATE_DIR="${OUM_SUPPORT_STATE_DIR:-/tmp/oum-support}"
+STATE_FILE="$STATE_DIR/status"
+PID_FILE="$STATE_DIR/pinggy.pid"
+DROPBEAR_PID_FILE="$STATE_DIR/dropbear.pid"
+KEYS_FILE="${OUM_SUPPORT_KEYS_FILE:-/etc/dropbear/authorized_keys}"
+PUBLIC_KEY_FILE="${OUM_SUPPORT_PUBLIC_KEY_FILE:-/etc/oum/support/support_key.pub}"
+PERSIST_DIR="${OUM_SUPPORT_PERSIST_DIR:-/etc/oum/support}"
+AUDIT_FILE="$PERSIST_DIR/audit.log"
+BACKUP_FILE="$PERSIST_DIR/pre-support-backup.tar.gz"
+MARKER_PREFIX=oum-support-
+SSH_MATCH="${OUM_SUPPORT_SSH_MATCH:-free.pinggy.io}"
+DROPBEAR_MATCH="${OUM_SUPPORT_DROPBEAR_MATCH:-127.0.0.1:22022}"
+SYSUPGRADE="${OUM_SUPPORT_SYSUPGRADE:-/sbin/sysupgrade}"
+CONFIG_DIR="${OUM_SUPPORT_CONFIG_DIR:-/etc/config}"
+LISTEN_ADDR="${OUM_SUPPORT_LISTEN_ADDR:-127.0.0.1:22022}"
+
+mkdir -p "$STATE_DIR" "$PERSIST_DIR"
+chmod 700 "$STATE_DIR" "$PERSIST_DIR"
+
+read_value() {
+	key="$1"; file="$2"
+	[ -f "$file" ] || return 0
+	sed -n "s/^${key}=//p" "$file" | head -n 1
+}
+
+audit_event() {
+	event="$1"; detail="${2:-}"
+	printf '%s\t%s\t%s\n' "$(date +%s)" "$event" "$detail" >>"$AUDIT_FILE"
+	chmod 600 "$AUDIT_FILE"
+	lines="$(wc -l <"$AUDIT_FILE" | tr -d ' ')"
+	if [ "$lines" -gt 100 ]; then
+		tail -n 100 "$AUDIT_FILE" >"$AUDIT_FILE.tmp"
+		mv "$AUDIT_FILE.tmp" "$AUDIT_FILE"
+	fi
+}
+
+write_status() {
+	state="$1"; message="$2"
+	mode="$(read_value mode "$STATE_DIR/request")"
+	hostname="$(read_value hostname "$STATE_DIR/request")"
+	port="$(read_value port "$STATE_DIR/request")"
+	expires_at="$(read_value expires_at "$STATE_DIR/request")"
+	started_at="$(read_value started_at "$STATE_DIR/request")"
+	session="$(read_value session "$STATE_DIR/request")"
+	connect_command=''
+	[ -z "$hostname" ] || connect_command="ssh -p ${port} root@${hostname}"
+	cat >"$STATE_FILE" <<EOF
+state=$state
+mode=$mode
+hostname=$hostname
+port=$port
+connect_command=$connect_command
+started_at=$started_at
+expires_at=$expires_at
+session=$session
+provider=pinggy
+message=$message
+backup_available=$([ -s "$BACKUP_FILE" ] && printf 1 || printf 0)
+EOF
+	chmod 600 "$STATE_FILE"
+}
+
+remove_support_key() {
+	[ -f "$KEYS_FILE" ] || return 0
+	tmp="$STATE_DIR/authorized_keys.clean"
+	grep -v " ${MARKER_PREFIX}" "$KEYS_FILE" >"$tmp" || true
+	cat "$tmp" >"$KEYS_FILE"
+	chmod 600 "$KEYS_FILE"
+	rm -f "$tmp"
+}
+
+process_running() {
+	pid_file="$1"; match="$2"
+	[ -s "$pid_file" ] || return 1
+	pid="$(cat "$pid_file" 2>/dev/null || true)"
+	case "$pid" in *[!0-9]*|'') return 1 ;; esac
+	kill -0 "$pid" 2>/dev/null || return 1
+	[ -r "/proc/$pid/cmdline" ] || return 1
+	tr '\000' ' ' <"/proc/$pid/cmdline" | grep -Fq "$match"
+}
+
+connector_running() { process_running "$PID_FILE" "$SSH_MATCH"; }
+support_dropbear_running() { process_running "$DROPBEAR_PID_FILE" "$DROPBEAR_MATCH"; }
+
+kill_process() {
+	pid_file="$1"
+	[ -s "$pid_file" ] || return 0
+	pid="$(cat "$pid_file" 2>/dev/null || true)"
+	case "$pid" in *[!0-9]*|'') return 0 ;; esac
+	kill "$pid" 2>/dev/null || true
+}
+
+kill_connector() {
+	kill_process "$PID_FILE"
+	kill_process "$DROPBEAR_PID_FILE"
+}
+
+find_openssh() {
+	for candidate in "${OUM_SUPPORT_SSH:-}" /usr/bin/ssh /usr/sbin/ssh; do
+		[ -n "$candidate" ] && [ -x "$candidate" ] || continue
+		"$candidate" -V 2>&1 | grep -qi OpenSSH && { printf '%s' "$candidate"; return 0; }
+	done
+	return 1
+}
+
+find_dropbear() {
+	for candidate in "${OUM_SUPPORT_DROPBEAR:-}" /usr/sbin/dropbear; do
+		[ -n "$candidate" ] && [ -x "$candidate" ] && { printf '%s' "$candidate"; return 0; }
+	done
+	return 1
+}
+
+snapshot_configs() {
+	file="$1"; : >"$file"
+	for config in "$CONFIG_DIR"/*; do
+		[ -f "$config" ] || continue
+		sha256sum "$config" >>"$file" 2>/dev/null || true
+	done
+}
+
+changed_config_count() {
+	before="$STATE_DIR/config.before"; after="$STATE_DIR/config.after"
+	[ -s "$before" ] || { printf 0; return; }
+	snapshot_configs "$after"
+	awk 'NR == FNR { before[$2]=$1; next } { after[$2]=$1 }
+		END {
+			for (path in before) if (!(path in after) || before[path] != after[path]) changed++
+			for (path in after) if (!(path in before)) changed++
+			print changed + 0
+		}' "$before" "$after"
+}
+
+stop_session() {
+	reason="${1:-user}"
+	mode="$(read_value mode "$STATE_DIR/request")"
+	changed="$(changed_config_count)"
+	kill_connector
+	remove_support_key
+	rm -f "$PID_FILE" "$DROPBEAR_PID_FILE"
+	case "$reason" in
+		expired) state=expired; message='Время сеанса истекло; доступ автоматически закрыт.' ;;
+		disconnected) state=disconnected; message='Туннель закрыт; временный ключ удалён.' ;;
+		remote) state=stopped; message='Специалист завершил сеанс; временный ключ удалён.' ;;
+		boot) state=stopped; message='Временный доступ очищен при загрузке роутера.' ;;
+		*) state=stopped; message='Сеанс удалённого доступа завершён.' ;;
+	esac
+	write_status "$state" "$message"
+	audit_event "session_$reason" "mode=${mode:-unknown};changed_configs=$changed"
+}
+
+expire_if_needed() {
+	[ -f "$STATE_FILE" ] || return 0
+	[ "$(read_value state "$STATE_FILE")" = active ] || return 0
+	expires_at="$(read_value expires_at "$STATE_FILE")"; now="$(date +%s)"
+	case "$expires_at" in *[!0-9]*|'') return 0 ;; esac
+	if [ "$now" -ge "$expires_at" ]; then
+		stop_session expired
+	elif ! connector_running || ! support_dropbear_running; then
+		stop_session disconnected
+	fi
+}
+
+start_session() {
+	request="$STATE_DIR/request"
+	[ -s "$request" ] && [ -s "$PUBLIC_KEY_FILE" ] || exit 2
+	[ "$(read_value state "$STATE_FILE")" != active ] || { echo 'Сеанс поддержки уже активен.' >&2; exit 6; }
+	ssh_client="$(find_openssh || true)"; dropbear="$(find_dropbear || true)"
+	[ -n "$ssh_client" ] || { write_status failed 'OpenSSH-клиент не установлен.'; exit 3; }
+	[ -n "$dropbear" ] || { write_status failed 'SSH-сервер Dropbear не найден.'; exit 3; }
+	mode="$(read_value mode "$request")"; public_key="$(head -n 1 "$PUBLIC_KEY_FILE")"
+	session="${MARKER_PREFIX}$(date +%s)-$$"
+	remove_support_key
+	if [ "$mode" = repair ]; then
+		[ -x "$SYSUPGRADE" ] || { write_status failed 'Средство резервного копирования недоступно.'; exit 4; }
+		"$SYSUPGRADE" -b "$BACKUP_FILE" >/tmp/oum-support-backup.log 2>&1 || { write_status failed 'Не удалось создать страховочную копию перед доступом.'; exit 4; }
+		chmod 600 "$BACKUP_FILE"
+	fi
+	snapshot_configs "$STATE_DIR/config.before"
+	printf 'session=%s\n' "$session" >>"$request"
+	mkdir -p "$(dirname "$KEYS_FILE")"; touch "$KEYS_FILE"; chmod 600 "$KEYS_FILE"
+	if [ "$mode" = diagnostic ]; then
+		forced_shell=/usr/libexec/oum-support-shell
+		printf '%s %s\n' 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty' "$public_key $session" >>"$KEYS_FILE"
+	else
+		forced_shell=/usr/libexec/oum-support-repair-shell
+		printf '%s %s\n' 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding' "$public_key $session" >>"$KEYS_FILE"
+	fi
+	"$dropbear" -F -E -s -j -k -c "$forced_shell" -p "$LISTEN_ADDR" >"$STATE_DIR/dropbear.log" 2>&1 &
+	printf '%s\n' "$!" >"$DROPBEAR_PID_FILE"
+	sleep "${OUM_SUPPORT_START_DELAY:-1}"
+	if ! support_dropbear_running; then
+		remove_support_key; rm -f "$DROPBEAR_PID_FILE"
+		write_status failed 'Не удалось запустить изолированный SSH-сеанс.'; exit 5
+	fi
+	: >"$STATE_DIR/pinggy.log"
+	"$ssh_client" -o StrictHostKeyChecking=accept-new \
+		-o "UserKnownHostsFile=$STATE_DIR/known_hosts" -o ServerAliveInterval=20 \
+		-o ServerAliveCountMax=2 -o ExitOnForwardFailure=yes \
+		-p 443 -R0:"$LISTEN_ADDR" -T tcp@free.pinggy.io >"$STATE_DIR/pinggy.log" 2>&1 &
+	printf '%s\n' "$!" >"$PID_FILE"
+	tries="${OUM_SUPPORT_DISCOVERY_TRIES:-15}"; endpoint=''
+	while [ "$tries" -gt 0 ]; do
+		connector_running || break
+		endpoint="$(sed -n 's#.*tcp://\([A-Za-z0-9.-]*\):\([0-9][0-9]*\).*#\1 \2#p' "$STATE_DIR/pinggy.log" | head -n 1)"
+		[ -z "$endpoint" ] || break
+		tries=$((tries - 1)); sleep 1
+	done
+	if [ -z "$endpoint" ]; then
+		kill_connector; remove_support_key; rm -f "$PID_FILE" "$DROPBEAR_PID_FILE"
+		write_status failed 'Pinggy не выдал адрес подключения. Проверьте доступ в интернет.'
+		audit_event session_failed 'endpoint_discovery_failed'; exit 5
+	fi
+	hostname="${endpoint% *}"; port="${endpoint#* }"
+	printf 'hostname=%s\nport=%s\n' "$hostname" "$port" >>"$request"
+	write_status active 'Удалённая поддержка через Pinggy активна.'
+	audit_event session_started "mode=$mode;expires_at=$(read_value expires_at "$request")"
+	if [ "${OUM_SUPPORT_NO_WATCH:-0}" != 1 ]; then "$0" watch "$session" >/dev/null 2>&1 & fi
+}
+
+watch_session() {
+	wanted="${1:-}"; [ -n "$wanted" ] || exit 2
+	expires_at="$(read_value expires_at "$STATE_DIR/request")"
+	case "$expires_at" in *[!0-9]*|'') exit 2 ;; esac
+	while [ "$(read_value state "$STATE_FILE")" = active ] && [ "$(read_value session "$STATE_FILE")" = "$wanted" ]; do
+		now="$(date +%s)"
+		if [ "$now" -ge "$expires_at" ]; then stop_session expired; exit 0; fi
+		if ! connector_running || ! support_dropbear_running; then stop_session disconnected; exit 0; fi
+		sleep 5
+	done
+}
+
+cleanup_boot() {
+	kill_connector; remove_support_key; rm -rf "$STATE_DIR"
+	mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
+	write_status stopped 'Временный доступ очищен при загрузке роутера.'
+	audit_event boot_cleanup 'temporary_key_removed'
+}
+
+restore_backup() {
+	[ "$(read_value state "$STATE_FILE")" != active ] || { echo 'support session is active' >&2; exit 7; }
+	[ -s "$BACKUP_FILE" ] && [ -x "$SYSUPGRADE" ] || { echo 'support backup unavailable' >&2; exit 8; }
+	audit_event backup_restore_requested 'router_reboot_required'
+	("$SYSUPGRADE" -r "$BACKUP_FILE" && reboot) >/tmp/oum-support-restore.log 2>&1 &
+}
+
+case "${1:-status}" in
+	start) start_session ;;
+	stop) stop_session "${2:-user}" ;;
+	watch) watch_session "${2:-}" ;;
+	cleanup-boot) cleanup_boot ;;
+	restore) restore_backup ;;
+	audit) [ ! -f "$AUDIT_FILE" ] || tail -n 20 "$AUDIT_FILE" ;;
+	status)
+		expire_if_needed
+		if [ -f "$STATE_FILE" ]; then cat "$STATE_FILE"; else printf 'state=idle\nmode=\nhostname=\nport=\nconnect_command=\nstarted_at=0\nexpires_at=0\nprovider=pinggy\nmessage=Удалённая поддержка выключена.\nbackup_available=%s\n' "$([ -s "$BACKUP_FILE" ] && printf 1 || printf 0)"; fi
+		;;
+	*) echo "usage: $0 {start|stop|status|audit|restore|cleanup-boot}" >&2; exit 2 ;;
+esac

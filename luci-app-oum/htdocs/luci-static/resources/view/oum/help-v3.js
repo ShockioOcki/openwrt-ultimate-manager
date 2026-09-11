@@ -4,6 +4,90 @@
 'require ui';
 
 const callDashboardStatus = rpc.declare({ object: 'oum', method: 'dashboardStatus', expect: { '': {} } });
+const callSupportStatus = rpc.declare({ object: 'oum', method: 'supportStatus', expect: { '': {} } });
+const callStartSupport = rpc.declare({ object: 'oum', method: 'startSupportSession', params: [ 'mode', 'duration', 'consent' ], expect: { '': {} } });
+const callStopSupport = rpc.declare({ object: 'oum', method: 'stopSupportSession', expect: { '': {} } });
+const callRestoreSupportBackup = rpc.declare({ object: 'oum', method: 'restoreSupportBackup', expect: { '': {} } });
+
+function supportModeLabel(mode) {
+	return mode === 'repair' ? 'Диагностика и исправление' : 'Только диагностика';
+}
+
+function supportRecovery(support) {
+	const items = [];
+	if (support.backup_available) {
+		items.push(E('button', { 'class': 'btn', click: () => ui.showModal('Восстановить настройки?', [
+			E('p', {}, 'Будет восстановлена страховочная копия, созданная перед последним сеансом исправления. Роутер перезагрузится.'),
+			E('div', { 'class': 'right' }, [
+				E('button', { 'class': 'btn', click: ui.hideModal }, 'Отмена'),
+				E('button', { 'class': 'btn cbi-button-negative', click: async ev => {
+					ev.currentTarget.disabled = true;
+					const result = await callRestoreSupportBackup();
+					if (!result.ok) { ev.currentTarget.disabled = false; ui.addNotification(null, E('p', {}, result.message || 'Не удалось восстановить настройки.'), 'error'); return; }
+					ui.showModal('Восстановление запущено', [ E('p', {}, result.message) ]);
+				} }, 'Восстановить и перезагрузить')
+			])
+		]) }, 'Откатить изменения поддержки'));
+	}
+	if (support.audit) {
+		items.push(E('details', { 'class': 'oum-support-audit' }, [
+			E('summary', {}, 'Журнал удалённой поддержки'),
+			E('pre', {}, support.audit.trim().split('\n').slice(-10).join('\n'))
+		]));
+	}
+	return items.length ? E('div', { 'class': 'oum-support-recovery' }, items) : null;
+}
+
+function supportPanel(support) {
+	const active = support.state === 'active';
+	if (active) {
+		const expires = support.expires_at ? new Date(support.expires_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+		return E('section', { 'class': 'oum-support-panel is-active' }, [
+			E('div', { 'class': 'oum-support-head' }, [ E('div', {}, [ E('h2', {}, 'Удалённая поддержка'), E('p', {}, support.message || 'Сеанс активен.') ]), E('span', { 'class': 'oum-support-state' }, 'Доступ открыт') ]),
+			E('div', { 'class': 'oum-support-summary' }, [
+				E('div', {}, [ E('small', {}, 'Режим'), E('strong', {}, supportModeLabel(support.mode)) ]),
+				E('div', {}, [ E('small', {}, 'Подключение'), E('strong', {}, support.connect_command || '—') ]),
+				E('div', {}, [ E('small', {}, 'Автоотключение'), E('strong', {}, expires) ])
+			]),
+			E('p', { 'class': 'oum-support-privacy' }, 'Передайте специалисту только команду подключения. Пароль роутера в интернет не публикуется.'),
+			E('button', { 'class': 'btn cbi-button-action', click: () => navigator.clipboard.writeText(support.connect_command || '').then(() => ui.addNotification(null, E('p', {}, 'Команда подключения скопирована.'), 'info')) }, 'Скопировать команду'), ' ',
+			E('button', { 'class': 'btn cbi-button-negative', click: async ev => {
+				ev.currentTarget.disabled = true;
+				const result = await callStopSupport();
+				if (!result.ok) { ev.currentTarget.disabled = false; ui.addNotification(null, E('p', {}, result.message || 'Не удалось завершить сеанс.'), 'error'); return; }
+				location.reload();
+			} }, 'Завершить удалённый доступ'),
+			supportRecovery(support)
+		]);
+	}
+
+	const duration = E('select', { 'class': 'cbi-input-select' }, [ E('option', { value: '15' }, '15 минут'), E('option', { value: '30', selected: '' }, '30 минут'), E('option', { value: '60' }, '60 минут') ]);
+	const consent = E('input', { type: 'checkbox' });
+	const modeDiagnostic = E('input', { type: 'radio', name: 'support_mode', value: 'diagnostic', checked: '' });
+	const modeRepair = E('input', { type: 'radio', name: 'support_mode', value: 'repair' });
+	return E('section', { 'class': 'oum-support-panel' }, [
+		E('div', { 'class': 'oum-support-head' }, [ E('div', {}, [ E('h2', {}, 'Удалённая поддержка'), E('p', {}, 'OUM сам создаст временный Pinggy-туннель и покажет готовую команду для специалиста.') ]), E('span', { 'class': 'oum-support-state is-off' }, 'Выключена') ]),
+		(support.state === 'expired' || support.state === 'disconnected' || support.state === 'failed') ? E('div', { 'class': 'oum-support-notice', 'data-state': support.state }, support.message) : null,
+		!support.client_ready ? E('div', { 'class': 'oum-support-notice' }, [ E('strong', {}, 'OpenSSH-клиент не установлен.'), E('span', {}, ' Установите полный комплект OUM с зависимостью openssh-client.') ]) : null,
+		E('div', { 'class': 'oum-support-modes' }, [
+			E('label', { 'class': 'oum-support-mode' }, [ modeDiagnostic, E('span', {}, [ E('strong', {}, 'Только диагностика'), E('small', {}, 'Специалист видит состояние, службы и очищенный журнал. Настройки менять нельзя.') ]) ]),
+			E('label', { 'class': 'oum-support-mode' }, [ modeRepair, E('span', {}, [ E('strong', {}, 'Диагностика и исправление'), E('small', {}, 'Перед подключением создаётся страховочная копия; специалист получает временный полный доступ.') ]) ])
+		]),
+		E('div', { 'class': 'oum-support-fields' }, [
+			E('label', {}, [ E('span', {}, 'Срок сеанса'), duration ])
+		]),
+		E('p', { 'class': 'oum-support-privacy' }, 'Бесплатный адрес Pinggy случайный и действует не более 60 минут. OUM принимает только заранее подготовленный временный ключ; пароль отключён.'),
+		E('label', { 'class': 'oum-support-consent' }, [ consent, E('span', {}, 'Я понимаю, что на выбранное время открываю удалённый доступ к этому роутеру.') ]),
+		E('div', { 'class': 'oum-setting-actions' }, [ E('button', { 'class': 'btn cbi-button-action', disabled: support.client_ready ? null : '', click: async ev => {
+			const selected = modeRepair.checked ? 'repair' : 'diagnostic';
+			ev.currentTarget.disabled = true;
+			const result = await callStartSupport(selected, +duration.value, consent.checked);
+			if (!result.ok) { ev.currentTarget.disabled = false; ui.addNotification(null, E('p', {}, result.message || 'Не удалось запустить поддержку.'), 'error'); return; }
+			location.reload();
+		} }, 'Открыть временный доступ') ]),
+		supportRecovery(support)
+	]);
+}
 
 function appSidebar(active) {
 	const item = (key, label, path) => E('a', { 'class': `oum-nav-item${active === key ? ' is-active' : ''}`, href: L.url('oum', path) }, label);
@@ -11,8 +95,10 @@ function appSidebar(active) {
 }
 
 return view.extend({
-	load() { return callDashboardStatus(); },
-	render(status) {
+	load() { return Promise.all([ callDashboardStatus(), callSupportStatus() ]); },
+	render(data) {
+		const status = data[0] || {};
+		const support = data[1] || { available: false, state: 'unavailable', client_ready: false };
 		const checks = [
 			[ '1', 'Проверьте интернет', status.wan?.up ? `Подключение есть${status.wan.ipv4 ? ` · ${status.wan.ipv4}` : ''}.` : 'Подключения нет. Проверьте WAN-кабель или данные PPPoE в Настройках.', status.wan?.up ],
 			[ '2', 'Проверьте DNS', 'Если открываются IP-адреса, но не сайты, смените основной и Bootstrap DNS активного VPN-движка в Настройках.', null ],
@@ -20,11 +106,12 @@ return view.extend({
 			[ '4', 'Не помогло?', 'Сохраните резервную копию OUM, перезагрузите роутер и повторите проверку. Сброс VPN не меняет WAN и Wi-Fi.', null ]
 		];
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260907-quick14` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260910-pinggy1` }),
 			E('h2', {}, 'Если интернет не работает'),
 			E('p', {}, 'Идите сверху вниз: сначала обычное подключение, затем DNS и только после этого VPN.'),
 			E('div', { 'class': 'oum-help-grid' }, checks.map(([ number, title, text, ok ]) => E('section', { 'class': 'oum-help-step' }, [ E('span', { 'class': 'oum-help-number' }, number), E('div', {}, [ E('h3', {}, title), E('p', { 'class': ok == null ? '' : 'oum-help-result', 'data-ok': ok == null ? null : String(ok) }, text) ]) ]))),
 			E('div', { 'class': 'oum-setting-actions' }, [ E('a', { 'class': 'btn cbi-button-action', href: L.url('oum', 'dashboard') }, 'Открыть главную'), ' ', E('a', { 'class': 'btn', href: L.url('oum', 'settings') }, 'Открыть настройки') ]),
+			supportPanel(support),
 			E('details', { 'class': 'oum-help-extra' }, [
 				E('summary', {}, 'Дополнительно: YouTube на Windows'),
 				E('p', {}, 'Если YouTube через Zapret всё равно подвисает, можно попробовать включить TCP timestamps. Это необязательная настройка ПК, а не требование OUM.'),

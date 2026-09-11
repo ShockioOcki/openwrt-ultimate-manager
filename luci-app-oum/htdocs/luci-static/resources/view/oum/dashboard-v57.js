@@ -90,12 +90,18 @@ function preferredNodes(nodeStatus) {
 	return result;
 }
 
-function policySelect(client) {
-	return E('select', { 'class': 'oum-policy', 'data-mac': client.mac }, [
+function policySelect(client, engine) {
+	const options = [
 		E('option', { value: 'default', selected: client.policy === 'default' ? '' : null }, 'По общим правилам'),
 		E('option', { value: 'direct', selected: client.policy === 'direct' ? '' : null }, 'Всегда напрямую'),
 		E('option', { value: 'vpn', selected: client.policy === 'vpn' ? '' : null }, 'Полностью через VPN')
-	]);
+	];
+	options.splice(2, 0, E('option', {
+		value: 'gaming',
+		selected: client.policy === 'gaming' ? '' : null,
+		disabled: engine === 'passwall' ? null : ''
+	}, engine === 'passwall' ? 'Игры напрямую' : 'Игры напрямую (только PassWall)'));
+	return E('select', { 'class': 'oum-policy', 'data-mac': client.mac }, options);
 }
 
 function validDeviceAlias(alias) {
@@ -988,12 +994,12 @@ return view.extend({
 					nameCell(client), E('td', {}, client.ip),
 					E('td', {}, client.medium === 'wifi' ? 'Wi-Fi' : (client.medium === 'ethernet' ? 'Кабель' : 'Не определено')),
 					E('td', { 'class': 'optional' }, client.mac), trafficCell(client.traffic),
-					E('td', {}, policySelect(client)),
+					E('td', {}, policySelect(client, vpnEngine)),
 					E('td', {}, parentalButton(client)),
 					E('td', { 'class': 'oum-mobile-device-action' }, mobileDeviceButton(client))
 				])));
 				offlineBody.replaceChildren(...(fresh.offline_clients || []).map((client) => {
-					const select = policySelect(client);
+					const select = policySelect(client, vpnEngine);
 					select.disabled = true;
 					return E('tr', { 'class': client.paused ? 'oum-client-paused' : '' }, [
 						nameCell(client), E('td', {}, client.ip || '—'), E('td', { 'class': 'optional' }, client.mac),
@@ -1407,7 +1413,7 @@ return view.extend({
 				const client = (dashboardState.clients || []).find((item) => item.mac === mac);
 				if (!client) return;
 				const aliasInput = E('input', { maxlength: 32, value: client.alias || client.name, 'aria-label': 'Имя устройства' });
-				const routeSelect = policySelect(client);
+				const routeSelect = policySelect(client, vpnEngine);
 				const parentalToggle = E('button', {
 					type: 'button',
 					'class': `btn ${client.parental_managed ? 'cbi-button-negative' : 'cbi-button'} oum-mobile-parental-toggle`
