@@ -2171,9 +2171,7 @@ body.theme-oum .cbi-value-description {
   color: var(--oum-subtle) !important;
   margin-top: 6px !important;
   padding: 0 !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 6px !important;
+  display: block !important;
 }
 
 [data-darkmode="true"] body.theme-oum .cbi-value-description {
@@ -3420,5 +3418,418 @@ body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-chec
 @media (max-width: 900px) {
   body.theme-oum[data-page="admin-network-network"] .cbi-section[data-tab]:not([data-tab-active]) {
     display: none !important;
+  }
+}
+/* WLESS-D (mirrored from live 2026-09-12; live diverged under Gemini — see journal).
+   Full mobile redesign in the Interfaces tab language. Scoped to
+   admin-network-wireless, mobile only. Desktop untouched. */
+@media (max-width: 900px) {
+  /* ---- radio + SSID cards ---- */
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device tr[id^="cbi-wireless-"] {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    margin: 0 0 12px !important;
+    padding: 6px 14px 14px !important;
+    border: 1px solid var(--oum-line) !important;
+    border-radius: 14px !important;
+    background: var(--oum-paper) !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device tr[id^="cbi-wireless-"] > td {
+    display: block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+  /* header pill row */
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td[data-name="_badge"] {
+    padding: 8px 0 4px !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td[data-name="_badge"] .center {
+    text-align: left !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td[data-name="_badge"] .ifacebadge {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 4px 12px 4px 4px !important;
+    border-radius: 99px !important;
+    background: var(--oum-paper-soft) !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td[data-name="_badge"] .ifacebadge img {
+    width: 22px !important;
+    height: 22px !important;
+  }
+  /* facts: label left / value right, hairlines; kill "|" separators */
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td[data-name="_stat"] > div {
+    font-size: 0 !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td[data-name="_stat"] big {
+    display: block !important;
+    padding: 8px 0 2px !important;
+    font-size: 15px !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td[data-name="_stat"] span.nowrap {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: baseline !important;
+    gap: 12px !important;
+    padding: 7px 0 !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    font-size: 13px !important;
+    white-space: normal !important;
+    text-align: right !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td[data-name="_stat"] span.nowrap > strong {
+    flex: 0 0 auto !important;
+    font-weight: 400 !important;
+    font-size: 12px !important;
+    color: var(--oum-faint) !important;
+    text-align: left !important;
+  }
+  /* buttons grid 2x2 (3rd spans full) */
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td.cbi-section-actions {
+    min-width: 0 !important;
+    width: auto !important;
+    padding-top: 12px !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td.cbi-section-actions > div {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td.cbi-section-actions .cbi-button {
+    min-height: 42px !important;
+    margin: 0 !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td.cbi-section-actions .cbi-button:last-child:nth-child(odd) {
+    grid-column: 1 / -1 !important;
+  }
+  /* ---- clients in the same language ---- */
+  body.theme-oum[data-page="admin-network-wireless"] table.assoclist tr.tr.table-titles {
+    display: none !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] table.assoclist,
+  body.theme-oum[data-page="admin-network-wireless"] table.assoclist tbody {
+    display: block !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] table.assoclist tr.tr {
+    display: block !important;
+    margin: 0 0 12px !important;
+    padding: 6px 14px 14px !important;
+    border: 1px solid var(--oum-line) !important;
+    border-radius: 14px !important;
+    background: var(--oum-paper) !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] table.assoclist td.td {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    flex: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    align-self: stretch !important;
+    gap: 12px !important;
+    padding: 7px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    font-size: 13px !important;
+    text-align: right !important;
+    white-space: normal !important;
+    overflow-wrap: break-word !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] table.assoclist td.td > * {
+    min-width: 0 !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] table.assoclist td.td[data-title]::before {
+    content: attr(data-title);
+    flex: 0 0 auto !important;
+    font-weight: 400 !important;
+    font-size: 12px !important;
+    color: var(--oum-faint) !important;
+    text-align: left !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] table.assoclist td.td.hide-xs {
+    display: none !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] table.assoclist td.td:last-child {
+    border-bottom: 0 !important;
+    padding-top: 12px !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] table.assoclist td.td:last-child .cbi-button {
+    width: 100% !important;
+    min-height: 42px !important;
+  }
+  /* badges: kill stock white pills, dark soft instead */
+  body.theme-oum[data-page="admin-network-wireless"] table.assoclist td.td .ifacebadge {
+    background: var(--oum-paper-soft) !important;
+    border: 1px solid var(--oum-line) !important;
+    color: inherit !important;
+  }
+}
+/* LuCI-wide responsive cleanup: page tabs, dense operational tables and footer rhythm. */
+@media (max-width: 900px) {
+  body.theme-oum #maincontent .cbi-section,
+  body.theme-oum #maincontent .panel {
+    margin-bottom: 12px !important;
+    padding: 14px !important;
+    border-radius: 12px !important;
+  }
+
+  body.theme-oum #maincontent .cbi-section .cbi-section {
+    margin: 16px 0 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.theme-oum #maincontent .cbi-tabmenu {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    gap: 18px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 41px !important;
+    margin: 0 0 16px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+    scroll-snap-type: x proximity;
+  }
+
+  body.theme-oum #maincontent .cbi-tabmenu::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  body.theme-oum #maincontent .cbi-tabmenu > li {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: max-content !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    scroll-snap-align: start;
+  }
+
+  body.theme-oum #maincontent .cbi-tabmenu > li > a {
+    display: inline-flex !important;
+    align-items: center !important;
+    width: auto !important;
+    min-width: max-content !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--oum-subtle) !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+
+  body.theme-oum #maincontent .cbi-tabmenu > li.cbi-tab > a {
+    border-bottom-color: var(--oum-action) !important;
+    color: var(--oum-action) !important;
+  }
+
+  body.theme-oum #maincontent .cbi-tabmenu > li > a:focus-visible {
+    outline: 0 !important;
+    box-shadow: inset 0 0 0 2px var(--oum-action-ring) !important;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table,
+  body.theme-oum[data-page="admin-system-startup"] #maincontent table.table {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table > tbody,
+  body.theme-oum[data-page="admin-system-startup"] #maincontent table.table > tbody {
+    display: table !important;
+    width: 100% !important;
+    min-width: 920px !important;
+    border-collapse: collapse !important;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table tr,
+  body.theme-oum[data-page="admin-system-startup"] #maincontent table.table tr {
+    display: table-row !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table tr.table-titles,
+  body.theme-oum[data-page="admin-system-startup"] #maincontent table.table tr.table-titles {
+    display: table-row !important;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table th,
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table td,
+  body.theme-oum[data-page="admin-system-startup"] #maincontent table.table th,
+  body.theme-oum[data-page="admin-system-startup"] #maincontent table.table td {
+    display: table-cell !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 8px 10px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    background: transparent !important;
+    vertical-align: middle !important;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table td::before,
+  body.theme-oum[data-page="admin-system-startup"] #maincontent table.table td::before {
+    content: none !important;
+    display: none !important;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table .cbi-section-actions,
+  body.theme-oum[data-page="admin-system-startup"] #maincontent table.table .cbi-section-actions {
+    display: table-cell !important;
+    width: 1% !important;
+    white-space: nowrap !important;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table .cbi-section-actions > div,
+  body.theme-oum[data-page="admin-system-startup"] #maincontent table.table .cbi-section-actions > div {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 4px !important;
+    width: auto !important;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table .cbi-section-actions button,
+  body.theme-oum[data-page="admin-system-startup"] #maincontent table.table .cbi-section-actions button {
+    width: auto !important;
+    min-width: 0 !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
+    white-space: nowrap !important;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table tr,
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table tr.table-titles {
+    display: grid !important;
+    grid-template-columns: 70px 100px minmax(650px, 1fr) 100px 100px 340px !important;
+    min-width: 1360px !important;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table tr > th,
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table tr > td,
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table tr > .cbi-section-actions {
+    display: block !important;
+    width: auto !important;
+  }
+
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table.table tr > .cbi-section-actions > div {
+    width: 100% !important;
+  }
+
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-chain {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules {
+    display: table !important;
+    width: 100% !important;
+    min-width: 1100px !important;
+    max-width: none !important;
+    overflow: visible !important;
+    table-layout: auto !important;
+  }
+
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules > tbody {
+    display: table !important;
+    width: 100% !important;
+    min-width: 1100px !important;
+    border-collapse: collapse !important;
+  }
+
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr,
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr.table-titles {
+    display: table-row !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules th,
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules td {
+    display: table-cell !important;
+    width: auto !important;
+    height: auto !important;
+    padding: 8px 10px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    background: transparent !important;
+    vertical-align: top !important;
+  }
+
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules .ifacebadge {
+    white-space: nowrap !important;
+  }
+
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules .ifacebadge > var,
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules .ifacebadge > span {
+    display: inline !important;
+  }
+
+  body.theme-oum.oum-has-mobile-nav:not(.oum-auth-page) #maincontent {
+    padding-bottom: 16px !important;
+  }
+
+  body.theme-oum.oum-has-mobile-nav:not(.oum-auth-page) .oum-system-footer {
+    margin-bottom: 56px !important;
+  }
+}
+
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-network-dhcp"] #view .cbi-section {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-inline: contain;
+  }
+
+  body.theme-oum[data-page="admin-status-routesj"] #view .cbi-section {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-inline: contain;
   }
 }
