@@ -3833,3 +3833,183 @@ body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-chec
     overscroll-behavior-inline: contain;
   }
 }
+/* LuCI mobile polish: classic tabs, inline reveals, compact creation and empty states. */
+@media (max-width: 900px) {
+  body.theme-oum #maincontent ul.tabs {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    gap: 18px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 41px !important;
+    margin: 0 0 16px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+    scroll-snap-type: x proximity;
+  }
+
+  body.theme-oum #maincontent ul.tabs::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  body.theme-oum #maincontent ul.tabs > li {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: max-content !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    scroll-snap-align: start;
+  }
+
+  body.theme-oum #maincontent ul.tabs > li > a {
+    display: inline-flex !important;
+    align-items: center !important;
+    width: auto !important;
+    min-width: max-content !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--oum-subtle) !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+  }
+
+  body.theme-oum #maincontent ul.tabs > li.active > a {
+    border-bottom-color: var(--oum-action) !important;
+    color: var(--oum-action) !important;
+  }
+
+  body.theme-oum[data-page="admin-system-admin"] #maincontent .control-group:has(> input[type="password"]) {
+    position: relative !important;
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  body.theme-oum[data-page="admin-system-admin"] #maincontent .control-group > input[type="password"],
+  body.theme-oum[data-page="admin-system-admin"] #maincontent .control-group > input[type="text"]:has(+ button[aria-label="Показать/скрыть пароль"]) {
+    width: 100% !important;
+    padding-right: 50px !important;
+  }
+
+  body.theme-oum[data-page="admin-system-admin"] #maincontent .control-group > button[aria-label="Показать/скрыть пароль"] {
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-left: 1px solid var(--oum-line-strong) !important;
+    border-radius: 0 var(--oum-control-radius) var(--oum-control-radius) 0 !important;
+    background: transparent !important;
+    color: var(--oum-subtle) !important;
+    font-size: 0 !important;
+  }
+
+  body.theme-oum[data-page="admin-system-admin"] #maincontent .control-group > button[aria-label="Показать/скрыть пароль"]::before {
+    content: "" !important;
+    display: block !important;
+    width: 18px !important;
+    height: 18px !important;
+    margin: auto !important;
+    background: currentColor !important;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") no-repeat center / contain !important;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") no-repeat center / contain !important;
+  }
+
+  body.theme-oum #maincontent .cbi-section-create:has(.cbi-section-create-name) {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 44px !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  body.theme-oum #maincontent .cbi-section-create:has(.cbi-section-create-name) > div,
+  body.theme-oum #maincontent .cbi-section-create:has(.cbi-section-create-name) .cbi-section-create-name {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  body.theme-oum #maincontent .cbi-section-create:has(.cbi-section-create-name) > .cbi-button-add {
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0 !important;
+    font-size: 0 !important;
+  }
+
+  body.theme-oum #maincontent .table .tr.placeholder,
+  body.theme-oum #maincontent .table tr.placeholder {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body.theme-oum #maincontent .table .tr.placeholder > .td,
+  body.theme-oum #maincontent .table tr.placeholder > td {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 12px 14px !important;
+    border: 0 !important;
+    color: var(--oum-subtle) !important;
+    text-align: center !important;
+    grid-template-columns: none !important;
+    line-height: 1.45 !important;
+  }
+
+  body.theme-oum #maincontent .table .tr.placeholder > .td > em,
+  body.theme-oum #maincontent .table tr.placeholder > td > em {
+    display: inline !important;
+    width: auto !important;
+    height: auto !important;
+    line-height: 1.45 !important;
+  }
+
+  body.theme-oum[data-page="admin-system-package-manager"] #packages:has(tr.placeholder) {
+    display: none !important;
+  }
+
+  body.theme-oum[data-page="admin-system-package-manager"] #packages:has(tr.placeholder) + .controls {
+    display: none !important;
+  }
+
+  body.theme-oum[data-page="admin-system-package-manager"] .cbi-tabmenu.mode + .controls .pager:has(.prev:disabled):has(.next:disabled) {
+    display: block !important;
+    margin: 0 0 12px !important;
+    padding: 14px !important;
+    border: 1px solid var(--oum-line) !important;
+    border-radius: 12px !important;
+    background: var(--oum-paper) !important;
+    color: var(--oum-subtle) !important;
+    text-align: center !important;
+  }
+
+  body.theme-oum[data-page="admin-system-package-manager"] .cbi-tabmenu.mode + .controls .pager:has(.prev:disabled):has(.next:disabled) > button {
+    display: none !important;
+  }
+}
