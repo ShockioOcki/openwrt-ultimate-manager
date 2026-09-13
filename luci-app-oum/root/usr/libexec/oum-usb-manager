@@ -7,6 +7,9 @@ ACTION="${1:-status}"
 MOUNT_ROOT=/mnt/oum
 FSTAB_SECTION=oum_usb
 STORAGE_PACKAGES='block-mount kmod-usb-storage kmod-usb-storage-uas kmod-scsi-core kmod-fs-ext4 e2fsprogs parted'
+SMB_PACKAGES='ksmbd-server'
+SMB_SHARE_SECTION=oum_share
+SMB_SHARE_NAME=OUM
 
 clean_value() {
 	printf '%s' "${1:-}" | tr '\n\r\t' '   '
@@ -61,6 +64,21 @@ packages_ready() {
 	done
 }
 
+service_enabled() {
+	[ -x "/etc/init.d/$1" ] && "/etc/init.d/$1" enabled >/dev/null 2>&1
+}
+
+service_running() {
+	[ -x "/etc/init.d/$1" ] && "/etc/init.d/$1" running >/dev/null 2>&1
+}
+
+managed_mountpoint() {
+	target="$(uci -q get "fstab.$FSTAB_SECTION.target" 2>/dev/null || true)"
+	[ -n "$target" ] || return 1
+	awk -v target="$target" '$2 == target { found=1 } END { exit !found }' /proc/mounts || return 1
+	printf '%s\n' "$target"
+}
+
 status() {
 	disk="$(usb_disk 2>/dev/null || true)"
 	partition=""
@@ -96,6 +114,10 @@ status() {
 	emit label "$label"
 	emit mountpoint "$mountpoint"
 	emit mounted "$([ -n "$mountpoint" ] && echo 1 || echo 0)"
+	emit smb_installed "$(apk info -e ksmbd-server >/dev/null 2>&1 && echo 1 || echo 0)"
+	emit smb_enabled "$(service_enabled ksmbd && echo 1 || echo 0)"
+	emit smb_running "$(service_running ksmbd && echo 1 || echo 0)"
+	emit smb_share "$([ -n "$mountpoint" ] && printf '%s/%s' "$mountpoint" "$SMB_SHARE_NAME" || true)"
 }
 
 require_usb_disk() {
@@ -158,12 +180,63 @@ mount_partition() {
 	mountpoint="$(mounted_at "$partition")"
 	[ -z "$mountpoint" ] || [ "$mountpoint" = "$target" ] || { echo 'Partition is already mounted elsewhere' >&2; return 1; }
 	[ -n "$mountpoint" ] || mount -t ext4 -o rw,noatime "$partition" "$target"
-	[ "$(mounted_at "$partition")" = "$target" ]
+	[ "$(mounted_at "$partition")" = "$target" ] || return 1
+	if service_enabled ksmbd; then
+		share="$(uci -q get "ksmbd.$SMB_SHARE_SECTION.path" 2>/dev/null || true)"
+		if [ "$share" = "$target/$SMB_SHARE_NAME" ]; then
+			mkdir -p "$share"
+			chown nobody:nogroup "$share"
+			chmod 0775 "$share"
+			/etc/init.d/ksmbd restart
+		else
+			/etc/init.d/ksmbd disable
+		fi
+	fi
+}
+
+smb_enable() {
+	target="$(managed_mountpoint)" || { echo 'Mount the managed USB storage before enabling SMB' >&2; return 1; }
+	apk info -e ksmbd-server >/dev/null 2>&1 || apk -U add $SMB_PACKAGES
+	mkdir -p /etc/oum/usb
+	[ -e /etc/oum/usb/ksmbd-before-oum ] || cp -p /etc/config/ksmbd /etc/oum/usb/ksmbd-before-oum
+	share="$target/$SMB_SHARE_NAME"
+	mkdir -p "$share"
+	chown nobody:nogroup "$share"
+	chmod 0775 "$share"
+	uci -q batch <<-EOF
+		set ksmbd.@globals[0].interface='lan'
+		set ksmbd.@globals[0].workgroup='WORKGROUP'
+		set ksmbd.@globals[0].description='OUM storage'
+		delete ksmbd.$SMB_SHARE_SECTION
+		set ksmbd.$SMB_SHARE_SECTION='share'
+		set ksmbd.$SMB_SHARE_SECTION.name='$SMB_SHARE_NAME'
+		set ksmbd.$SMB_SHARE_SECTION.path='$share'
+		set ksmbd.$SMB_SHARE_SECTION.read_only='no'
+		set ksmbd.$SMB_SHARE_SECTION.writeable='yes'
+		set ksmbd.$SMB_SHARE_SECTION.guest_ok='yes'
+		set ksmbd.$SMB_SHARE_SECTION.browseable='yes'
+		set ksmbd.$SMB_SHARE_SECTION.create_mask='0664'
+		set ksmbd.$SMB_SHARE_SECTION.dir_mask='0775'
+		delete ksmbd.$SMB_SHARE_SECTION.force_root
+	EOF
+	uci -q commit ksmbd
+	/etc/init.d/ksmbd enable
+	/etc/init.d/ksmbd restart
+	service_running ksmbd
+}
+
+smb_disable() {
+	[ -x /etc/init.d/ksmbd ] || return 0
+	/etc/init.d/ksmbd stop
+	/etc/init.d/ksmbd disable
 }
 
 format_disk() {
 	disk="$(require_usb_disk "${1:-}")"
 	[ "${2:-}" = ERASE ] || { echo 'Format confirmation is missing' >&2; return 1; }
+	# Formatting invalidates paths on the old filesystem. Leave SMB off until
+	# the user explicitly enables it for the freshly formatted disk.
+	smb_disable
 	unmount_disk_partitions "$disk"
 	parted -s "$disk" mklabel gpt
 	parted -s "$disk" mkpart primary ext4 1MiB 100%
@@ -196,6 +269,7 @@ unmount_managed() {
 	partition="$(uci -q get "fstab.$FSTAB_SECTION.uuid" 2>/dev/null || true)"
 	[ -n "$partition" ] || return 0
 	target="$(uci -q get "fstab.$FSTAB_SECTION.target" 2>/dev/null || true)"
+	service_running ksmbd && /etc/init.d/ksmbd stop
 	[ -z "$target" ] || ! grep -qs " $target " /proc/mounts || umount "$target"
 	uci -q set "fstab.$FSTAB_SECTION.enabled=0"
 	uci -q commit fstab
@@ -207,5 +281,7 @@ case "$ACTION" in
 	format) format_disk "${2:-}" "${3:-}" ;;
 	mount) mount_disk "${2:-}" ;;
 	unmount) unmount_managed ;;
-	*) echo "usage: $0 {status|prepare|format DEVICE ERASE|mount DEVICE|unmount}" >&2; exit 2 ;;
+	smb-enable) smb_enable ;;
+	smb-disable) smb_disable ;;
+	*) echo "usage: $0 {status|prepare|format DEVICE ERASE|mount DEVICE|unmount|smb-enable|smb-disable}" >&2; exit 2 ;;
 esac

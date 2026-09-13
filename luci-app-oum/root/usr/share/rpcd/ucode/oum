@@ -730,7 +730,11 @@ function usbStorageStatusData() {
 		uuid: '',
 		label: '',
 		mountpoint: '',
-		mounted: false
+		mounted: false,
+		smb_installed: false,
+		smb_enabled: false,
+		smb_running: false,
+		smb_share: ''
 	};
 	if (!result.available)
 		return result;
@@ -741,7 +745,7 @@ function usbStorageStatusData() {
 		let pair = match(line, /^([a-z_]+)=(.*)$/);
 		if (!pair)
 			continue;
-		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted' ])
+		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted', 'smb_installed', 'smb_enabled', 'smb_running' ])
 			result[pair[1]] = trim(pair[2]) == '1';
 		else if (pair[1] == 'size_bytes')
 			result.size_bytes = +(trim(pair[2]) || 0);
@@ -1816,6 +1820,21 @@ const methods = {
 			if (!current.mounted)
 				return failure('usb_not_mounted', 'Накопитель уже отключён.');
 			return startSystemJob('usb_unmount', {});
+		}
+	},
+
+	setUsbSmb: {
+		args: { enabled: false },
+		call: function(request) {
+			let enabled = request.args.enabled == true;
+			let current = usbStorageStatusData();
+			if (enabled && !current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (enabled && current.smb_running)
+				return failure('usb_smb_running', 'SMB уже включён.');
+			if (!enabled && !current.smb_enabled && !current.smb_running)
+				return failure('usb_smb_stopped', 'SMB уже выключен.');
+			return startSystemJob(enabled ? 'usb_smb_enable' : 'usb_smb_disable', {});
 		}
 	},
 

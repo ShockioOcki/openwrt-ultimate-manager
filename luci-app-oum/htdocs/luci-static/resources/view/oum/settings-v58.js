@@ -25,6 +25,7 @@ const callPrepareUsbStorage = rpc.declare({ object: 'oum', method: 'prepareUsbSt
 const callFormatUsbStorage = rpc.declare({ object: 'oum', method: 'formatUsbStorage', params: [ 'device', 'confirm' ], expect: { '': {} } });
 const callMountUsbStorage = rpc.declare({ object: 'oum', method: 'mountUsbStorage', params: [ 'device' ], expect: { '': {} } });
 const callUnmountUsbStorage = rpc.declare({ object: 'oum', method: 'unmountUsbStorage', expect: { '': {} } });
+const callSetUsbSmb = rpc.declare({ object: 'oum', method: 'setUsbSmb', params: [ 'enabled' ], expect: { '': {} } });
 const callScanWifi = rpc.declare({ object: 'oum', method: 'scanWifi', params: [ 'band' ], expect: { '': {} } });
 const callSetWisp = rpc.declare({ object: 'oum', method: 'setWisp', params: [ 'enabled', 'ssid', 'password', 'band' ], expect: { '': {} } });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
@@ -204,7 +205,7 @@ return view.extend({
 		const lan = settings.lan || { address: '192.168.5.1', prefix: 24, rollback: false, rollback_address: '' };
 		const mesh = settings.mesh || { enabled: false, id: '', band: '5g' };
 		const wisp = settings.wisp || { enabled: false, connected: false, ssid: '', ip: '', signal: null, band: '2g', rollback: false };
-		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false };
+		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '' };
 		const project = settings.project || { version: 'development', rollback: false };
 		const projectUpdatable = project.version && project.version !== 'development';
 		const dns = settings.dns || {
@@ -264,6 +265,7 @@ return view.extend({
 				(!usb.runtime_ready ? 'Накопитель найден · нужны драйверы' :
 					(!usb.disk ? 'Драйверы установлены · переподключите накопитель' :
 						(usb.mounted ? `${usbName} · ${formatBytes(usb.size_bytes)} · подключён` : `${usbName} · ${formatBytes(usb.size_bytes)} · не подключён`))));
+		const smbAddress = `\\\\${lan.address || '192.168.5.1'}\\OUM`;
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
 		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
@@ -362,13 +364,19 @@ return view.extend({
 					...(usb.runtime_ready && usb.disk ? [ E('button', { 'class': 'btn cbi-button-negative', id: 'format-usb-storage', 'data-system-action': '' }, 'Форматировать ext4') ] : [])
 				]),
 				E('div', { 'class': 'oum-usb-services' }, [
-					E('span', {}, [ E('strong', {}, 'SMB'), E('small', {}, 'Без пароля · только домашняя сеть') ]),
+					E('article', { 'class': `oum-usb-service${usb.smb_running ? ' is-active' : ''}` }, [
+						E('div', {}, [
+							E('strong', {}, 'SMB'),
+							E('small', {}, usb.smb_running ? `${smbAddress} · без пароля` : 'Без пароля · только домашняя сеть')
+						]),
+						E('button', { 'class': `btn ${usb.smb_running ? '' : 'cbi-button-action'}`, id: 'toggle-usb-smb', 'data-system-action': '', disabled: usb.mounted || usb.smb_running ? null : '' }, usb.smb_running ? 'Выключить' : 'Включить')
+					]),
 					E('span', {}, [ E('strong', {}, 'aria2'), E('small', {}, 'Загрузки и AriaNg') ]),
 					E('span', {}, [ E('strong', {}, 'miniDLNA'), E('small', {}, 'Видео, музыка и фото') ]),
 					E('span', {}, [ E('strong', {}, 'Сортировщик'), E('small', {}, 'TMDB · фильмы и сериалы') ]),
 					E('span', {}, [ E('strong', {}, 'Swap'), E('small', {}, 'Отдельная настройка') ])
 				]),
-				E('p', { 'class': 'oum-help oum-usb-next' }, usb.mounted ? 'Накопитель готов. Сервисы подключим следующими независимыми переключателями.' : 'Сначала подготовьте и подключите накопитель — сервисы останутся выключенными.')
+				E('p', { 'class': 'oum-help oum-usb-next' }, usb.mounted ? (usb.smb_running ? 'SMB работает. Остальные сервисы добавим следующими независимыми переключателями.' : 'Накопитель готов. Можно включить общий доступ SMB.') : 'Сначала подготовьте и подключите накопитель — сервисы останутся выключенными.')
 			]),
 			E('details', { 'class': 'oum-settings-panel oum-protected' }, [
 				E('summary', {}, 'Расширение сети'),
@@ -1107,6 +1115,14 @@ return view.extend({
 			const description = `${usbName} · ${formatBytes(usb.size_bytes)} · ${usb.disk}. Все разделы и данные на этом USB-накопителе будут удалены. Внутренняя память роутера не затрагивается.`;
 			if (await confirmation('Форматировать USB-накопитель?', description, 'Стереть и форматировать', true))
 				start(callFormatUsbStorage(usb.disk, 'ERASE'));
+		});
+		const smbButton = root.querySelector('#toggle-usb-smb');
+		if (smbButton) smbButton.addEventListener('click', async () => {
+			const enable = !usb.smb_running;
+			const title = enable ? 'Включить общий доступ?' : 'Выключить общий доступ?';
+			const description = enable ? `Папка ${smbAddress} станет доступна без пароля устройствам домашней сети.` : 'Подключения SMB будут закрыты. Файлы на накопителе сохранятся.';
+			if (await confirmation(title, description, enable ? 'Включить SMB' : 'Выключить SMB', false))
+				start(callSetUsbSmb(enable));
 		});
 		root.querySelector('#create-backup').addEventListener('click', () => {
 			setBusy(true);

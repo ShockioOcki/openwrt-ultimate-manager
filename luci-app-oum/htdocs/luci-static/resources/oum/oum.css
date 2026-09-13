@@ -932,7 +932,12 @@
 .oum-usb-device .oum-help { margin: 4px 0 0; }
 .oum-usb-actions { margin: 0; }
 .oum-usb-services { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-.oum-usb-services > span { display: grid; gap: 2px; min-width: 0; padding: 10px 11px; border: 1px solid var(--oum-line); border-radius: 10px; background: var(--oum-paper); opacity: .72; }
+.oum-usb-services > span, .oum-usb-service { display: grid; gap: 2px; min-width: 0; padding: 10px 11px; border: 1px solid var(--oum-line); border-radius: 10px; background: var(--oum-paper); }
+.oum-usb-services > span { opacity: .72; }
+.oum-usb-service { gap: 9px; }
+.oum-usb-service > div { display: grid; gap: 2px; min-width: 0; }
+.oum-usb-service.is-active { border-color: color-mix(in srgb, var(--oum-good) 55%, var(--oum-line)); background: color-mix(in srgb, var(--oum-good) 9%, var(--oum-paper)); }
+.oum-usb-service .btn { width: 100%; min-height: 38px; padding-block: 6px; }
 .oum-usb-services strong, .oum-usb-services small { overflow-wrap: anywhere; }
 .oum-usb-services small { color: var(--oum-subtle); line-height: 1.35; }
 .oum-usb-next { margin: -2px 0 0; }
@@ -946,7 +951,9 @@
   .oum-usb-head { align-items: center; }
   .oum-usb-device { padding: 11px 12px; }
   .oum-usb-actions { grid-template-columns: 1fr !important; }
-  .oum-usb-services { grid-template-columns: 1fr; }
+  .oum-usb-services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .oum-usb-service { grid-column: 1 / -1; }
+  .oum-usb-service .btn { min-height: 42px; }
 }
 .oum-choice:has(input:checked) { border-color: var(--oum-action) !important; background: var(--oum-action-soft); }
 
