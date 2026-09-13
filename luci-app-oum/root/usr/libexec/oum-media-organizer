@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+
+"""Sort completed aria2 videos into the OUM miniDLNA library."""
+
+import json
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import urllib.parse
+import urllib.request
+
+
+CONFIG_FILE = "/etc/oum/media-organizer.conf"
+KEY_FILE = "/etc/oum/tmdb_api_key"
+VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts"}
+TV_PATTERNS = (
+    re.compile(r"^(.*?)[. _-]+[sS](\d{1,2})[eE](\d{1,2})"),
+    re.compile(r"^(.*?)[. _-]+(\d{1,2})x(\d{1,2})", re.IGNORECASE),
+    re.compile(r"^[sS](\d{1,2})[eE](\d{1,2})"),
+)
+SEASON_FOLDER = re.compile(r"^(?:s|season|сезон)\s*\.?\s*\d{1,2}$", re.IGNORECASE)
+GENERIC_EPISODE = re.compile(r"^(?:episode|эпизод)\s*\d+$", re.IGNORECASE)
+TMDB_HOST = "api.themoviedb.org"
+_TMDB_IP = None
+
+
+def resolve_tmdb_ip():
+    global _TMDB_IP
+    if _TMDB_IP:
+        return _TMDB_IP
+    try:
+        result = subprocess.run(
+            ["nslookup", TMDB_HOST, "1.1.1.1"],
+            capture_output=True,
+            text=True,
+            timeout=6,
+            check=False,
+        )
+        for candidate in re.findall(
+            r"Address:\s*(\d+\.\d+\.\d+\.\d+)\s*$", result.stdout, re.MULTILINE
+        ):
+            octets = [int(part) for part in candidate.split(".")]
+            if octets[0] == 127 or (octets[0] == 198 and octets[1] in (18, 19)):
+                continue
+            _TMDB_IP = candidate
+            return candidate
+    except Exception:
+        pass
+    return None
+
+
+_ORIGINAL_GETADDRINFO = socket.getaddrinfo
+
+
+def direct_tmdb_getaddrinfo(host, *args, **kwargs):
+    if host == TMDB_HOST:
+        direct_ip = resolve_tmdb_ip()
+        if direct_ip:
+            return _ORIGINAL_GETADDRINFO(direct_ip, *args, **kwargs)
+    return _ORIGINAL_GETADDRINFO(host, *args, **kwargs)
+
+
+socket.getaddrinfo = direct_tmdb_getaddrinfo
+
+
+def load_values(path):
+    values = {}
+    with open(path, encoding="utf-8") as source:
+        for raw_line in source:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip().strip("\"'")
+    return values
+
+
+def clean_name(name):
+    name = re.sub(r"-\s*\[\d+x\d+\]", "", name)
+    name = re.sub(r"[. [(]?(?:19|20)\d{2}.*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(
+        r"\b(?:1080p|720p|2160p|4k|uhd|imax|dv|hdr|web[ .-]?dl|web[ .-]?dlrip|"
+        r"bdrip|hdrip|remux|bluray|x264|x265|hevc|h265|h264|aac|ac3|dub\S*|eng)\b",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"\s+", " ", name.replace(".", " ").replace("_", " ")).strip(" -_")
+
+
+def safe_name(name):
+    name = name.replace(":", " -")
+    name = re.sub(r'[\\/*?"<>|]', "", name)
+    return re.sub(r"\s+", " ", name).strip() or "Без названия"
+
+
+def fetch_tmdb(endpoint, parameters, api_key):
+    query = dict(parameters)
+    query.update({"api_key": api_key, "language": "ru-RU"})
+    url = "https://{}/3/{}?{}".format(
+        TMDB_HOST,
+        endpoint, urllib.parse.urlencode(query)
+    )
+    request = urllib.request.Request(url, headers={"User-Agent": "OUM/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            if response.status == 200:
+                return json.loads(response.read().decode("utf-8"))
+    except Exception as error:
+        print("[TMDB] {}".format(error), file=sys.stderr)
+    return None
+
+
+def movie_title(query, api_key):
+    data = fetch_tmdb("search/movie", {"query": query}, api_key)
+    if data and data.get("results"):
+        return data["results"][0].get("title")
+    return None
+
+
+def tv_info(query, season, episode, api_key):
+    data = fetch_tmdb("search/tv", {"query": query}, api_key)
+    if not data or not data.get("results"):
+        return query, None
+    show = data["results"][0]
+    title = show.get("name") or query
+    episode_data = fetch_tmdb(
+        "tv/{}/season/{}/episode/{}".format(show["id"], season, episode), {}, api_key
+    )
+    return title, episode_data.get("name") if episode_data else None
+
+
+def show_name(filepath, captured, source_dir):
+    if captured and captured.strip():
+        return captured.strip()
+    directory = os.path.dirname(filepath)
+    source_dir = os.path.normpath(source_dir)
+    for _ in range(4):
+        normalized = os.path.normpath(directory)
+        if normalized == source_dir or not normalized.startswith(source_dir + os.sep):
+            break
+        candidate = os.path.basename(directory)
+        if candidate and not SEASON_FOLDER.match(candidate.strip()):
+            return candidate
+        directory = os.path.dirname(directory)
+    return os.path.splitext(os.path.basename(filepath))[0]
+
+
+def safe_move(source, destination):
+    if not os.path.exists(destination):
+        shutil.move(source, destination)
+        return destination
+    base, extension = os.path.splitext(destination)
+    counter = 2
+    while True:
+        candidate = "{} ({}){}".format(base, counter, extension)
+        if not os.path.exists(candidate):
+            shutil.move(source, candidate)
+            return candidate
+        counter += 1
+
+
+def prepare_tv_directory(tv_dir, title, season):
+    show_dir = os.path.join(tv_dir, title)
+    season_dir = os.path.join(show_dir, "Season {:02d}".format(season))
+    os.makedirs(season_dir, exist_ok=True)
+    owner = os.stat(tv_dir)
+    for directory in (show_dir, season_dir):
+        os.chown(directory, owner.st_uid, owner.st_gid)
+        os.chmod(directory, 0o2775)
+    return season_dir
+
+
+def sort_video(filepath, source_dir, movies_dir, tv_dir, api_key):
+    filename = os.path.basename(filepath)
+    stem, extension = os.path.splitext(filename)
+    extension = extension.lower()
+    if extension not in VIDEO_EXTENSIONS:
+        return False
+
+    for pattern in TV_PATTERNS:
+        match = pattern.search(stem)
+        if not match:
+            continue
+        named = len(match.groups()) == 3
+        captured = match.group(1) if named else None
+        season = int(match.group(2 if named else 1))
+        episode = int(match.group(3 if named else 2))
+        query = clean_name(show_name(filepath, captured, source_dir))
+        title, episode_title = tv_info(query, season, episode, api_key)
+        title = safe_name(title or query)
+        destination_dir = prepare_tv_directory(tv_dir, title, season)
+        new_name = "{} - S{:02d}E{:02d}".format(title, season, episode)
+        if episode_title and not GENERIC_EPISODE.match(episode_title.strip()):
+            new_name += " - {}".format(safe_name(episode_title))
+        destination = safe_move(filepath, os.path.join(destination_dir, new_name + extension))
+        print("[TV] {} -> {}".format(filename, destination))
+        return True
+
+    query = clean_name(stem)
+    title = safe_name(movie_title(query, api_key) or query)
+    os.makedirs(movies_dir, exist_ok=True)
+    destination = safe_move(filepath, os.path.join(movies_dir, title + extension))
+    print("[MOVIE] {} -> {}".format(filename, destination))
+    return True
+
+
+def cleanup_empty_dirs(source_dir):
+    for root, _directories, _files in os.walk(source_dir, topdown=False):
+        if os.path.normpath(root) == os.path.normpath(source_dir):
+            continue
+        try:
+            if not os.listdir(root):
+                os.rmdir(root)
+        except OSError:
+            pass
+
+
+def main():
+    config = load_values(CONFIG_FILE)
+    required = ("SOURCE_DIR", "MOVIES_DIR", "TV_DIR")
+    if any(not config.get(name) for name in required):
+        raise RuntimeError("media organizer paths are not configured")
+    with open(KEY_FILE, encoding="ascii") as source:
+        api_key = source.read().strip()
+    if not re.fullmatch(r"[A-Fa-f0-9]{32}", api_key):
+        raise RuntimeError("TMDB API key is invalid")
+
+    source_dir = config["SOURCE_DIR"]
+    if not os.path.isdir(source_dir):
+        raise RuntimeError("downloads directory is unavailable")
+    moved = 0
+    for root, _directories, files in os.walk(source_dir):
+        for filename in files:
+            if sort_video(
+                os.path.join(root, filename),
+                source_dir,
+                config["MOVIES_DIR"],
+                config["TV_DIR"],
+                api_key,
+            ):
+                moved += 1
+    cleanup_empty_dirs(source_dir)
+    print("[DONE] moved={}".format(moved))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as error:
+        print("[ERROR] {}".format(error), file=sys.stderr)
+        sys.exit(1)

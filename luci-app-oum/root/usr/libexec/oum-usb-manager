@@ -15,6 +15,11 @@ ARIA2_SECTION=main
 ARIA2_SECRET_FILE=/etc/oum/usb/aria2-secret
 DLNA_PACKAGES='minidlna'
 DLNA_SECTION=config
+SORTER_PACKAGES='python3-light python3-codecs python3-openssl python3-urllib'
+SORTER_CONFIG=/etc/oum/media-organizer.conf
+SORTER_KEY=/etc/oum/tmdb_api_key
+SORTER_COMMAND=/usr/libexec/oum-media-organizer-run
+SORTER_CRON="*/5 * * * * $SORTER_COMMAND"
 
 clean_value() {
 	printf '%s' "${1:-}" | tr '\n\r\t' '   '
@@ -91,6 +96,16 @@ prepare_private_root() {
 	chmod 0711 "$root"
 }
 
+sorter_enabled() {
+	crontab -l 2>/dev/null | grep -Fqx "$SORTER_CRON"
+}
+
+sorter_value() {
+	key="$1"
+	[ -f "$SORTER_CONFIG" ] || return 0
+	sed -n "s/^$key=//p" "$SORTER_CONFIG" | head -n 1
+}
+
 status() {
 	disk="$(usb_disk 2>/dev/null || true)"
 	partition=""
@@ -140,6 +155,19 @@ status() {
 	emit dlna_enabled "$(service_enabled minidlna && echo 1 || echo 0)"
 	emit dlna_running "$(service_running minidlna && echo 1 || echo 0)"
 	emit dlna_media_dir "$([ -n "$mountpoint" ] && printf '%s/%s/Media' "$mountpoint" "$SMB_SHARE_NAME" || true)"
+	emit sorter_installed "$(apk info -e python3-light >/dev/null 2>&1 && [ -x /usr/libexec/oum-media-organizer ] && echo 1 || echo 0)"
+	emit sorter_enabled "$(sorter_enabled && echo 1 || echo 0)"
+	emit tmdb_key_set "$([ -s "$SORTER_KEY" ] && echo 1 || echo 0)"
+	state_dir="$(sorter_value STATE_DIR)"
+	if [ -n "$state_dir" ] && [ -f "$state_dir/status" ]; then
+		emit sorter_last_run "$(sed -n 's/^last_run=//p' "$state_dir/status" | head -n 1)"
+		emit sorter_result "$(sed -n 's/^result=//p' "$state_dir/status" | head -n 1)"
+		emit sorter_message "$(sed -n 's/^message=//p' "$state_dir/status" | head -n 1)"
+	else
+		emit sorter_last_run ''
+		emit sorter_result ''
+		emit sorter_message ''
+	fi
 }
 
 require_usb_disk() {
@@ -380,11 +408,57 @@ dlna_disable() {
 	/etc/init.d/minidlna disable
 }
 
+sorter_enable() {
+	target="$(managed_mountpoint)" || { echo 'Mount the managed USB storage before enabling the media organizer' >&2; return 1; }
+	grep -Eq '^[A-Fa-f0-9]{32}$' "$SORTER_KEY" 2>/dev/null || { echo 'A valid TMDB API key is required' >&2; return 1; }
+	[ -x /usr/libexec/oum-media-organizer ] && [ -x "$SORTER_COMMAND" ] || { echo 'Media organizer runtime is missing' >&2; return 1; }
+	for package in $SORTER_PACKAGES; do
+		apk info -e "$package" >/dev/null 2>&1 || { apk -U add $SORTER_PACKAGES; break; }
+	done
+	source_dir="$target/$SMB_SHARE_NAME/Downloads"
+	media_dir="$target/$SMB_SHARE_NAME/Media"
+	state_dir="$target/.oum/media-organizer"
+	prepare_private_root "$target"
+	mkdir -p "$source_dir" "$media_dir/Movies" "$media_dir/TV" "$state_dir"
+	chown nobody:nogroup "$source_dir" "$media_dir" "$media_dir/Movies" "$media_dir/TV"
+	chmod 2775 "$source_dir" "$media_dir" "$media_dir/Movies" "$media_dir/TV"
+	chown root:root "$state_dir"
+	chmod 0700 "$state_dir"
+	mkdir -p /etc/oum
+	cat > "$SORTER_CONFIG" <<-EOF
+		SOURCE_DIR=$source_dir
+		MOVIES_DIR=$media_dir/Movies
+		TV_DIR=$media_dir/TV
+		STATE_DIR=$state_dir
+	EOF
+	chmod 0600 "$SORTER_CONFIG"
+	(crontab -l 2>/dev/null || true) | grep -Fvx "$SORTER_CRON" > /tmp/oum-sorter-cron || true
+	printf '%s\n' "$SORTER_CRON" >> /tmp/oum-sorter-cron
+	crontab /tmp/oum-sorter-cron
+	rm -f /tmp/oum-sorter-cron
+	/etc/init.d/cron restart
+}
+
+sorter_disable() {
+	(crontab -l 2>/dev/null || true) | grep -Fvx "$SORTER_CRON" > /tmp/oum-sorter-cron || true
+	crontab /tmp/oum-sorter-cron
+	rm -f /tmp/oum-sorter-cron
+	/etc/init.d/cron restart
+}
+
+sorter_run() {
+	sorter_enabled || { echo 'Media organizer is disabled' >&2; return 1; }
+	target="$(managed_mountpoint)" || { echo 'Mount the managed USB storage before sorting media' >&2; return 1; }
+	[ "$(sorter_value SOURCE_DIR)" = "$target/$SMB_SHARE_NAME/Downloads" ] || { echo 'Media organizer belongs to another USB storage' >&2; return 1; }
+	"$SORTER_COMMAND"
+}
+
 format_disk() {
 	disk="$(require_usb_disk "${1:-}")"
 	[ "${2:-}" = ERASE ] || { echo 'Format confirmation is missing' >&2; return 1; }
 	# Formatting invalidates paths on the old filesystem. Leave USB services
 	# off until the user explicitly enables them for the freshly formatted disk.
+	sorter_disable
 	dlna_disable
 	aria2_disable
 	smb_disable
@@ -440,5 +514,8 @@ case "$ACTION" in
 	aria2-disable) aria2_disable ;;
 	dlna-enable) dlna_enable ;;
 	dlna-disable) dlna_disable ;;
-	*) echo "usage: $0 {status|prepare|format DEVICE ERASE|mount DEVICE|unmount|smb-enable|smb-disable|aria2-enable|aria2-disable|dlna-enable|dlna-disable}" >&2; exit 2 ;;
+	sorter-enable) sorter_enable ;;
+	sorter-disable) sorter_disable ;;
+	sorter-run) sorter_run ;;
+	*) echo "usage: $0 {status|prepare|format DEVICE ERASE|mount DEVICE|unmount|smb-enable|smb-disable|aria2-enable|aria2-disable|dlna-enable|dlna-disable|sorter-enable|sorter-disable|sorter-run}" >&2; exit 2 ;;
 esac

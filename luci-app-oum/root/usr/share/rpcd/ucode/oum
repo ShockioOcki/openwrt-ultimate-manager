@@ -744,7 +744,13 @@ function usbStorageStatusData() {
 		dlna_installed: false,
 		dlna_enabled: false,
 		dlna_running: false,
-		dlna_media_dir: ''
+		dlna_media_dir: '',
+		sorter_installed: false,
+		sorter_enabled: false,
+		tmdb_key_set: false,
+		sorter_last_run: 0,
+		sorter_result: '',
+		sorter_message: ''
 	};
 	if (!result.available)
 		return result;
@@ -755,10 +761,10 @@ function usbStorageStatusData() {
 		let pair = match(line, /^([a-z0-9_]+)=(.*)$/);
 		if (!pair)
 			continue;
-		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted', 'smb_installed', 'smb_enabled', 'smb_running', 'aria2_installed', 'aria2_enabled', 'aria2_running', 'ariang_ready', 'dlna_installed', 'dlna_enabled', 'dlna_running' ])
+		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted', 'smb_installed', 'smb_enabled', 'smb_running', 'aria2_installed', 'aria2_enabled', 'aria2_running', 'ariang_ready', 'dlna_installed', 'dlna_enabled', 'dlna_running', 'sorter_installed', 'sorter_enabled', 'tmdb_key_set' ])
 			result[pair[1]] = trim(pair[2]) == '1';
-		else if (pair[1] == 'size_bytes')
-			result.size_bytes = +(trim(pair[2]) || 0);
+		else if (pair[1] in [ 'size_bytes', 'sorter_last_run' ])
+			result[pair[1]] = +(trim(pair[2]) || 0);
 		else if (pair[1] in result)
 			result[pair[1]] = trim(pair[2]);
 	}
@@ -1875,6 +1881,39 @@ const methods = {
 			if (!enabled && !current.dlna_enabled && !current.dlna_running)
 				return failure('usb_dlna_stopped', 'Медиасервер уже выключен.');
 			return startSystemJob(enabled ? 'usb_dlna_enable' : 'usb_dlna_disable', {});
+		}
+	},
+
+	configureUsbSorter: {
+		args: { enabled: false, tmdb_key: '' },
+		call: function(request) {
+			let enabled = request.args.enabled == true;
+			let key = trim(request.args.tmdb_key ?? '');
+			let current = usbStorageStatusData();
+			if (enabled && !current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (length(key) && !match(key, /^[A-Fa-f0-9]{32}$/))
+				return failure('tmdb_key_invalid', 'TMDB API Key должен состоять из 32 шестнадцатеричных символов.');
+			if (enabled && !length(key) && !current.tmdb_key_set)
+				return failure('tmdb_key_missing', 'Укажите TMDB API Key.');
+			if (length(key)) {
+				if (system('mkdir -p /etc/oum') != 0 || !writePrivate('/etc/oum/tmdb_api_key', `${key}\n`))
+					return failure('tmdb_key_save', 'Не удалось безопасно сохранить TMDB API Key.');
+			}
+			if (!enabled && !current.sorter_enabled)
+				return failure('usb_sorter_stopped', 'Сортировщик уже выключен.');
+			return startSystemJob(enabled ? 'usb_sorter_enable' : 'usb_sorter_disable', {});
+		}
+	},
+
+	runUsbSorter: {
+		call: function() {
+			let current = usbStorageStatusData();
+			if (!current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (!current.sorter_enabled)
+				return failure('usb_sorter_stopped', 'Сначала включите сортировщик.');
+			return startSystemJob('usb_sorter_run', {});
 		}
 	},
 

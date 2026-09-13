@@ -942,6 +942,8 @@
 .oum-usb-services strong, .oum-usb-services small { overflow-wrap: anywhere; }
 .oum-usb-services small { color: var(--oum-subtle); line-height: 1.35; }
 .oum-usb-next { margin: -2px 0 0; }
+.oum-sorter-modal-actions { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px !important; }
+.oum-sorter-modal-actions .btn { width: 100%; margin: 0 !important; }
 
 @media (max-width: 900px) {
   .oum-usb-services { grid-template-columns: repeat(2, minmax(0, 1fr)); }

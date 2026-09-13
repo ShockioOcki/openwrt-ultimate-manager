@@ -28,6 +28,8 @@ const callUnmountUsbStorage = rpc.declare({ object: 'oum', method: 'unmountUsbSt
 const callSetUsbSmb = rpc.declare({ object: 'oum', method: 'setUsbSmb', params: [ 'enabled' ], expect: { '': {} } });
 const callSetUsbAria2 = rpc.declare({ object: 'oum', method: 'setUsbAria2', params: [ 'enabled' ], expect: { '': {} } });
 const callSetUsbDlna = rpc.declare({ object: 'oum', method: 'setUsbDlna', params: [ 'enabled' ], expect: { '': {} } });
+const callConfigureUsbSorter = rpc.declare({ object: 'oum', method: 'configureUsbSorter', params: [ 'enabled', 'tmdb_key' ], expect: { '': {} } });
+const callRunUsbSorter = rpc.declare({ object: 'oum', method: 'runUsbSorter', expect: { '': {} } });
 const callScanWifi = rpc.declare({ object: 'oum', method: 'scanWifi', params: [ 'band' ], expect: { '': {} } });
 const callSetWisp = rpc.declare({ object: 'oum', method: 'setWisp', params: [ 'enabled', 'ssid', 'password', 'band' ], expect: { '': {} } });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
@@ -207,7 +209,7 @@ return view.extend({
 		const lan = settings.lan || { address: '192.168.5.1', prefix: 24, rollback: false, rollback_address: '' };
 		const mesh = settings.mesh || { enabled: false, id: '', band: '5g' };
 		const wisp = settings.wisp || { enabled: false, connected: false, ssid: '', ip: '', signal: null, band: '2g', rollback: false };
-		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '', aria2_installed: false, aria2_enabled: false, aria2_running: false, ariang_ready: false, aria2_dir: '', aria2_secret_b64: '', dlna_installed: false, dlna_enabled: false, dlna_running: false, dlna_media_dir: '' };
+		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '', aria2_installed: false, aria2_enabled: false, aria2_running: false, ariang_ready: false, aria2_dir: '', aria2_secret_b64: '', dlna_installed: false, dlna_enabled: false, dlna_running: false, dlna_media_dir: '', sorter_installed: false, sorter_enabled: false, tmdb_key_set: false, sorter_last_run: 0, sorter_result: '', sorter_message: '' };
 		const project = settings.project || { version: 'development', rollback: false };
 		const projectUpdatable = project.version && project.version !== 'development';
 		const dns = settings.dns || {
@@ -270,12 +272,13 @@ return view.extend({
 		const smbAddress = `\\\\${lan.address || '192.168.5.1'}\\OUM`;
 		const ariaHost = lan.address || '192.168.5.1';
 		const ariangUrl = `http://${ariaHost}/ariang/#!/settings/rpc/set?protocol=http&host=${ariaHost}&port=6800&interface=jsonrpc&secret=${usb.aria2_secret_b64 || ''}`;
+		const sorterNote = usb.sorter_enabled ? (usb.sorter_result === 'waiting' ? 'Ждёт завершения загрузок' : (usb.sorter_message || 'Проверка каждые 5 минут')) : 'TMDB · фильмы и сериалы';
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
 		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
 		const initialVpnTab = status.pending_source !== 'none' && status.active_source === 'none' ? 'connection' : 'engine';
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260906-parental05` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260914-usb04` }),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('div', {}, [ E('h2', {}, 'Настройки OUM'), E('p', { 'class': 'oum-muted' }, 'Сеть, Wi‑Fi и защищённое подключение') ])
 			]),
@@ -386,10 +389,13 @@ return view.extend({
 						E('div', {}, [ E('strong', {}, 'miniDLNA'), E('small', {}, usb.dlna_running ? 'OUM Media · домашняя сеть' : 'Видео, музыка и фото') ]),
 						E('button', { 'class': `btn ${usb.dlna_running ? '' : 'cbi-button-action'}`, id: 'toggle-usb-dlna', 'data-system-action': '', disabled: usb.mounted || usb.dlna_running ? null : '' }, usb.dlna_running ? 'Выключить' : 'Включить')
 					]),
-					E('span', {}, [ E('strong', {}, 'Сортировщик'), E('small', {}, 'TMDB · фильмы и сериалы') ]),
+					E('article', { 'class': `oum-usb-service${usb.sorter_enabled ? ' is-active' : ''}` }, [
+						E('div', {}, [ E('strong', {}, 'Сортировщик'), E('small', {}, sorterNote) ]),
+						E('button', { 'class': `btn ${usb.sorter_enabled ? '' : 'cbi-button-action'}`, id: 'configure-usb-sorter', 'data-system-action': '', disabled: usb.mounted || usb.sorter_enabled ? null : '' }, usb.sorter_enabled ? 'Управление' : 'Настроить')
+					]),
 					E('span', {}, [ E('strong', {}, 'Swap'), E('small', {}, 'Отдельная настройка') ])
 				]),
-				E('p', { 'class': 'oum-help oum-usb-next' }, usb.mounted ? (usb.smb_running ? 'SMB работает. Остальные сервисы добавим следующими независимыми переключателями.' : 'Накопитель готов. Можно включить общий доступ SMB.') : 'Сначала подготовьте и подключите накопитель — сервисы останутся выключенными.')
+				E('p', { 'class': 'oum-help oum-usb-next' }, usb.mounted ? 'Каждая служба включается отдельно; отключение службы не удаляет файлы.' : 'Сначала подготовьте и подключите накопитель — сервисы останутся выключенными.')
 			]),
 			E('details', { 'class': 'oum-settings-panel oum-protected' }, [
 				E('summary', {}, 'Расширение сети'),
@@ -1152,6 +1158,40 @@ return view.extend({
 			const description = enable ? 'OUM создаст папки Movies, TV, Music и Pictures. Телевизоры и медиаплееры увидят сервер OUM Media в домашней сети.' : 'Медиасервер исчезнет из домашней сети. Все файлы и каталог останутся на накопителе.';
 			if (await confirmation(title, description, enable ? 'Включить miniDLNA' : 'Выключить miniDLNA', false))
 				start(callSetUsbDlna(enable));
+		});
+		const sorterButton = root.querySelector('#configure-usb-sorter');
+		if (sorterButton) sorterButton.addEventListener('click', () => {
+			const keyInput = E('input', {
+				type: 'password', maxlength: 32, autocomplete: 'off', inputmode: 'text',
+				placeholder: usb.tmdb_key_set ? 'Ключ сохранён · оставьте пустым' : '32 символа'
+			});
+			const close = () => ui.hideModal();
+			ui.showModal('Сортировщик медиа', [
+				E('p', {}, 'Готовые видео из Downloads будут разложены в Movies и TV. Пока рядом есть файл .aria2, OUM ничего не перемещает.'),
+				field('TMDB API Key (v3)', keyInput),
+				E('p', { 'class': 'oum-help' }, [
+					usb.tmdb_key_set ? 'Ключ уже сохранён. Вводите новый только для замены. ' : 'Нужен бесплатный ключ для русских названий. ',
+					E('a', { href: 'https://www.themoviedb.org/settings/api', target: '_blank', rel: 'noopener' }, 'Получить на TMDB')
+				]),
+				E('div', { 'class': 'right oum-sorter-modal-actions' }, [
+					E('button', { 'class': 'btn', click: close }, 'Закрыть'),
+					...(usb.sorter_enabled ? [
+						E('button', { 'class': 'btn', click: () => { close(); start(callRunUsbSorter()); } }, 'Запустить сейчас'),
+						E('button', { 'class': 'btn cbi-button-negative', click: async () => {
+							close();
+							if (await confirmation('Выключить сортировщик?', 'Автоматическая проверка остановится. Настройки, ключ и медиафайлы сохранятся.', 'Выключить', false)) start(callConfigureUsbSorter(false, ''));
+						} }, 'Выключить')
+					] : []),
+					E('button', { 'class': 'btn cbi-button-action important', click: () => {
+						const key = keyInput.value.trim();
+						if (!usb.tmdb_key_set && !/^[a-f0-9]{32}$/i.test(key)) return ui.addNotification(null, E('p', {}, 'Введите TMDB API Key: 32 шестнадцатеричных символа.'), 'warning');
+						if (key && !/^[a-f0-9]{32}$/i.test(key)) return ui.addNotification(null, E('p', {}, 'TMDB API Key должен содержать ровно 32 шестнадцатеричных символа.'), 'warning');
+						keyInput.value = '';
+						close();
+						start(callConfigureUsbSorter(true, key));
+					} }, usb.sorter_enabled ? 'Сохранить' : 'Включить')
+				])
+			]);
 		});
 		root.querySelector('#create-backup').addEventListener('click', () => {
 			setBusy(true);
