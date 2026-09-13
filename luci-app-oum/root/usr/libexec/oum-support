@@ -48,13 +48,21 @@ write_status() {
 	started_at="$(read_value started_at "$STATE_DIR/request")"
 	session="$(read_value session "$STATE_DIR/request")"
 	connect_command=''
+	web_command=''
+	web_url=''
 	[ -z "$hostname" ] || connect_command="ssh -p ${port} root@${hostname}"
+	if [ "$mode" = repair ] && [ -n "$hostname" ]; then
+		web_command="ssh -N -L 8080:127.0.0.1:80 -p ${port} root@${hostname}"
+		web_url='http://127.0.0.1:8080/cgi-bin/luci/'
+	fi
 	cat >"$STATE_FILE" <<EOF
 state=$state
 mode=$mode
 hostname=$hostname
 port=$port
 connect_command=$connect_command
+web_command=$web_command
+web_url=$web_url
 started_at=$started_at
 expires_at=$expires_at
 session=$session
@@ -178,13 +186,15 @@ start_session() {
 	mkdir -p "$AUTH_DIR"; chmod 700 "$AUTH_DIR"
 	if [ "$mode" = diagnostic ]; then
 		forced_shell=/usr/libexec/oum-support-shell
+		forward_flags='-j -k'
 		printf '%s %s\n' 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty' "$public_key $session" >"$KEYS_FILE"
 	else
 		forced_shell=/usr/libexec/oum-support-repair-shell
-		printf '%s %s\n' 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding' "$public_key $session" >"$KEYS_FILE"
+		forward_flags='-k'
+		printf '%s %s\n' 'no-agent-forwarding,no-X11-forwarding,permitopen="127.0.0.1:80"' "$public_key $session" >"$KEYS_FILE"
 	fi
 	chmod 600 "$KEYS_FILE"
-	"$dropbear" -F -E -s -j -k -D "$AUTH_DIR" -c "$forced_shell" -p "$LISTEN_ADDR" >"$STATE_DIR/dropbear.log" 2>&1 &
+	"$dropbear" -F -E -s $forward_flags -D "$AUTH_DIR" -c "$forced_shell" -p "$LISTEN_ADDR" >"$STATE_DIR/dropbear.log" 2>&1 &
 	printf '%s\n' "$!" >"$DROPBEAR_PID_FILE"
 	sleep "${OUM_SUPPORT_START_DELAY:-1}"
 	if ! support_dropbear_running; then
@@ -251,7 +261,7 @@ case "${1:-status}" in
 	audit) [ ! -f "$AUDIT_FILE" ] || tail -n 20 "$AUDIT_FILE" ;;
 	status)
 		expire_if_needed
-		if [ -f "$STATE_FILE" ]; then cat "$STATE_FILE"; else printf 'state=idle\nmode=\nhostname=\nport=\nconnect_command=\nstarted_at=0\nexpires_at=0\nprovider=pinggy\nmessage=Удалённая поддержка выключена.\nbackup_available=%s\n' "$([ -s "$BACKUP_FILE" ] && printf 1 || printf 0)"; fi
+		if [ -f "$STATE_FILE" ]; then cat "$STATE_FILE"; else printf 'state=idle\nmode=\nhostname=\nport=\nconnect_command=\nweb_command=\nweb_url=\nstarted_at=0\nexpires_at=0\nprovider=pinggy\nmessage=Удалённая поддержка выключена.\nbackup_available=%s\n' "$([ -s "$BACKUP_FILE" ] && printf 1 || printf 0)"; fi
 		;;
 	*) echo "usage: $0 {start|stop|status|audit|restore|cleanup-boot}" >&2; exit 2 ;;
 esac

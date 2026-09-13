@@ -102,7 +102,7 @@ function supportStatusData() {
 		process.read('all');
 		process.close();
 	}
-	let value = readKeyValues(`${SUPPORT_DIR}/status`, [ 'state', 'mode', 'hostname', 'port', 'connect_command', 'provider', 'started_at', 'expires_at', 'message', 'backup_available' ]);
+	let value = readKeyValues(`${SUPPORT_DIR}/status`, [ 'state', 'mode', 'hostname', 'port', 'connect_command', 'web_command', 'web_url', 'provider', 'started_at', 'expires_at', 'message', 'backup_available' ]);
 	return {
 		available: true,
 		client_ready: system("ssh -V 2>&1 | grep -qi OpenSSH") == 0,
@@ -111,6 +111,8 @@ function supportStatusData() {
 		hostname: value.hostname ?? '',
 		port: +(value.port ?? 0),
 		connect_command: value.connect_command ?? '',
+		web_command: value.web_command ?? '',
+		web_url: value.web_url ?? '',
 		provider: value.provider ?? 'pinggy',
 		started_at: +(value.started_at ?? 0),
 		expires_at: +(value.expires_at ?? 0),

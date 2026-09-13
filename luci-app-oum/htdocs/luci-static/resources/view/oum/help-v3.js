@@ -42,6 +42,14 @@ function supportPanel(support) {
 	const active = support.state === 'active';
 	if (active) {
 		const expires = support.expires_at ? new Date(support.expires_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+		const webAccess = support.mode === 'repair' && support.web_command ? E('div', { 'class': 'oum-support-web' }, [
+			E('div', {}, [ E('strong', {}, 'Веб-интерфейс через SSH'), E('p', {}, 'Специалист запускает команду на своём компьютере и, пока она работает, открывает локальный адрес в браузере.') ]),
+			E('div', { 'class': 'oum-support-web-row' }, [
+				E('code', {}, support.web_command),
+				E('button', { 'class': 'btn', click: () => navigator.clipboard.writeText(support.web_command).then(() => ui.addNotification(null, E('p', {}, 'Команда веб-доступа скопирована.'), 'info')) }, 'Скопировать команду')
+			]),
+			E('p', { 'class': 'oum-support-web-url' }, [ E('span', {}, 'Открыть на компьютере специалиста: '), E('code', {}, support.web_url) ])
+		]) : null;
 		return E('section', { 'class': 'oum-support-panel is-active' }, [
 			E('div', { 'class': 'oum-support-head' }, [ E('div', {}, [ E('h2', {}, 'Удалённая поддержка'), E('p', {}, support.message || 'Сеанс активен.') ]), E('span', { 'class': 'oum-support-state' }, 'Доступ открыт') ]),
 			E('div', { 'class': 'oum-support-summary' }, [
@@ -49,7 +57,8 @@ function supportPanel(support) {
 				E('div', {}, [ E('small', {}, 'Подключение'), E('strong', {}, support.connect_command || '—') ]),
 				E('div', {}, [ E('small', {}, 'Автоотключение'), E('strong', {}, expires) ])
 			]),
-			E('p', { 'class': 'oum-support-privacy' }, 'Передайте специалисту только команду подключения. Пароль роутера в интернет не публикуется.'),
+			webAccess,
+			E('p', { 'class': 'oum-support-privacy' }, support.mode === 'repair' ? 'Передайте специалисту нужную команду. Веб-интерфейс идёт внутри SSH-туннеля и не публикуется в интернет.' : 'Передайте специалисту только команду подключения. Пароль роутера в интернет не публикуется.'),
 			E('button', { 'class': 'btn cbi-button-action', click: () => navigator.clipboard.writeText(support.connect_command || '').then(() => ui.addNotification(null, E('p', {}, 'Команда подключения скопирована.'), 'info')) }, 'Скопировать команду'), ' ',
 			E('button', { 'class': 'btn cbi-button-negative', click: async ev => {
 				ev.currentTarget.disabled = true;
@@ -106,7 +115,7 @@ return view.extend({
 			[ '4', 'Не помогло?', 'Сохраните резервную копию OUM, перезагрузите роутер и повторите проверку. Сброс VPN не меняет WAN и Wi-Fi.', null ]
 		];
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260910-pinggy1` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260913-supportweb1` }),
 			E('h2', {}, 'Если интернет не работает'),
 			E('p', {}, 'Идите сверху вниз: сначала обычное подключение, затем DNS и только после этого VPN.'),
 			E('div', { 'class': 'oum-help-grid' }, checks.map(([ number, title, text, ok ]) => E('section', { 'class': 'oum-help-step' }, [ E('span', { 'class': 'oum-help-number' }, number), E('div', {}, [ E('h3', {}, title), E('p', { 'class': ok == null ? '' : 'oum-help-result', 'data-ok': ok == null ? null : String(ok) }, text) ]) ]))),

@@ -3848,6 +3848,12 @@ html[data-theme="dark"] .oum-node.oum-pick .oum-delay { color: var(--oum-subtle)
 .oum-support-summary > div { padding: 12px; border-radius: 10px; background: var(--oum-field); }
 .oum-support-summary small,.oum-support-summary strong { display: block; }
 .oum-support-summary small { color: var(--oum-subtle); margin-bottom: 3px; }
+.oum-support-web { margin: 16px 0; padding: 14px 0; border-block: 1px solid var(--oum-line); }
+.oum-support-web > div:first-child p { margin: 4px 0 12px; color: var(--oum-subtle); }
+.oum-support-web-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: center; }
+.oum-support-web-row code { min-width: 0; padding: 10px 12px; border-radius: 9px; background: var(--oum-field); overflow-wrap: anywhere; }
+.oum-support-web-url { margin: 10px 0 0; color: var(--oum-subtle); }
+.oum-support-web-url code { color: var(--oum-ink); overflow-wrap: anywhere; }
 .oum-support-privacy { color: var(--oum-subtle); }
 .oum-support-recovery { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .oum-support-audit { flex: 1 1 100%; padding: 10px 12px; border: 1px solid var(--oum-line); border-radius: 10px; }
@@ -3859,4 +3865,6 @@ html[data-theme="dark"] .oum-node.oum-pick .oum-delay { color: var(--oum-subtle)
   .oum-support-mode + .oum-support-mode { margin-top: 8px; }
   .oum-support-fields,.oum-support-summary { grid-template-columns: 1fr; }
   .oum-support-fields .is-wide { grid-column: auto; }
+  .oum-support-web-row { grid-template-columns: 1fr; }
+  .oum-support-web-row .btn { width: 100%; }
 }

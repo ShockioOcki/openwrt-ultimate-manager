@@ -16,8 +16,14 @@ grep -Fq 'client_ready:' "$RPC"
 grep -Fq "params: [ 'mode', 'duration', 'consent' ]" "$HELP"
 grep -Fq 'Pinggy' "$HELP"
 grep -Fq 'Скопировать команду' "$HELP"
+grep -Fq 'Веб-интерфейс через SSH' "$HELP"
+grep -Fq 'support.web_command' "$HELP"
 grep -Fq 'tcp@free.pinggy.io' "$RUNTIME"
 grep -Fq '127.0.0.1:22022' "$RUNTIME"
+grep -Fq 'web_command="ssh -N -L 8080:127.0.0.1:80' "$RUNTIME"
+grep -Fq "forward_flags='-j -k'" "$RUNTIME"
+grep -Fq "forward_flags='-k'" "$RUNTIME"
+grep -Fq 'permitopen="127.0.0.1:80"' "$RUNTIME"
 grep -Fq 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding' "$RUNTIME"
 grep -Fq -- '-D "$AUTH_DIR"' "$RUNTIME"
 grep -Fq 'Время сеанса истекло' "$RUNTIME"
@@ -71,9 +77,13 @@ grep -Fq 'state=active' "$TMP/state/status"
 grep -Fq 'hostname=test-tunnel.a.free.pinggy.link' "$TMP/state/status"
 grep -Fq 'port=34567' "$TMP/state/status"
 grep -Fq 'connect_command=ssh -p 34567 root@test-tunnel.a.free.pinggy.link' "$TMP/state/status"
+grep -Fq 'web_command=ssh -N -L 8080:127.0.0.1:80 -p 34567 root@test-tunnel.a.free.pinggy.link' "$TMP/state/status"
+grep -Fq 'web_url=http://127.0.0.1:8080/cgi-bin/luci/' "$TMP/state/status"
 grep -Fq 'oum-support-' "$TMP/support-auth/authorized_keys"
 grep -Fxq 'original-key' "$TMP/dropbear/authorized_keys"
-grep -Fq 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding' "$TMP/support-auth/authorized_keys"
+grep -Fq 'no-agent-forwarding,no-X11-forwarding' "$TMP/support-auth/authorized_keys"
+grep -Fq 'permitopen="127.0.0.1:80"' "$TMP/support-auth/authorized_keys"
+! grep -Fq 'no-port-forwarding' "$TMP/support-auth/authorized_keys"
 [ -s "$TMP/persist/pre-support-backup.tar.gz" ]
 cp "$TMP/state/status" "$TMP/active.status"
 ! env $SUPPORT_ENV "$RUNTIME" start >/dev/null 2>&1
@@ -83,6 +93,17 @@ env $SUPPORT_ENV "$RUNTIME" stop user
 grep -Fxq 'original-key' "$TMP/dropbear/authorized_keys"
 ! test -e "$TMP/support-auth/authorized_keys"
 grep -Fq 'changed_configs=1' "$TMP/persist/audit.log"
+
+cat >"$TMP/state/request" <<EOF
+mode=diagnostic
+started_at=$(date +%s)
+expires_at=$(($(date +%s) + 300))
+EOF
+env $SUPPORT_ENV "$RUNTIME" start
+grep -Fxq 'web_command=' "$TMP/state/status"
+grep -Fxq 'web_url=' "$TMP/state/status"
+grep -Fq 'no-port-forwarding' "$TMP/support-auth/authorized_keys"
+env $SUPPORT_ENV "$RUNTIME" stop user
 
 printf 'ssh-ed25519 TEST oum-support-stale\n' >"$TMP/support-auth/authorized_keys"
 env $SUPPORT_ENV "$RUNTIME" cleanup-boot
