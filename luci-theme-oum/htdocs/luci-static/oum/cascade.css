@@ -4013,3 +4013,110 @@ body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-chec
     display: none !important;
   }
 }
+/* PassWall node list: preserve usable desktop columns and compact actions. */
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #node_list,
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes,
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #container\.passwall\.nodes\.default,
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-fieldset {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-fieldset {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table {
+    width: 100% !important;
+    min-width: 925px !important;
+    table-layout: fixed !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table th,
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table td {
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 10px 8px !important;
+    vertical-align: middle !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table tr > :nth-child(1) {
+    width: 44px !important;
+    text-align: center !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table tr > :nth-child(2) {
+    width: 287px !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table tr > :nth-child(3),
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table tr > :nth-child(4),
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table tr > :nth-child(5) {
+    width: 58px !important;
+    text-align: center !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table tr > :nth-child(6) {
+    width: 420px !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table .node-wrapper {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 6px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table .node-wrapper > input.btn {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 9px !important;
+    white-space: nowrap !important;
+    word-break: normal !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table .drag-handle {
+    display: inline-flex !important;
+    flex: 0 0 24px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 24px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table tr._now_use_bg {
+    background: var(--oum-action-soft) !important;
+    color: var(--oum-ink) !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table tr._now_use_bg > td:first-child {
+    box-shadow: inset 3px 0 0 var(--oum-action) !important;
+  }
+
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table tr._now_use_bg .pw-remark {
+    color: var(--oum-action-dark) !important;
+    font-weight: 650 !important;
+  }
+
+  [data-darkmode="true"] body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table tr._now_use_bg {
+    background: rgba(56, 189, 248, 0.1) !important;
+  }
+
+  [data-darkmode="true"] body.theme-oum[data-page="admin-services-passwall-node_list"] #cbi-passwall-nodes-default-table tr._now_use_bg .pw-remark {
+    color: #7dd3fc !important;
+  }
+}
