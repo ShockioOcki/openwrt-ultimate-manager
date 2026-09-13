@@ -6,9 +6,10 @@ STATE_DIR="${OUM_SUPPORT_STATE_DIR:-/tmp/oum-support}"
 STATE_FILE="$STATE_DIR/status"
 PID_FILE="$STATE_DIR/pinggy.pid"
 DROPBEAR_PID_FILE="$STATE_DIR/dropbear.pid"
-KEYS_FILE="${OUM_SUPPORT_KEYS_FILE:-/etc/dropbear/authorized_keys}"
 PUBLIC_KEY_FILE="${OUM_SUPPORT_PUBLIC_KEY_FILE:-/etc/oum/support/support_key.pub}"
 PERSIST_DIR="${OUM_SUPPORT_PERSIST_DIR:-/etc/oum/support}"
+KEYS_FILE="${OUM_SUPPORT_KEYS_FILE:-$PERSIST_DIR/dropbear-auth/authorized_keys}"
+AUTH_DIR="$(dirname "$KEYS_FILE")"
 AUDIT_FILE="$PERSIST_DIR/audit.log"
 BACKUP_FILE="$PERSIST_DIR/pre-support-backup.tar.gz"
 MARKER_PREFIX=oum-support-
@@ -64,14 +65,7 @@ EOF
 	chmod 600 "$STATE_FILE"
 }
 
-remove_support_key() {
-	[ -f "$KEYS_FILE" ] || return 0
-	tmp="$STATE_DIR/authorized_keys.clean"
-	grep -v " ${MARKER_PREFIX}" "$KEYS_FILE" >"$tmp" || true
-	cat "$tmp" >"$KEYS_FILE"
-	chmod 600 "$KEYS_FILE"
-	rm -f "$tmp"
-}
+remove_support_key() { rm -f "$KEYS_FILE"; }
 
 process_running() {
 	pid_file="$1"; match="$2"
@@ -181,15 +175,16 @@ start_session() {
 	fi
 	snapshot_configs "$STATE_DIR/config.before"
 	printf 'session=%s\n' "$session" >>"$request"
-	mkdir -p "$(dirname "$KEYS_FILE")"; touch "$KEYS_FILE"; chmod 600 "$KEYS_FILE"
+	mkdir -p "$AUTH_DIR"; chmod 700 "$AUTH_DIR"
 	if [ "$mode" = diagnostic ]; then
 		forced_shell=/usr/libexec/oum-support-shell
-		printf '%s %s\n' 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty' "$public_key $session" >>"$KEYS_FILE"
+		printf '%s %s\n' 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty' "$public_key $session" >"$KEYS_FILE"
 	else
 		forced_shell=/usr/libexec/oum-support-repair-shell
-		printf '%s %s\n' 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding' "$public_key $session" >>"$KEYS_FILE"
+		printf '%s %s\n' 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding' "$public_key $session" >"$KEYS_FILE"
 	fi
-	"$dropbear" -F -E -s -j -k -c "$forced_shell" -p "$LISTEN_ADDR" >"$STATE_DIR/dropbear.log" 2>&1 &
+	chmod 600 "$KEYS_FILE"
+	"$dropbear" -F -E -s -j -k -D "$AUTH_DIR" -c "$forced_shell" -p "$LISTEN_ADDR" >"$STATE_DIR/dropbear.log" 2>&1 &
 	printf '%s\n' "$!" >"$DROPBEAR_PID_FILE"
 	sleep "${OUM_SUPPORT_START_DELAY:-1}"
 	if ! support_dropbear_running; then
