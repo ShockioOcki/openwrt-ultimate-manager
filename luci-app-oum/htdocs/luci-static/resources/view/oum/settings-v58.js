@@ -21,6 +21,10 @@ const callApplyWan = rpc.declare({
 const callApplyLan = rpc.declare({ object: 'oum', method: 'applyLanSettings', params: [ 'address' ], expect: { '': {} } });
 const callApplyMesh = rpc.declare({ object: 'oum', method: 'applyMeshSettings', params: [ 'enabled', 'mesh_id', 'password', 'band' ], expect: { '': {} } });
 const callInstallMeshRuntime = rpc.declare({ object: 'oum', method: 'installMeshRuntime', expect: { '': {} } });
+const callPrepareUsbStorage = rpc.declare({ object: 'oum', method: 'prepareUsbStorage', expect: { '': {} } });
+const callFormatUsbStorage = rpc.declare({ object: 'oum', method: 'formatUsbStorage', params: [ 'device', 'confirm' ], expect: { '': {} } });
+const callMountUsbStorage = rpc.declare({ object: 'oum', method: 'mountUsbStorage', params: [ 'device' ], expect: { '': {} } });
+const callUnmountUsbStorage = rpc.declare({ object: 'oum', method: 'unmountUsbStorage', expect: { '': {} } });
 const callScanWifi = rpc.declare({ object: 'oum', method: 'scanWifi', params: [ 'band' ], expect: { '': {} } });
 const callSetWisp = rpc.declare({ object: 'oum', method: 'setWisp', params: [ 'enabled', 'ssid', 'password', 'band' ], expect: { '': {} } });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
@@ -80,6 +84,15 @@ function engineChoice(value, title, description, checked, disabled, pill, note) 
 
 function field(label, input) {
 	return E('div', { 'class': 'oum-setting-field' }, [ E('label', {}, label), input ]);
+}
+
+function formatBytes(value) {
+	let bytes = Number(value || 0);
+	if (!Number.isFinite(bytes) || bytes <= 0) return 'размер неизвестен';
+	const units = [ 'Б', 'КБ', 'МБ', 'ГБ', 'ТБ' ];
+	let unit = 0;
+	while (bytes >= 1024 && unit < units.length - 1) { bytes /= 1024; unit++; }
+	return `${bytes >= 10 || unit === 0 ? bytes.toFixed(0) : bytes.toFixed(1)} ${units[unit]}`;
 }
 
 function vpnSvg(inner) {
@@ -191,6 +204,7 @@ return view.extend({
 		const lan = settings.lan || { address: '192.168.5.1', prefix: 24, rollback: false, rollback_address: '' };
 		const mesh = settings.mesh || { enabled: false, id: '', band: '5g' };
 		const wisp = settings.wisp || { enabled: false, connected: false, ssid: '', ip: '', signal: null, band: '2g', rollback: false };
+		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false };
 		const project = settings.project || { version: 'development', rollback: false };
 		const projectUpdatable = project.version && project.version !== 'development';
 		const dns = settings.dns || {
@@ -244,6 +258,12 @@ return view.extend({
 		const meshReady = capabilities.mesh_driver === true && capabilities.mesh_runtime === true;
 		const usbState = !capabilities.usb_host ? '' :
 			[ capabilities.usb_storage ? 'накопитель' : '', capabilities.usb_network ? 'сетевое устройство' : '', capabilities.usb_modem ? 'модем' : '' ].filter(Boolean).join(', ') || 'USB-порт доступен, подключённых устройств нет.';
+		const usbName = [ usb.vendor, usb.model ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim() || 'USB-накопитель';
+		const usbSummary = !usb.host_present ? 'USB-порт не обнаружен' :
+			(!usb.storage_attached ? 'Накопитель не подключён' :
+				(!usb.runtime_ready ? 'Накопитель найден · нужны драйверы' :
+					(!usb.disk ? 'Драйверы установлены · переподключите накопитель' :
+						(usb.mounted ? `${usbName} · ${formatBytes(usb.size_bytes)} · подключён` : `${usbName} · ${formatBytes(usb.size_bytes)} · не подключён`))));
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
 		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
@@ -324,6 +344,31 @@ return view.extend({
 						E('button', { type: 'button', 'class': 'btn oum-mobile-sheet-cancel' }, 'Отмена')
 					])
 				])
+			]),
+			E('section', { 'class': 'oum-settings-panel oum-usb-panel' }, [
+				E('div', { 'class': 'oum-usb-head' }, [
+					E('div', {}, [ E('h3', {}, 'USB'), E('p', { 'class': 'oum-help' }, 'Накопитель, общий доступ, загрузки и медиатека.') ]),
+					E('span', { 'class': 'oum-network-status', 'data-state': usb.mounted ? 'active' : (usb.storage_attached ? 'warning' : '') }, usb.mounted ? 'Подключён' : (usb.storage_attached ? 'Найден' : 'Нет устройства'))
+				]),
+				E('div', { 'class': 'oum-usb-device' }, [
+					E('strong', {}, usbSummary),
+					...(usb.disk ? [ E('small', {}, `${usb.disk}${usb.partition ? ` · ${usb.partition}` : ''}${usb.fs_type ? ` · ${usb.fs_type}` : ''}${usb.mountpoint ? ` · ${usb.mountpoint}` : ''}`) ] : []),
+					...(!usb.runtime_ready && usb.storage_attached ? [ E('p', { 'class': 'oum-help' }, 'OUM установит только драйверы USB-storage, ext4 и средства безопасного монтирования.') ] : [])
+				]),
+				E('div', { 'class': 'oum-setting-actions oum-usb-actions' }, [
+					...(!usb.runtime_ready ? [ E('button', { 'class': 'btn cbi-button-action', id: 'prepare-usb-storage', 'data-system-action': '', disabled: usb.storage_attached ? null : '' }, 'Установить поддержку') ] : []),
+					...(usb.runtime_ready && usb.disk && !usb.mounted && usb.fs_type === 'ext4' ? [ E('button', { 'class': 'btn cbi-button-action', id: 'mount-usb-storage', 'data-system-action': '' }, 'Подключить') ] : []),
+					...(usb.mounted ? [ E('button', { 'class': 'btn', id: 'unmount-usb-storage', 'data-system-action': '' }, 'Безопасно отключить') ] : []),
+					...(usb.runtime_ready && usb.disk ? [ E('button', { 'class': 'btn cbi-button-negative', id: 'format-usb-storage', 'data-system-action': '' }, 'Форматировать ext4') ] : [])
+				]),
+				E('div', { 'class': 'oum-usb-services' }, [
+					E('span', {}, [ E('strong', {}, 'SMB'), E('small', {}, 'Без пароля · только домашняя сеть') ]),
+					E('span', {}, [ E('strong', {}, 'aria2'), E('small', {}, 'Загрузки и AriaNg') ]),
+					E('span', {}, [ E('strong', {}, 'miniDLNA'), E('small', {}, 'Видео, музыка и фото') ]),
+					E('span', {}, [ E('strong', {}, 'Сортировщик'), E('small', {}, 'TMDB · фильмы и сериалы') ]),
+					E('span', {}, [ E('strong', {}, 'Swap'), E('small', {}, 'Отдельная настройка') ])
+				]),
+				E('p', { 'class': 'oum-help oum-usb-next' }, usb.mounted ? 'Накопитель готов. Сервисы подключим следующими независимыми переключателями.' : 'Сначала подготовьте и подключите накопитель — сервисы останутся выключенными.')
 			]),
 			E('details', { 'class': 'oum-settings-panel oum-protected' }, [
 				E('summary', {}, 'Расширение сети'),
@@ -691,7 +736,7 @@ return view.extend({
 				if (zapretStatus && status.action?.startsWith('zapret_'))
 					zapretStatus.textContent = status.message || 'Операция Zapret выполняется…';
 				if (status.action === 'engine') return;
-				if ((status.action === 'wifi_toggle' || status.action === 'dns' || status.action === 'adguard' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'wisp' || status.action === 'rollback_wisp' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'engine_update' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action === 'gearup_install' || status.action === 'gearup_uninstall' || status.action?.startsWith('zapret_')) && status.state === 'success')
+				if ((status.action === 'wifi_toggle' || status.action === 'dns' || status.action === 'adguard' || status.action === 'mesh' || status.action === 'mesh_runtime' || status.action === 'wisp' || status.action === 'rollback_wisp' || status.action === 'project_update' || status.action === 'project_rollback' || status.action === 'engine_update' || status.action === 'podkop_configure' || status.action === 'podkop_awg' || status.action === 'podkop_proxy' || status.action === 'podkop_youtube' || status.action === 'gearup_install' || status.action === 'gearup_uninstall' || status.action?.startsWith('usb_') || status.action?.startsWith('zapret_')) && status.state === 'success')
 					acknowledgeStatus(status).finally(() => window.setTimeout(() => window.location.reload(), 900));
 			}).catch(() => window.setTimeout(tick, 2000));
 			tick();
@@ -1042,6 +1087,27 @@ return view.extend({
 		root.querySelector('#rollback-wan').addEventListener('click', async () => {
 			if (await confirmation('Вернуть подключение?', 'Будет восстановлена конфигурация до последнего изменения через OUM.', 'Восстановить', false)) start(callRollback('wan'));
 		});
+		const prepareUsbButton = root.querySelector('#prepare-usb-storage');
+		if (prepareUsbButton) prepareUsbButton.addEventListener('click', async () => {
+			if (await confirmation('Установить поддержку накопителей?', 'OUM загрузит драйверы USB-storage и ext4. Данные на накопителе не изменятся.', 'Установить', false))
+				start(callPrepareUsbStorage());
+		});
+		const mountUsbButton = root.querySelector('#mount-usb-storage');
+		if (mountUsbButton) mountUsbButton.addEventListener('click', async () => {
+			if (await confirmation('Подключить накопитель?', `${usbName} будет смонтирован по UUID и автоматически подключаться после перезагрузки.`, 'Подключить', false))
+				start(callMountUsbStorage(usb.disk));
+		});
+		const unmountUsbButton = root.querySelector('#unmount-usb-storage');
+		if (unmountUsbButton) unmountUsbButton.addEventListener('click', async () => {
+			if (await confirmation('Безопасно отключить накопитель?', 'Запись будет завершена, после чего накопитель можно извлечь из USB-порта.', 'Отключить', false))
+				start(callUnmountUsbStorage());
+		});
+		const formatUsbButton = root.querySelector('#format-usb-storage');
+		if (formatUsbButton) formatUsbButton.addEventListener('click', async () => {
+			const description = `${usbName} · ${formatBytes(usb.size_bytes)} · ${usb.disk}. Все разделы и данные на этом USB-накопителе будут удалены. Внутренняя память роутера не затрагивается.`;
+			if (await confirmation('Форматировать USB-накопитель?', description, 'Стереть и форматировать', true))
+				start(callFormatUsbStorage(usb.disk, 'ERASE'));
+		});
 		root.querySelector('#create-backup').addEventListener('click', () => {
 			setBusy(true);
 			callCreateBackup().then((result) => {
@@ -1078,12 +1144,13 @@ return view.extend({
 		});
 		const wifiPanel = root.querySelector('.oum-settings-grid > .oum-settings-panel:first-child');
 		const internetPanel = root.querySelector('.oum-settings-grid > .oum-internet-panel');
+		const usbPanel = root.querySelector('.oum-usb-panel');
 		const gearupPanel = root.querySelector('#install-gearup')?.closest('section');
 		const networkPanel = root.querySelector('details.oum-settings-panel.oum-protected:not(.oum-vpn-section)');
 		const vpnPanel = root.querySelector('.oum-vpn-workspace');
 		const maintenancePanel = Array.from(root.querySelectorAll('.oum-settings-panel')).find((panel) => panel.querySelector(':scope > h3')?.textContent === 'Обслуживание OUM');
 		const maintenanceCards = maintenancePanel ? Array.from(maintenancePanel.querySelectorAll('.oum-maintenance-card')) : [];
-		const mobileSources = [ wifiPanel, internetPanel, networkPanel, vpnPanel, maintenancePanel, gearupPanel ].filter(Boolean);
+		const mobileSources = [ wifiPanel, internetPanel, usbPanel, networkPanel, vpnPanel, maintenancePanel, gearupPanel ].filter(Boolean);
 		mobileSources.forEach((node) => node.classList.add('oum-mobile-sheet-source'));
 
 		let activeSheetNode = null;
@@ -1495,6 +1562,7 @@ return view.extend({
 			E('div', { 'class': 'oum-mobile-settings-launchers' }, [
 				launcher('Wi-Fi', `${wifi.mode === 'separate' ? 'Две сети' : 'Одна сеть'} · ${wifi.ssid_24 || 'имя не задано'} · WPA2/WPA3 · ${wifi.enabled === false ? 'выключена' : 'включена'}`, () => openSheet('Wi-Fi', wifiPanel)),
 				launcher('Подключение к интернету', `${wisp.enabled ? 'Wi-Fi' : (wan.proto === 'pppoe' ? 'PPPoE' : 'DHCP')} · ${wan.up ? 'подключено' : 'нет соединения'}${wan.ipv4 ? ` · ${wan.ipv4}` : ''}`, () => openSheet('Подключение к интернету', internetPanel)),
+				launcher('USB', usbSummary, () => openSheet('USB', usbPanel)),
 				launcher('Расширение сети', `Локальная сеть · ${mesh.enabled ? 'Mesh включена' : 'Mesh-сеть'}`, () => openNetworkSheet('Расширение сети'))
 			]),
 			E('section', { 'class': 'oum-mobile-vpn-card' }, [

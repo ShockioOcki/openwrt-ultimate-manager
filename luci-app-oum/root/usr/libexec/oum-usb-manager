@@ -1,0 +1,211 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-status}"
+MOUNT_ROOT=/mnt/oum
+FSTAB_SECTION=oum_usb
+STORAGE_PACKAGES='block-mount kmod-usb-storage kmod-usb-storage-uas kmod-scsi-core kmod-fs-ext4 e2fsprogs parted'
+
+clean_value() {
+	printf '%s' "${1:-}" | tr '\n\r\t' '   '
+}
+
+emit() {
+	printf '%s=%s\n' "$1" "$(clean_value "${2:-}")"
+}
+
+storage_attached() {
+	for class in /sys/bus/usb/devices/*:*/bInterfaceClass; do
+		[ -f "$class" ] || continue
+		[ "$(cat "$class" 2>/dev/null || true)" = 08 ] && return 0
+	done
+	return 1
+}
+
+usb_disk() {
+	for path in /sys/class/block/sd[a-z]; do
+		[ -e "$path" ] || continue
+		target="$(readlink -f "$path/device" 2>/dev/null || true)"
+		case "$target" in */usb*/*) printf '/dev/%s\n' "${path##*/}"; return 0 ;; esac
+	done
+	return 1
+}
+
+disk_partition() {
+	disk="${1:-}"
+	name="${disk##*/}"
+	for path in "/sys/class/block/$name"[0-9]*; do
+		[ -e "$path" ] || continue
+		printf '/dev/%s\n' "${path##*/}"
+		return 0
+	done
+	return 1
+}
+
+block_value() {
+	line="$1"
+	key="$2"
+	printf '%s\n' "$line" | sed -n "s/.* $key=\"\([^\"]*\)\".*/\1/p"
+}
+
+mounted_at() {
+	device="$1"
+	awk -v device="$device" '$1 == device { print $2; exit }' /proc/mounts
+}
+
+packages_ready() {
+	for package in $STORAGE_PACKAGES; do
+		apk info -e "$package" >/dev/null 2>&1 || return 1
+	done
+}
+
+status() {
+	disk="$(usb_disk 2>/dev/null || true)"
+	partition=""
+	[ -z "$disk" ] || partition="$(disk_partition "$disk" 2>/dev/null || true)"
+	name="${disk##*/}"
+	size=0
+	model=""
+	vendor=""
+	if [ -n "$disk" ]; then
+		sectors="$(cat "/sys/class/block/$name/size" 2>/dev/null || echo 0)"
+		size="$((sectors * 512))"
+		model="$(cat "/sys/class/block/$name/device/model" 2>/dev/null || true)"
+		vendor="$(cat "/sys/class/block/$name/device/vendor" 2>/dev/null || true)"
+	fi
+	fs_type=""; uuid=""; label=""; mountpoint=""
+	if [ -n "$partition" ]; then
+		info="$(block info "$partition" 2>/dev/null || true)"
+		fs_type="$(block_value "$info" TYPE)"
+		uuid="$(block_value "$info" UUID)"
+		label="$(block_value "$info" LABEL)"
+		mountpoint="$(mounted_at "$partition")"
+	fi
+	emit host_present "$([ -d /sys/bus/usb/devices/usb1 ] && echo 1 || echo 0)"
+	emit storage_attached "$(storage_attached && echo 1 || echo 0)"
+	emit runtime_ready "$(packages_ready && echo 1 || echo 0)"
+	emit disk "$disk"
+	emit partition "$partition"
+	emit size_bytes "$size"
+	emit vendor "$vendor"
+	emit model "$model"
+	emit fs_type "$fs_type"
+	emit uuid "$uuid"
+	emit label "$label"
+	emit mountpoint "$mountpoint"
+	emit mounted "$([ -n "$mountpoint" ] && echo 1 || echo 0)"
+}
+
+require_usb_disk() {
+	requested="${1:-}"
+	current="$(usb_disk 2>/dev/null || true)"
+	[ -n "$current" ] || { echo 'USB disk not found' >&2; return 1; }
+	[ "$requested" = "$current" ] || { echo 'USB disk changed; refresh status' >&2; return 1; }
+	name="${current##*/}"
+	target="$(readlink -f "/sys/class/block/$name/device" 2>/dev/null || true)"
+	case "$target" in */usb*/*) ;; *) echo 'Refusing non-USB block device' >&2; return 1 ;; esac
+	if awk -v disk="$current" '$2 == "/" && index($1, disk) == 1 { found=1 } END { exit !found }' /proc/mounts; then
+		echo 'Refusing root device' >&2
+		return 1
+	fi
+	printf '%s\n' "$current"
+}
+
+prepare() {
+	apk -U add $STORAGE_PACKAGES
+	modprobe usb-storage 2>/dev/null || true
+	modprobe uas 2>/dev/null || true
+	count=0
+	while [ "$count" -lt 10 ]; do
+		usb_disk >/dev/null 2>&1 && return 0
+		count=$((count + 1))
+		sleep 1
+	done
+	storage_attached && { echo 'Storage driver installed, reconnect the USB drive' >&2; return 2; }
+	return 0
+}
+
+unmount_disk_partitions() {
+	disk="$1"
+	while read -r source target rest; do
+		case "$source" in "$disk"|"$disk"[0-9]*) umount "$target" || return 1 ;; esac
+	done < /proc/mounts
+}
+
+mount_partition() {
+	partition="$1"
+	info="$(block info "$partition" 2>/dev/null || true)"
+	fs_type="$(block_value "$info" TYPE)"
+	uuid="$(block_value "$info" UUID)"
+	[ "$fs_type" = ext4 ] || { echo 'Only ext4 is supported in the first USB stage' >&2; return 1; }
+	[ -n "$uuid" ] || { echo 'Filesystem UUID is missing' >&2; return 1; }
+	short_uuid="$(printf '%s' "$uuid" | tr -cd 'A-Fa-f0-9' | cut -c1-8)"
+	[ -n "$short_uuid" ] || short_uuid=storage
+	target="$MOUNT_ROOT-$short_uuid"
+	mkdir -p "$target"
+	uci -q batch <<-EOF
+		delete fstab.$FSTAB_SECTION
+		set fstab.$FSTAB_SECTION='mount'
+		set fstab.$FSTAB_SECTION.uuid='$uuid'
+		set fstab.$FSTAB_SECTION.target='$target'
+		set fstab.$FSTAB_SECTION.fstype='ext4'
+		set fstab.$FSTAB_SECTION.options='rw,noatime'
+		set fstab.$FSTAB_SECTION.enabled='1'
+	EOF
+	uci -q commit fstab
+	mountpoint="$(mounted_at "$partition")"
+	[ -z "$mountpoint" ] || [ "$mountpoint" = "$target" ] || { echo 'Partition is already mounted elsewhere' >&2; return 1; }
+	[ -n "$mountpoint" ] || mount -t ext4 -o rw,noatime "$partition" "$target"
+	[ "$(mounted_at "$partition")" = "$target" ]
+}
+
+format_disk() {
+	disk="$(require_usb_disk "${1:-}")"
+	[ "${2:-}" = ERASE ] || { echo 'Format confirmation is missing' >&2; return 1; }
+	unmount_disk_partitions "$disk"
+	parted -s "$disk" mklabel gpt
+	parted -s "$disk" mkpart primary ext4 1MiB 100%
+	partprobe "$disk" 2>/dev/null || true
+	count=0
+	partition=""
+	while [ "$count" -lt 10 ]; do
+		partition="$(disk_partition "$disk" 2>/dev/null || true)"
+		[ -z "$partition" ] || break
+		count=$((count + 1))
+		sleep 1
+	done
+	[ -n "$partition" ] || { echo 'Partition did not appear after formatting' >&2; return 1; }
+	# A media/download disk does not need the millions of inodes from the
+	# generic ext4 profile. largefile keeps enough room for mixed NAS content
+	# while avoiding minutes of needless writes on inexpensive flash drives.
+	mkfs.ext4 -F -T largefile -m 0 -E lazy_itable_init=1,lazy_journal_init=1 -L OUM "$partition"
+	block info "$partition" >/dev/null 2>&1 || true
+	mount_partition "$partition"
+}
+
+mount_disk() {
+	disk="$(require_usb_disk "${1:-}")"
+	partition="$(disk_partition "$disk" 2>/dev/null || true)"
+	[ -n "$partition" ] || { echo 'USB disk has no partition' >&2; return 1; }
+	mount_partition "$partition"
+}
+
+unmount_managed() {
+	partition="$(uci -q get "fstab.$FSTAB_SECTION.uuid" 2>/dev/null || true)"
+	[ -n "$partition" ] || return 0
+	target="$(uci -q get "fstab.$FSTAB_SECTION.target" 2>/dev/null || true)"
+	[ -z "$target" ] || ! grep -qs " $target " /proc/mounts || umount "$target"
+	uci -q set "fstab.$FSTAB_SECTION.enabled=0"
+	uci -q commit fstab
+}
+
+case "$ACTION" in
+	status) status ;;
+	prepare) prepare ;;
+	format) format_disk "${2:-}" "${3:-}" ;;
+	mount) mount_disk "${2:-}" ;;
+	unmount) unmount_managed ;;
+	*) echo "usage: $0 {status|prepare|format DEVICE ERASE|mount DEVICE|unmount}" >&2; exit 2 ;;
+esac

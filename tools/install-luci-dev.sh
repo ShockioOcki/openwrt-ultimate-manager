@@ -37,6 +37,7 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-awg-manager" /usr/libexec/oum-awg-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-dns-manager" /usr/libexec/oum-dns-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-mesh-manager" /usr/libexec/oum-mesh-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-mesh-runtime" /usr/libexec/oum-mesh-runtime
+cp "$SOURCE_DIR/root/usr/libexec/oum-usb-manager" /usr/libexec/oum-usb-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-project-manager" /usr/libexec/oum-project-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-strategy" /usr/libexec/oum-zapret-strategy
 cp "$SOURCE_DIR/root/usr/libexec/oum-zapret-quic" /usr/libexec/oum-zapret-quic
@@ -78,6 +79,7 @@ chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/ou
 		/usr/libexec/oum-dns-manager \
 		/usr/libexec/oum-mesh-manager \
 		/usr/libexec/oum-mesh-runtime \
+		/usr/libexec/oum-usb-manager \
 		/usr/libexec/oum-project-manager \
 	/usr/libexec/oum-zapret-strategy \
 	/usr/libexec/oum-zapret-quic \

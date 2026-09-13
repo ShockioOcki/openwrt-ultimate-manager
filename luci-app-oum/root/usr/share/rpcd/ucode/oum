@@ -715,6 +715,43 @@ function capabilityStatus() {
 	};
 }
 
+function usbStorageStatusData() {
+	let result = {
+		available: access('/usr/libexec/oum-usb-manager') ? true : false,
+		host_present: false,
+		storage_attached: false,
+		runtime_ready: false,
+		disk: '',
+		partition: '',
+		size_bytes: 0,
+		vendor: '',
+		model: '',
+		fs_type: '',
+		uuid: '',
+		label: '',
+		mountpoint: '',
+		mounted: false
+	};
+	if (!result.available)
+		return result;
+	let process = popen('/usr/libexec/oum-usb-manager status 2>/dev/null');
+	if (!process)
+		return result;
+	for (let line = process.read('line'); length(line); line = process.read('line')) {
+		let pair = match(line, /^([a-z_]+)=(.*)$/);
+		if (!pair)
+			continue;
+		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted' ])
+			result[pair[1]] = trim(pair[2]) == '1';
+		else if (pair[1] == 'size_bytes')
+			result.size_bytes = +(trim(pair[2]) || 0);
+		else if (pair[1] in result)
+			result[pair[1]] = trim(pair[2]);
+	}
+	process.close();
+	return result;
+}
+
 function passwallInstalled() {
 	return access('/etc/init.d/passwall') && access('/etc/config/passwall');
 }
@@ -873,6 +910,7 @@ function settingsStatusData() {
 		reboot_required: access('/etc/oum/reboot-required') ? true : false,
 		unmanaged_tunnels: unmanagedTunnels(uci),
 		capabilities: capabilityStatus(),
+		usb_storage: usbStorageStatusData(),
 		rollback_wifi: access('/etc/oum/rollback/wireless') ? true : false,
 		rollback_wan: access('/etc/oum/rollback/network') ? true : false
 	};
@@ -1510,6 +1548,12 @@ const methods = {
 		}
 	},
 
+	usbStorageStatus: {
+		call: function() {
+			return usbStorageStatusData();
+		}
+	},
+
 	systemJobStatus: {
 		call: function() {
 			return systemJobStatus();
@@ -1726,6 +1770,52 @@ const methods = {
 			if (!capabilities.mesh_runtime_bundle)
 				return failure('mesh_runtime_unavailable', 'Для этой прошивки нет проверенного Mesh-комплекта.');
 			return startSystemJob('mesh_runtime', {});
+		}
+	},
+
+	prepareUsbStorage: {
+		call: function() {
+			let current = usbStorageStatusData();
+			if (!current.host_present)
+				return failure('usb_unavailable', 'USB-порт не обнаружен.');
+			if (current.runtime_ready && length(current.disk))
+				return failure('usb_ready', 'Поддержка накопителей уже установлена.');
+			return startSystemJob('usb_prepare', {});
+		}
+	},
+
+	formatUsbStorage: {
+		args: { device: '', confirm: '' },
+		call: function(request) {
+			let device = request.args.device ?? '';
+			if (!match(device, /^\/dev\/sd[a-z]$/) || request.args.confirm != 'ERASE')
+				return failure('usb_format_confirmation', 'Форматирование не подтверждено.');
+			let current = usbStorageStatusData();
+			if (current.disk != device)
+				return failure('usb_changed', 'USB-накопитель изменился. Обновите страницу и проверьте устройство.');
+			return startSystemJob('usb_format', { device, confirm: 'ERASE' });
+		}
+	},
+
+	mountUsbStorage: {
+		args: { device: '' },
+		call: function(request) {
+			let device = request.args.device ?? '';
+			if (!match(device, /^\/dev\/sd[a-z]$/))
+				return failure('usb_invalid_device', 'USB-накопитель не выбран.');
+			let current = usbStorageStatusData();
+			if (current.disk != device)
+				return failure('usb_changed', 'USB-накопитель изменился. Обновите страницу и проверьте устройство.');
+			return startSystemJob('usb_mount', { device });
+		}
+	},
+
+	unmountUsbStorage: {
+		call: function() {
+			let current = usbStorageStatusData();
+			if (!current.mounted)
+				return failure('usb_not_mounted', 'Накопитель уже отключён.');
+			return startSystemJob('usb_unmount', {});
 		}
 	},
 
