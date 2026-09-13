@@ -92,6 +92,9 @@ printf 'network-changed\n' >"$TMP/config/network"
 env $SUPPORT_ENV "$RUNTIME" stop user
 grep -Fxq 'original-key' "$TMP/dropbear/authorized_keys"
 ! test -e "$TMP/support-auth/authorized_keys"
+grep -Fxq 'connect_command=' "$TMP/state/status"
+grep -Fxq 'web_command=' "$TMP/state/status"
+grep -Fxq 'web_url=' "$TMP/state/status"
 grep -Fq 'changed_configs=1' "$TMP/persist/audit.log"
 
 cat >"$TMP/state/request" <<EOF

@@ -50,8 +50,10 @@ write_status() {
 	connect_command=''
 	web_command=''
 	web_url=''
-	[ -z "$hostname" ] || connect_command="ssh -p ${port} root@${hostname}"
-	if [ "$mode" = repair ] && [ -n "$hostname" ]; then
+	if [ "$state" = active ] && [ -n "$hostname" ]; then
+		connect_command="ssh -p ${port} root@${hostname}"
+	fi
+	if [ "$state" = active ] && [ "$mode" = repair ] && [ -n "$hostname" ]; then
 		web_command="ssh -N -L 8080:127.0.0.1:80 -p ${port} root@${hostname}"
 		web_url='http://127.0.0.1:8080/cgi-bin/luci/'
 	fi
