@@ -262,13 +262,13 @@ return view.extend({
 		};
 		const communityCatalog = () => E('div', { 'class': 'oum-route-catalog' }, categoryDefinitions.flatMap(([, ids]) =>
 			ids.filter((id) => catalogById[id]).map((id) => routeRow(catalogById[id]))));
-		const systemMeter = (id, label, tone = '') => E('div', { 'class': 'oum-system-metric' }, [
-			E('div', { 'class': 'oum-system-metric-head' }, [ E('span', {}, label), E('span', { id: `${id}-detail` }, '—') ]),
+		const systemMeter = (id, label, tone = '', hidden = false) => E('div', { 'class': 'oum-system-metric', id: `${id}-row`, hidden: hidden ? '' : null }, [
+			E('div', { 'class': 'oum-system-metric-head' }, [ E('span', { id: `${id}-label` }, label), E('span', { id: `${id}-detail` }, '—') ]),
 			E('div', { 'class': `oum-meter${tone ? ` ${tone}` : ''}` }, E('span', { id: `${id}-meter` }))
 		]);
 
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260913-passwallflat1` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260914-systemusb1` }),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('div', {}, [ E('h2', {}, 'Панель OUM'), E('p', { 'class': 'oum-muted' }, 'Домашняя сеть и защищённое подключение') ]),
 				E('div', { 'class': 'oum-head-actions' }, [
@@ -497,7 +497,8 @@ return view.extend({
 					E('section', { 'class': 'oum-system-group' }, [
 						E('h4', {}, 'Хранилище'),
 						systemMeter('storage-root', 'Дисковое пространство (/overlay)'),
-						systemMeter('storage-tmp', 'Временное хранилище (/tmp)', 'is-secondary')
+						systemMeter('storage-tmp', 'Временное хранилище (/tmp)', 'is-secondary'),
+						systemMeter('storage-usb', 'USB-накопитель', 'is-storage', true)
 					]),
 					E('section', { 'class': 'oum-system-group' }, [
 						E('h4', {}, 'Состояние портов'),
@@ -920,10 +921,17 @@ return view.extend({
 			setSystemMeter('memory-buffered', Number(health.memory_buffered || 0), totalMemory);
 			setSystemMeter('storage-root', Number(health.root_used || 0), Number(health.root_total || 0));
 			setSystemMeter('storage-tmp', Number(health.tmp_used || 0), Number(health.tmp_total || 0));
+			const usbStorage = health.usb_storage || {};
+			const usbStorageRow = root.querySelector('#storage-usb-row');
+			usbStorageRow.hidden = usbStorage.mounted !== true || Number(usbStorage.total || 0) <= 0;
+			if (!usbStorageRow.hidden) {
+				root.querySelector('#storage-usb-label').textContent = `USB-накопитель (${usbStorage.device || usbStorage.mountpoint || 'подключён'})`;
+				setSystemMeter('storage-usb', Number(usbStorage.used || 0), Number(usbStorage.total || 0));
+			}
 			root.querySelector('#system-port-grid').replaceChildren(...(health.ports || []).map((port) => {
 				const speed = port.up ? (port.speed >= 1000 ? `${port.speed / 1000} GbE` : `${port.speed} MbE`) : 'нет соединения';
 				return E('div', { 'class': 'oum-port-card', 'data-up': port.up ? 'true' : 'false' }, [
-					E('strong', { 'class': 'oum-port-name' }, port.name),
+					E('strong', { 'class': 'oum-port-name' }, port.name === 'wan' && port.device && port.device !== 'wan' ? `WAN · ${port.device}` : port.name),
 					E('div', { 'class': 'oum-port-state', 'aria-label': port.up ? 'Порт подключён' : 'Порт не подключён' }, E('span', {})),
 					E('div', { 'class': 'oum-port-speed' }, speed),
 					E('div', { 'class': 'oum-port-link' }, E('span', {})),

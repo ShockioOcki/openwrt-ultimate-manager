@@ -1178,6 +1178,7 @@ body.dark .oum-help-page {
   list-style:none;
 }
 .oum-dashboard.oum-app .oum-system-summary::-webkit-details-marker { display:none; }
+.oum-dashboard.oum-app .oum-system-pills { display:none; }
 .oum-dashboard.oum-app .oum-system-title { display:flex; min-width:0; align-items:center; gap:6px; }
 .oum-dashboard.oum-app .oum-system-title h3 { margin:0; font-size:1rem; }
 .oum-dashboard.oum-app .oum-system-title > .oum-muted,
@@ -1200,6 +1201,7 @@ body.dark .oum-help-page {
 .oum-dashboard.oum-app .oum-system-metric-head span:last-child { color:var(--oum-ink); font-variant-numeric:tabular-nums; }
 .oum-dashboard.oum-app .oum-system-metric .oum-meter { height:8px; margin:0; background:var(--oum-field-soft); }
 .oum-dashboard.oum-app .oum-system-metric .oum-meter.is-secondary span { background:#38a9e8; }
+.oum-dashboard.oum-app .oum-system-metric .oum-meter.is-storage span { background:var(--oum-good); }
 .oum-dashboard.oum-app .oum-system-metric .oum-meter.is-muted span { background:#c9d0d8; }
 .oum-dashboard.oum-app .oum-port-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
 .oum-dashboard.oum-app .oum-port-card { display:grid; min-width:0; overflow:hidden; justify-items:center; border:1px solid var(--oum-line); border-radius:12px; background:var(--oum-paper); }

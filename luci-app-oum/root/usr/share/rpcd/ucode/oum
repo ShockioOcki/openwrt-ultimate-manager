@@ -458,6 +458,34 @@ function thermalStatus() {
 	return { maximum, sensors };
 }
 
+function mountedFilesystemUsage(target) {
+	if (!match(target ?? '', /^\/mnt\/oum-[A-Za-z0-9._-]+$/))
+		return null;
+	let source = '';
+	for (let line in split(readfile('/proc/mounts') ?? '', '\n')) {
+		let fields = match(line, /^(\S+)\s+(\S+)\s+/);
+		if (fields && fields[2] == target) {
+			source = fields[1];
+			break;
+		}
+	}
+	if (!length(source))
+		return null;
+	let process = popen(`df -P ${shellquote(target)} 2>/dev/null`);
+	if (!process)
+		return null;
+	let total = 0, used = 0;
+	for (let line = process.read('line'); length(line); line = process.read('line')) {
+		let fields = match(line, /^\S+\s+(\d+)\s+(\d+)\s+\d+\s+\d+%\s+\S+/);
+		if (fields) {
+			total = +fields[1] * 1024;
+			used = +fields[2] * 1024;
+		}
+	}
+	process.close();
+	return total > 0 ? { mounted: true, device: source, mountpoint: target, total, used } : null;
+}
+
 function healthStatus() {
 	let bus = connect();
 	let info = bus?.call('system', 'info') ?? {};
@@ -469,6 +497,7 @@ function healthStatus() {
 	let thermal = thermalStatus();
 	let temperature = thermal.maximum;
 	let ports = [];
+	let portDevices = {};
 	for (let path in glob('/sys/class/net/*')) {
 		let name = basename(path);
 		if (!match(name, /^(wan|lan[0-9]+)$/))
@@ -477,15 +506,32 @@ function healthStatus() {
 		let speed = +(trim(readfile(`${path}/speed`) ?? '0'));
 		push(ports, {
 			name,
+			device: name,
 			up: state == 'up',
 			speed: speed > 0 ? speed : 0,
 			rx_bytes: +(trim(readfile(`${path}/statistics/rx_bytes`) ?? '0')),
 			tx_bytes: +(trim(readfile(`${path}/statistics/tx_bytes`) ?? '0'))
 		});
+		portDevices[name] = true;
+	}
+	let wan = bus?.call('network.interface.wan', 'status') ?? {};
+	let wanDevice = wan.device ?? wan.l3_device ?? cursor().get('network', 'wan', 'device') ?? '';
+	if (match(wanDevice, /^[A-Za-z0-9_.-]+$/) && !portDevices[wanDevice] && access(`/sys/class/net/${wanDevice}`)) {
+		let state = trim(readfile(`/sys/class/net/${wanDevice}/operstate`) ?? 'down');
+		let speed = +(trim(readfile(`/sys/class/net/${wanDevice}/speed`) ?? '0'));
+		push(ports, {
+			name: 'wan',
+			device: wanDevice,
+			up: state == 'up',
+			speed: speed > 0 ? speed : 0,
+			rx_bytes: +(trim(readfile(`/sys/class/net/${wanDevice}/statistics/rx_bytes`) ?? '0')),
+			tx_bytes: +(trim(readfile(`/sys/class/net/${wanDevice}/statistics/tx_bytes`) ?? '0'))
+		});
 	}
 	ports = sort(ports, (a, b) => a.name == 'wan' ? -1 : (b.name == 'wan' ? 1 : (a.name < b.name ? -1 : 1)));
 	let root = info.root ?? {};
 	let tmp = info.tmp ?? {};
+	let usbStorage = mountedFilesystemUsage(cursor().get('fstab', 'oum_usb', 'target') ?? '');
 	return {
 		uptime: +(info.uptime ?? 0),
 		load: +(info.load?.[0] ?? 0) / 65535,
@@ -499,6 +545,7 @@ function healthStatus() {
 		root_used: +(root.used ?? 0) * 1024,
 		tmp_total: +(tmp.total ?? 0) * 1024,
 		tmp_used: +(tmp.used ?? 0) * 1024,
+		usb_storage: usbStorage,
 		model: board.model ?? '',
 		kernel: board.kernel ?? '',
 		ports,
