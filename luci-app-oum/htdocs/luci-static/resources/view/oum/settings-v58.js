@@ -26,6 +26,7 @@ const callFormatUsbStorage = rpc.declare({ object: 'oum', method: 'formatUsbStor
 const callMountUsbStorage = rpc.declare({ object: 'oum', method: 'mountUsbStorage', params: [ 'device' ], expect: { '': {} } });
 const callUnmountUsbStorage = rpc.declare({ object: 'oum', method: 'unmountUsbStorage', expect: { '': {} } });
 const callSetUsbSmb = rpc.declare({ object: 'oum', method: 'setUsbSmb', params: [ 'enabled' ], expect: { '': {} } });
+const callSetUsbAria2 = rpc.declare({ object: 'oum', method: 'setUsbAria2', params: [ 'enabled' ], expect: { '': {} } });
 const callScanWifi = rpc.declare({ object: 'oum', method: 'scanWifi', params: [ 'band' ], expect: { '': {} } });
 const callSetWisp = rpc.declare({ object: 'oum', method: 'setWisp', params: [ 'enabled', 'ssid', 'password', 'band' ], expect: { '': {} } });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
@@ -205,7 +206,7 @@ return view.extend({
 		const lan = settings.lan || { address: '192.168.5.1', prefix: 24, rollback: false, rollback_address: '' };
 		const mesh = settings.mesh || { enabled: false, id: '', band: '5g' };
 		const wisp = settings.wisp || { enabled: false, connected: false, ssid: '', ip: '', signal: null, band: '2g', rollback: false };
-		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '' };
+		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '', aria2_installed: false, aria2_enabled: false, aria2_running: false, ariang_ready: false, aria2_dir: '', aria2_secret_b64: '' };
 		const project = settings.project || { version: 'development', rollback: false };
 		const projectUpdatable = project.version && project.version !== 'development';
 		const dns = settings.dns || {
@@ -266,6 +267,8 @@ return view.extend({
 					(!usb.disk ? 'Драйверы установлены · переподключите накопитель' :
 						(usb.mounted ? `${usbName} · ${formatBytes(usb.size_bytes)} · подключён` : `${usbName} · ${formatBytes(usb.size_bytes)} · не подключён`))));
 		const smbAddress = `\\\\${lan.address || '192.168.5.1'}\\OUM`;
+		const ariaHost = lan.address || '192.168.5.1';
+		const ariangUrl = `http://${ariaHost}/ariang/#!/settings/rpc/set?protocol=http&host=${ariaHost}&port=6800&interface=jsonrpc&secret=${usb.aria2_secret_b64 || ''}`;
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
 		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
@@ -371,7 +374,13 @@ return view.extend({
 						]),
 						E('button', { 'class': `btn ${usb.smb_running ? '' : 'cbi-button-action'}`, id: 'toggle-usb-smb', 'data-system-action': '', disabled: usb.mounted || usb.smb_running ? null : '' }, usb.smb_running ? 'Выключить' : 'Включить')
 					]),
-					E('span', {}, [ E('strong', {}, 'aria2'), E('small', {}, 'Загрузки и AriaNg') ]),
+					E('article', { 'class': `oum-usb-service${usb.aria2_running ? ' is-active' : ''}` }, [
+						E('div', {}, [ E('strong', {}, 'aria2'), E('small', {}, usb.aria2_running ? 'Загрузки · AriaNg готов' : 'Загрузки и AriaNg') ]),
+						E('div', { 'class': 'oum-usb-service-actions' }, [
+							E('button', { 'class': `btn ${usb.aria2_running ? '' : 'cbi-button-action'}`, id: 'toggle-usb-aria2', 'data-system-action': '', disabled: usb.mounted || usb.aria2_running ? null : '' }, usb.aria2_running ? 'Выключить' : 'Включить'),
+							...(usb.aria2_running && usb.ariang_ready && usb.aria2_secret_b64 ? [ E('a', { 'class': 'btn cbi-button-action', href: ariangUrl, target: '_blank', rel: 'noopener' }, 'Открыть') ] : [])
+						])
+					]),
 					E('span', {}, [ E('strong', {}, 'miniDLNA'), E('small', {}, 'Видео, музыка и фото') ]),
 					E('span', {}, [ E('strong', {}, 'Сортировщик'), E('small', {}, 'TMDB · фильмы и сериалы') ]),
 					E('span', {}, [ E('strong', {}, 'Swap'), E('small', {}, 'Отдельная настройка') ])
@@ -1123,6 +1132,14 @@ return view.extend({
 			const description = enable ? `Папка ${smbAddress} станет доступна без пароля устройствам домашней сети.` : 'Подключения SMB будут закрыты. Файлы на накопителе сохранятся.';
 			if (await confirmation(title, description, enable ? 'Включить SMB' : 'Выключить SMB', false))
 				start(callSetUsbSmb(enable));
+		});
+		const aria2Button = root.querySelector('#toggle-usb-aria2');
+		if (aria2Button) aria2Button.addEventListener('click', async () => {
+			const enable = !usb.aria2_running;
+			const title = enable ? 'Включить загрузчик?' : 'Выключить загрузчик?';
+			const description = enable ? 'OUM установит aria2 и AriaNg. Загрузки будут сохраняться в общей папке OUM/Downloads.' : 'Активные загрузки остановятся. Задания и скачанные файлы сохранятся.';
+			if (await confirmation(title, description, enable ? 'Включить aria2' : 'Выключить aria2', false))
+				start(callSetUsbAria2(enable));
 		});
 		root.querySelector('#create-backup').addEventListener('click', () => {
 			setBusy(true);

@@ -936,6 +936,7 @@
 .oum-usb-services > span { opacity: .72; }
 .oum-usb-service { gap: 9px; }
 .oum-usb-service > div { display: grid; gap: 2px; min-width: 0; }
+.oum-usb-service .oum-usb-service-actions { gap: 6px; }
 .oum-usb-service.is-active { border-color: color-mix(in srgb, var(--oum-good) 55%, var(--oum-line)); background: color-mix(in srgb, var(--oum-good) 9%, var(--oum-paper)); }
 .oum-usb-service .btn { width: 100%; min-height: 38px; padding-block: 6px; }
 .oum-usb-services strong, .oum-usb-services small { overflow-wrap: anywhere; }

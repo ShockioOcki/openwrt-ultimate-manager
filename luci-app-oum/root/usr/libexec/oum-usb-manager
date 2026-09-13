@@ -10,6 +10,9 @@ STORAGE_PACKAGES='block-mount kmod-usb-storage kmod-usb-storage-uas kmod-scsi-co
 SMB_PACKAGES='ksmbd-server'
 SMB_SHARE_SECTION=oum_share
 SMB_SHARE_NAME=OUM
+ARIA2_PACKAGES='aria2 ariang'
+ARIA2_SECTION=main
+ARIA2_SECRET_FILE=/etc/oum/usb/aria2-secret
 
 clean_value() {
 	printf '%s' "${1:-}" | tr '\n\r\t' '   '
@@ -118,6 +121,12 @@ status() {
 	emit smb_enabled "$(service_enabled ksmbd && echo 1 || echo 0)"
 	emit smb_running "$(service_running ksmbd && echo 1 || echo 0)"
 	emit smb_share "$([ -n "$mountpoint" ] && printf '%s/%s' "$mountpoint" "$SMB_SHARE_NAME" || true)"
+	emit aria2_installed "$(apk info -e aria2 >/dev/null 2>&1 && apk info -e ariang >/dev/null 2>&1 && echo 1 || echo 0)"
+	emit aria2_enabled "$(service_enabled aria2 && echo 1 || echo 0)"
+	emit aria2_running "$(service_running aria2 && echo 1 || echo 0)"
+	emit ariang_ready "$([ -f /www/ariang/index.html ] && echo 1 || echo 0)"
+	emit aria2_dir "$([ -n "$mountpoint" ] && printf '%s/%s/Downloads' "$mountpoint" "$SMB_SHARE_NAME" || true)"
+	emit aria2_secret_b64 "$([ -s "$ARIA2_SECRET_FILE" ] && base64 < "$ARIA2_SECRET_FILE" | tr '+/' '-_' | tr -d '=\n' || true)"
 }
 
 require_usb_disk() {
@@ -192,6 +201,21 @@ mount_partition() {
 			/etc/init.d/ksmbd disable
 		fi
 	fi
+	if service_enabled aria2; then
+		download_dir="$(uci -q get "aria2.$ARIA2_SECTION.dir" 2>/dev/null || true)"
+		config_dir="$(uci -q get "aria2.$ARIA2_SECTION.config_dir" 2>/dev/null || true)"
+		if [ "$download_dir" = "$target/$SMB_SHARE_NAME/Downloads" ] && [ "$config_dir" = "$target/.oum/aria2" ]; then
+			mkdir -p "$download_dir" "$config_dir"
+			chown aria2:nogroup "$download_dir"
+			chmod 2775 "$download_dir"
+			chown aria2:aria2 "$config_dir"
+			chmod 0700 "$config_dir"
+			/etc/init.d/aria2 restart
+			chmod 0700 "$config_dir"
+		else
+			/etc/init.d/aria2 disable
+		fi
+	fi
 }
 
 smb_enable() {
@@ -231,11 +255,57 @@ smb_disable() {
 	/etc/init.d/ksmbd disable
 }
 
+aria2_enable() {
+	target="$(managed_mountpoint)" || { echo 'Mount the managed USB storage before enabling aria2' >&2; return 1; }
+	apk info -e aria2 >/dev/null 2>&1 && apk info -e ariang >/dev/null 2>&1 || apk -U add $ARIA2_PACKAGES
+	mkdir -p /etc/oum/usb
+	[ -e /etc/oum/usb/aria2-before-oum ] || cp -p /etc/config/aria2 /etc/oum/usb/aria2-before-oum
+	if [ ! -s "$ARIA2_SECRET_FILE" ]; then
+		hexdump -n 24 -e '24/1 "%02x"' /dev/urandom > "$ARIA2_SECRET_FILE"
+		chmod 0600 "$ARIA2_SECRET_FILE"
+	fi
+	secret="$(cat "$ARIA2_SECRET_FILE")"
+	download_dir="$target/$SMB_SHARE_NAME/Downloads"
+	config_dir="$target/.oum/aria2"
+	mkdir -p "$download_dir" "$config_dir"
+	chown aria2:nogroup "$download_dir"
+	chmod 2775 "$download_dir"
+	chown aria2:aria2 "$config_dir"
+	chmod 0700 "$config_dir"
+	uci -q batch <<-EOF
+		set aria2.$ARIA2_SECTION='aria2'
+		set aria2.$ARIA2_SECTION.enabled='1'
+		set aria2.$ARIA2_SECTION.user='aria2'
+		set aria2.$ARIA2_SECTION.dir='$download_dir'
+		set aria2.$ARIA2_SECTION.config_dir='$config_dir'
+		set aria2.$ARIA2_SECTION.rpc_auth_method='token'
+		set aria2.$ARIA2_SECTION.rpc_secret='$secret'
+		set aria2.$ARIA2_SECTION.rpc_listen_port='6800'
+		set aria2.$ARIA2_SECTION.bt_enable_lpd='true'
+		set aria2.$ARIA2_SECTION.enable_dht='true'
+		set aria2.$ARIA2_SECTION.follow_torrent='true'
+		set aria2.$ARIA2_SECTION.file_allocation='none'
+		set aria2.$ARIA2_SECTION.save_session_interval='30'
+	EOF
+	uci -q commit aria2
+	/etc/init.d/aria2 enable
+	/etc/init.d/aria2 restart
+	chmod 0700 "$config_dir"
+	service_running aria2
+}
+
+aria2_disable() {
+	[ -x /etc/init.d/aria2 ] || return 0
+	/etc/init.d/aria2 stop
+	/etc/init.d/aria2 disable
+}
+
 format_disk() {
 	disk="$(require_usb_disk "${1:-}")"
 	[ "${2:-}" = ERASE ] || { echo 'Format confirmation is missing' >&2; return 1; }
 	# Formatting invalidates paths on the old filesystem. Leave SMB off until
 	# the user explicitly enables it for the freshly formatted disk.
+	aria2_disable
 	smb_disable
 	unmount_disk_partitions "$disk"
 	parted -s "$disk" mklabel gpt
@@ -269,6 +339,7 @@ unmount_managed() {
 	partition="$(uci -q get "fstab.$FSTAB_SECTION.uuid" 2>/dev/null || true)"
 	[ -n "$partition" ] || return 0
 	target="$(uci -q get "fstab.$FSTAB_SECTION.target" 2>/dev/null || true)"
+	service_running aria2 && /etc/init.d/aria2 stop
 	service_running ksmbd && /etc/init.d/ksmbd stop
 	[ -z "$target" ] || ! grep -qs " $target " /proc/mounts || umount "$target"
 	uci -q set "fstab.$FSTAB_SECTION.enabled=0"
@@ -283,5 +354,7 @@ case "$ACTION" in
 	unmount) unmount_managed ;;
 	smb-enable) smb_enable ;;
 	smb-disable) smb_disable ;;
-	*) echo "usage: $0 {status|prepare|format DEVICE ERASE|mount DEVICE|unmount|smb-enable|smb-disable}" >&2; exit 2 ;;
+	aria2-enable) aria2_enable ;;
+	aria2-disable) aria2_disable ;;
+	*) echo "usage: $0 {status|prepare|format DEVICE ERASE|mount DEVICE|unmount|smb-enable|smb-disable|aria2-enable|aria2-disable}" >&2; exit 2 ;;
 esac

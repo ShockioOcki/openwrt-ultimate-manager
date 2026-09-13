@@ -734,7 +734,13 @@ function usbStorageStatusData() {
 		smb_installed: false,
 		smb_enabled: false,
 		smb_running: false,
-		smb_share: ''
+		smb_share: '',
+		aria2_installed: false,
+		aria2_enabled: false,
+		aria2_running: false,
+		ariang_ready: false,
+		aria2_dir: '',
+		aria2_secret_b64: ''
 	};
 	if (!result.available)
 		return result;
@@ -742,10 +748,10 @@ function usbStorageStatusData() {
 	if (!process)
 		return result;
 	for (let line = process.read('line'); length(line); line = process.read('line')) {
-		let pair = match(line, /^([a-z_]+)=(.*)$/);
+		let pair = match(line, /^([a-z0-9_]+)=(.*)$/);
 		if (!pair)
 			continue;
-		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted', 'smb_installed', 'smb_enabled', 'smb_running' ])
+		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted', 'smb_installed', 'smb_enabled', 'smb_running', 'aria2_installed', 'aria2_enabled', 'aria2_running', 'ariang_ready' ])
 			result[pair[1]] = trim(pair[2]) == '1';
 		else if (pair[1] == 'size_bytes')
 			result.size_bytes = +(trim(pair[2]) || 0);
@@ -1835,6 +1841,21 @@ const methods = {
 			if (!enabled && !current.smb_enabled && !current.smb_running)
 				return failure('usb_smb_stopped', 'SMB уже выключен.');
 			return startSystemJob(enabled ? 'usb_smb_enable' : 'usb_smb_disable', {});
+		}
+	},
+
+	setUsbAria2: {
+		args: { enabled: false },
+		call: function(request) {
+			let enabled = request.args.enabled == true;
+			let current = usbStorageStatusData();
+			if (enabled && !current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (enabled && current.aria2_running)
+				return failure('usb_aria2_running', 'aria2 уже включён.');
+			if (!enabled && !current.aria2_enabled && !current.aria2_running)
+				return failure('usb_aria2_stopped', 'aria2 уже выключен.');
+			return startSystemJob(enabled ? 'usb_aria2_enable' : 'usb_aria2_disable', {});
 		}
 	},
 
