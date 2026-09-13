@@ -312,6 +312,12 @@ tr:hover td { background: color-mix(in srgb, var(--oum-action-soft) 38%, transpa
 .alert-message.error { border-color: #dfa7a3; background: var(--oum-bad-soft); color: var(--oum-bad); }
 .alert-message.success { border-color: #a8d8c5; background: var(--oum-good-soft); color: var(--oum-good); }
 .modal, .modal-dialog, .dropdown, .dropdown-menu { color: var(--oum-ink); }
+.theme-oum #modal_overlay > .modal {
+  border: 1px solid var(--oum-line);
+  background: var(--oum-paper);
+  color: var(--oum-ink);
+  box-shadow: 0 22px 60px rgba(23, 35, 31, .18);
+}
 .modal-dialog { border: 1px solid var(--oum-line); border-radius: var(--oum-radius); background: var(--oum-paper); box-shadow: 0 22px 60px rgba(23, 35, 31, .18); }
 .modal-header, .modal-footer { border-color: var(--oum-line); }
 

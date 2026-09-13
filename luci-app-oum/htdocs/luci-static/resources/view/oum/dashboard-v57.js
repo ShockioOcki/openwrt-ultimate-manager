@@ -197,7 +197,7 @@ return view.extend({
 		const podkopRouting = data[3] || { catalog: [], proxy: {}, direct: {} };
 		if (!status.setup_complete) {
 			const page = E('main', { 'class': 'oum-main' }, [
-				E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260907-quick14` }),
+				E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260913-passwallflat1` }),
 				E('div', { 'class': 'oum-page-head' }, [
 					E('div', {}, [
 						E('h2', {}, 'Панель OUM'),
@@ -268,7 +268,7 @@ return view.extend({
 		]);
 
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260907-quick14` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260913-passwallflat1` }),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('div', {}, [ E('h2', {}, 'Панель OUM'), E('p', { 'class': 'oum-muted' }, 'Домашняя сеть и защищённое подключение') ]),
 				E('div', { 'class': 'oum-head-actions' }, [
@@ -1176,7 +1176,7 @@ return view.extend({
 			if (quick && window.innerWidth <= 900) return E('div', { 'class': `oum-node${isCurrent ? ' is-current' : ''} is-quick`, 'data-node': !isCurrent ? (node.id || node.name) : null }, [
 				E('div', { 'class': 'oum-node-copy' }, [
 					E('span', { 'class': 'oum-node-flag', 'aria-hidden': 'true' }, flagOf(node.name)),
-					E('span', { 'class': 'oum-node-name', title: node.name }, shortOf(node.name, 14)),
+					E('span', { 'class': 'oum-node-name', title: node.name }, shortOf(node.name, isPasswall ? 28 : 14)),
 					E('span', { 'class': 'oum-delay', 'data-delay': delayState(node) }, delayText(node, '—'))
 				])
 			]);

@@ -2509,7 +2509,7 @@ body.dark .oum-help-page {
   #modal_overlay .modal::before { content:""; position:absolute; top:7px; left:50%; width:36px; height:4px; border-radius:999px; background:var(--oum-line-strong); transform:translateX(-50%); }
 }
 @media (max-width: 900px){
-  #modal_overlay .modal, #modal_overlay .modal-dialog { background:#fff !important; }
+  #modal_overlay .modal, #modal_overlay .modal-dialog { background:var(--oum-paper, #fff) !important; color:var(--oum-ink, #1f2937) !important; }
 }
 html body[data-page^="oum-"] #modal_overlay { align-items:flex-end !important; justify-content:flex-end !important; }
 html body[data-page^="oum-"] #modal_overlay .modal,
@@ -2517,8 +2517,12 @@ html body[data-page^="oum-"] #modal_overlay .modal-dialog {
   background:var(--oum-paper, #fff) !important;
   color:var(--oum-ink, #1f2937) !important;
 }
-/* force modal bottom even more specific, with dark bg fix */
-html[data-theme="dark"] body[data-page^="oum-"] #modal_overlay .modal { background:#fff !important; color:#1f2937 !important; }
+/* Keep LuCI modals on the active OUM palette in both supported dark-mode states. */
+html[data-theme="dark"] body[data-page^="oum-"] #modal_overlay .modal,
+html[data-darkmode="true"] body[data-page^="oum-"] #modal_overlay .modal {
+  background:var(--oum-paper, #151d2c) !important;
+  color:var(--oum-ink, #edf2f7) !important;
+}
 html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper, #fff) !important; }
 # hide duplicate Готово inside device custom sheet
 #oum-device-custom-content .right { display:none !important; }
@@ -3654,6 +3658,75 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
   .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-delay { font-size: .82rem !important; }
 }
 
+/* PassWall mobile: one surface, readable node rows instead of nested mini-cards. */
+@media (max-width: 900px) {
+  .oum-dashboard.oum-app #node-panel:has(.oum-node-controls[data-engine="passwall"]) {
+    display: grid !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+    border: 1px solid var(--oum-line) !important;
+    border-radius: 15px !important;
+    background: var(--oum-paper) !important;
+  }
+  .oum-dashboard.oum-app #node-panel:has(.oum-node-controls[data-engine="passwall"]) #passwall-panel,
+  .oum-dashboard.oum-app #node-panel:has(.oum-node-controls[data-engine="passwall"]) .oum-node-controls[data-engine="passwall"] {
+    padding: 16px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+  .oum-dashboard.oum-app #node-panel:has(.oum-node-controls[data-engine="passwall"]) .oum-node-controls[data-engine="passwall"] {
+    border-top: 1px solid var(--oum-line) !important;
+  }
+  .oum-node-controls[data-engine="passwall"] #measure-nodes {
+    min-height: 34px !important;
+    height: 34px !important;
+    padding: 0 11px !important;
+    font-size: .75rem !important;
+  }
+  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+    margin-top: 12px;
+    border-top: 1px solid var(--oum-line);
+  }
+  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node {
+    min-height: 48px;
+    padding: 10px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--oum-line) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node-copy {
+    display: grid !important;
+    grid-template-columns: 24px minmax(0,1fr) auto;
+    align-items: center !important;
+    gap: 9px !important;
+    text-align: left !important;
+  }
+  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node-flag {
+    font-size: 20px !important;
+  }
+  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node-name {
+    font-size: .86rem !important;
+  }
+  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-delay {
+    font-size: .78rem !important;
+    white-space: nowrap;
+  }
+  .oum-node-controls[data-engine="passwall"] .oum-all-nodes-btn {
+    min-height: 42px !important;
+    margin-top: 8px !important;
+    padding: 10px 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    font-size: .78rem !important;
+  }
+}
+
 /* cards75: порядок в 4 карточках, особенно Клиенты (текст залезал под QR). */
 .oum-dashboard .oum-card { min-width: 0 !important; }
 .oum-client-metric > div:first-child { min-width: 0 !important; flex: 1 1 auto !important; }
@@ -3839,22 +3912,25 @@ html[data-theme="dark"] .oum-node.oum-pick .oum-delay { color: var(--oum-subtle)
 .oum-support-mode:has(input:checked) { border-color: var(--oum-action); background: var(--oum-action-soft); }
 .oum-support-mode strong,.oum-support-mode small { display: block; }
 .oum-support-mode small { margin-top: 4px; color: var(--oum-subtle); line-height: 1.4; }
-.oum-support-fields { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-top: 16px; }
+.oum-support-fields { margin-top: 16px; }
+.oum-support-duration { display: block; width: min(100%,220px); }
 .oum-support-fields label > span { display: block; margin-bottom: 6px; font-weight: 700; }
 .oum-support-fields .is-wide { grid-column: 1/-1; }
 .oum-support-fields input,.oum-support-fields select,.oum-support-fields textarea { width: 100%; box-sizing: border-box; }
 .oum-support-consent { display: flex; align-items: flex-start; gap: 9px; margin: 16px 0; }
-.oum-support-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-top: 16px; }
-.oum-support-summary > div { padding: 12px; border-radius: 10px; background: var(--oum-field); }
-.oum-support-summary small,.oum-support-summary strong { display: block; }
-.oum-support-summary small { color: var(--oum-subtle); margin-bottom: 3px; }
-.oum-support-web { margin: 16px 0; padding: 14px 0; border-block: 1px solid var(--oum-line); }
-.oum-support-web > div:first-child p { margin: 4px 0 12px; color: var(--oum-subtle); }
-.oum-support-web-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: center; }
-.oum-support-web-row code { min-width: 0; padding: 10px 12px; border-radius: 9px; background: var(--oum-field); overflow-wrap: anywhere; }
-.oum-support-web-url { margin: 10px 0 0; color: var(--oum-subtle); }
-.oum-support-web-url code { color: var(--oum-ink); overflow-wrap: anywhere; }
-.oum-support-privacy { color: var(--oum-subtle); }
+.oum-support-session-meta { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 24px; margin-top: 16px; padding: 12px 0; border-block: 1px solid var(--oum-line); }
+.oum-support-session-meta small,.oum-support-session-meta strong { display: block; }
+.oum-support-session-meta small { margin-bottom: 2px; color: var(--oum-subtle); }
+.oum-support-session-meta > div:last-child { min-width: 112px; }
+.oum-support-access { margin-top: 4px; }
+.oum-support-access-item { padding: 16px 0; border-bottom: 1px solid var(--oum-line); }
+.oum-support-access-head p { margin: 3px 0 10px; color: var(--oum-subtle); }
+.oum-support-command-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: stretch; }
+.oum-support-command { display: flex; align-items: center; min-width: 0; padding: 9px 11px; border: 1px solid var(--oum-line); border-radius: 9px; background: var(--oum-field); color: var(--oum-ink); overflow-wrap: anywhere; word-break: break-word; }
+.oum-support-access-foot { margin: 9px 0 0; color: var(--oum-subtle); }
+.oum-support-access-foot code { color: var(--oum-ink); overflow-wrap: anywhere; }
+.oum-support-privacy { margin: 14px 0 0; color: var(--oum-subtle); }
+.oum-support-active-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
 .oum-support-recovery { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .oum-support-audit { flex: 1 1 100%; padding: 10px 12px; border: 1px solid var(--oum-line); border-radius: 10px; }
 .oum-support-audit pre { max-height: 180px; overflow: auto; margin: 10px 0 0; white-space: pre-wrap; color: var(--oum-subtle); font-size: 12px; }
@@ -3863,8 +3939,9 @@ html[data-theme="dark"] .oum-node.oum-pick .oum-delay { color: var(--oum-subtle)
   .oum-support-head,.oum-support-modes { display: block; }
   .oum-support-state { display: inline-block; margin-top: 10px; }
   .oum-support-mode + .oum-support-mode { margin-top: 8px; }
-  .oum-support-fields,.oum-support-summary { grid-template-columns: 1fr; }
+  .oum-support-fields { grid-template-columns: 1fr; }
   .oum-support-fields .is-wide { grid-column: auto; }
-  .oum-support-web-row { grid-template-columns: 1fr; }
-  .oum-support-web-row .btn { width: 100%; }
+  .oum-support-session-meta { grid-template-columns: minmax(0,1fr) auto; gap: 14px; }
+  .oum-support-command-row { grid-template-columns: 1fr; }
+  .oum-support-command-row .btn,.oum-support-active-actions .btn { width: 100%; }
 }

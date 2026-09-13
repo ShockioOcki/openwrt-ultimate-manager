@@ -42,30 +42,32 @@ function supportPanel(support) {
 	const active = support.state === 'active';
 	if (active) {
 		const expires = support.expires_at ? new Date(support.expires_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
-		const webAccess = support.mode === 'repair' && support.web_command ? E('div', { 'class': 'oum-support-web' }, [
-			E('div', {}, [ E('strong', {}, 'Веб-интерфейс через SSH'), E('p', {}, 'Специалист запускает команду на своём компьютере и, пока она работает, открывает локальный адрес в браузере.') ]),
-			E('div', { 'class': 'oum-support-web-row' }, [
-				E('code', {}, support.web_command),
-				E('button', { 'class': 'btn', click: () => navigator.clipboard.writeText(support.web_command).then(() => ui.addNotification(null, E('p', {}, 'Команда веб-доступа скопирована.'), 'info')) }, 'Скопировать команду')
+		const accessBlock = (title, description, command, copiedMessage, footer) => E('section', { 'class': 'oum-support-access-item' }, [
+			E('div', { 'class': 'oum-support-access-head' }, [ E('strong', {}, title), E('p', {}, description) ]),
+			E('div', { 'class': 'oum-support-command-row' }, [
+				E('code', { 'class': 'oum-support-command' }, command || 'Команда недоступна'),
+				E('button', { 'class': 'btn', disabled: command ? null : '', click: () => navigator.clipboard.writeText(command).then(() => ui.addNotification(null, E('p', {}, copiedMessage), 'info')) }, 'Скопировать')
 			]),
-			E('p', { 'class': 'oum-support-web-url' }, [ E('span', {}, 'Открыть на компьютере специалиста: '), E('code', {}, support.web_url) ])
-		]) : null;
+			footer || ''
+		]);
+		const sshAccess = accessBlock('SSH-консоль', support.mode === 'repair' ? 'Полный временный доступ к командной строке роутера.' : 'Безопасный доступ только к разрешённой диагностике.', support.connect_command, 'Команда SSH скопирована.');
+		const webAccess = support.mode === 'repair' && support.web_command ? accessBlock('Веб-интерфейс', 'Запустите SSH-туннель на компьютере специалиста.', support.web_command, 'Команда веб-доступа скопирована.', E('p', { 'class': 'oum-support-access-foot' }, [ E('span', {}, 'Затем откройте: '), E('code', {}, support.web_url) ])) : null;
 		return E('section', { 'class': 'oum-support-panel is-active' }, [
 			E('div', { 'class': 'oum-support-head' }, [ E('div', {}, [ E('h2', {}, 'Удалённая поддержка'), E('p', {}, support.message || 'Сеанс активен.') ]), E('span', { 'class': 'oum-support-state' }, 'Доступ открыт') ]),
-			E('div', { 'class': 'oum-support-summary' }, [
+			E('div', { 'class': 'oum-support-session-meta' }, [
 				E('div', {}, [ E('small', {}, 'Режим'), E('strong', {}, supportModeLabel(support.mode)) ]),
-				E('div', {}, [ E('small', {}, 'Подключение'), E('strong', {}, support.connect_command || '—') ]),
-				E('div', {}, [ E('small', {}, 'Автоотключение'), E('strong', {}, expires) ])
+				E('div', {}, [ E('small', {}, 'Доступ закроется'), E('strong', {}, expires) ])
 			]),
-			webAccess,
-			E('p', { 'class': 'oum-support-privacy' }, support.mode === 'repair' ? 'Передайте специалисту нужную команду. Веб-интерфейс идёт внутри SSH-туннеля и не публикуется в интернет.' : 'Передайте специалисту только команду подключения. Пароль роутера в интернет не публикуется.'),
-			E('button', { 'class': 'btn cbi-button-action', click: () => navigator.clipboard.writeText(support.connect_command || '').then(() => ui.addNotification(null, E('p', {}, 'Команда подключения скопирована.'), 'info')) }, 'Скопировать команду'), ' ',
-			E('button', { 'class': 'btn cbi-button-negative', click: async ev => {
-				ev.currentTarget.disabled = true;
-				const result = await callStopSupport();
-				if (!result.ok) { ev.currentTarget.disabled = false; ui.addNotification(null, E('p', {}, result.message || 'Не удалось завершить сеанс.'), 'error'); return; }
-				location.reload();
-			} }, 'Завершить удалённый доступ'),
+			E('div', { 'class': 'oum-support-access' }, [ sshAccess, webAccess ].filter(Boolean)),
+			E('p', { 'class': 'oum-support-privacy' }, support.mode === 'repair' ? 'Команды работают только до указанного времени. LuCI доступен исключительно внутри SSH-туннеля.' : 'Пароль роутера не передаётся. Диагностический доступ не позволяет менять настройки.'),
+			E('div', { 'class': 'oum-support-active-actions' }, [
+				E('button', { 'class': 'btn cbi-button-negative', click: async ev => {
+					ev.currentTarget.disabled = true;
+					const result = await callStopSupport();
+					if (!result.ok) { ev.currentTarget.disabled = false; ui.addNotification(null, E('p', {}, result.message || 'Не удалось завершить сеанс.'), 'error'); return; }
+					location.reload();
+				} }, 'Завершить удалённый доступ')
+			]),
 			supportRecovery(support)
 		]);
 	}
@@ -74,16 +76,19 @@ function supportPanel(support) {
 	const consent = E('input', { type: 'checkbox' });
 	const modeDiagnostic = E('input', { type: 'radio', name: 'support_mode', value: 'diagnostic', checked: '' });
 	const modeRepair = E('input', { type: 'radio', name: 'support_mode', value: 'repair' });
+	const notices = [
+		(support.state === 'expired' || support.state === 'disconnected' || support.state === 'failed') ? E('div', { 'class': 'oum-support-notice', 'data-state': support.state }, support.message) : null,
+		!support.client_ready ? E('div', { 'class': 'oum-support-notice' }, [ E('strong', {}, 'OpenSSH-клиент не установлен.'), E('span', {}, ' Установите полный комплект OUM с зависимостью openssh-client.') ]) : null
+	].filter(Boolean);
 	return E('section', { 'class': 'oum-support-panel' }, [
 		E('div', { 'class': 'oum-support-head' }, [ E('div', {}, [ E('h2', {}, 'Удалённая поддержка'), E('p', {}, 'OUM сам создаст временный Pinggy-туннель и покажет готовую команду для специалиста.') ]), E('span', { 'class': 'oum-support-state is-off' }, 'Выключена') ]),
-		(support.state === 'expired' || support.state === 'disconnected' || support.state === 'failed') ? E('div', { 'class': 'oum-support-notice', 'data-state': support.state }, support.message) : null,
-		!support.client_ready ? E('div', { 'class': 'oum-support-notice' }, [ E('strong', {}, 'OpenSSH-клиент не установлен.'), E('span', {}, ' Установите полный комплект OUM с зависимостью openssh-client.') ]) : null,
+		...notices,
 		E('div', { 'class': 'oum-support-modes' }, [
 			E('label', { 'class': 'oum-support-mode' }, [ modeDiagnostic, E('span', {}, [ E('strong', {}, 'Только диагностика'), E('small', {}, 'Специалист видит состояние, службы и очищенный журнал. Настройки менять нельзя.') ]) ]),
 			E('label', { 'class': 'oum-support-mode' }, [ modeRepair, E('span', {}, [ E('strong', {}, 'Диагностика и исправление'), E('small', {}, 'Перед подключением создаётся страховочная копия; специалист получает временный полный доступ.') ]) ])
 		]),
 		E('div', { 'class': 'oum-support-fields' }, [
-			E('label', {}, [ E('span', {}, 'Срок сеанса'), duration ])
+			E('label', { 'class': 'oum-support-duration' }, [ E('span', {}, 'Срок сеанса'), duration ])
 		]),
 		E('p', { 'class': 'oum-support-privacy' }, 'Бесплатный адрес Pinggy случайный и действует не более 60 минут. OUM принимает только заранее подготовленный временный ключ; пароль отключён.'),
 		E('label', { 'class': 'oum-support-consent' }, [ consent, E('span', {}, 'Я понимаю, что на выбранное время открываю удалённый доступ к этому роутеру.') ]),
@@ -115,7 +120,7 @@ return view.extend({
 			[ '4', 'Не помогло?', 'Сохраните резервную копию OUM, перезагрузите роутер и повторите проверку. Сброс VPN не меняет WAN и Wi-Fi.', null ]
 		];
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260913-supportweb1` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260913-supportui3` }),
 			E('h2', {}, 'Если интернет не работает'),
 			E('p', {}, 'Идите сверху вниз: сначала обычное подключение, затем DNS и только после этого VPN.'),
 			E('div', { 'class': 'oum-help-grid' }, checks.map(([ number, title, text, ok ]) => E('section', { 'class': 'oum-help-step' }, [ E('span', { 'class': 'oum-help-number' }, number), E('div', {}, [ E('h3', {}, title), E('p', { 'class': ok == null ? '' : 'oum-help-result', 'data-ok': ok == null ? null : String(ok) }, text) ]) ]))),
