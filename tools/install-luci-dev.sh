@@ -9,7 +9,7 @@ REPO_DIR="$(CDPATH= cd -- "$SOURCE_DIR/.." && pwd)"
 [ -f "$REPO_DIR/helpers/source_converter.rb" ] || { echo "Converter source not found" >&2; exit 1; }
 
 mkdir -p /etc/config /usr/share/luci/menu.d /usr/share/ucode/luci/controller /usr/share/rpcd/acl.d /usr/share/rpcd/ucode \
-	/usr/libexec/oum /www/luci-static/resources/view/oum /www/luci-static/resources/oum /etc/init.d
+	/usr/libexec/oum /www/luci-static/resources/view/oum /www/luci-static/resources/oum /etc/init.d /etc/oum/support
 
 [ -f /etc/config/oum ] || cp "$SOURCE_DIR/root/etc/config/oum" /etc/config/oum
 cp "$SOURCE_DIR/root/usr/share/luci/menu.d/luci-app-oum.json" /usr/share/luci/menu.d/luci-app-oum.json
@@ -47,6 +47,8 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-gearup" /usr/libexec/oum-gearup
 cp "$SOURCE_DIR/root/usr/libexec/oum-upstream-check" /usr/libexec/oum-upstream-check
 cp "$SOURCE_DIR/root/usr/libexec/oum-support" /usr/libexec/oum-support
 cp "$SOURCE_DIR/root/usr/libexec/oum-support-shell" /usr/libexec/oum-support-shell
+cp "$SOURCE_DIR/root/usr/libexec/oum-support-repair-shell" /usr/libexec/oum-support-repair-shell
+cp "$SOURCE_DIR/root/etc/oum/support/support_key.pub" /etc/oum/support/support_key.pub
 cp "$SOURCE_DIR/root/etc/init.d/oum-support" /etc/init.d/oum-support
 cp "$REPO_DIR/dist/oum-test.sh" /usr/libexec/oum-runtime.sh
 cp "$REPO_DIR/helpers/source_converter.rb" /usr/libexec/oum/source_converter.rb
@@ -84,8 +86,10 @@ chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/ou
 	/usr/libexec/oum-dropbear-blank-password \
 	/usr/libexec/oum-gearup \
 	/usr/libexec/oum-upstream-check \
-	/usr/libexec/oum-support /usr/libexec/oum-support-shell /etc/init.d/oum-support \
+	/usr/libexec/oum-support /usr/libexec/oum-support-shell /usr/libexec/oum-support-repair-shell /etc/init.d/oum-support \
 	/usr/libexec/oum-runtime.sh
+chmod 700 /etc/oum/support
+chmod 644 /etc/oum/support/support_key.pub
 chmod 600 /usr/libexec/oum/source_converter.rb
 mkdir -p /usr/share/oum
 cp "$SOURCE_DIR/root/usr/share/oum/zapret-youtube-strategies" /usr/share/oum/zapret-youtube-strategies

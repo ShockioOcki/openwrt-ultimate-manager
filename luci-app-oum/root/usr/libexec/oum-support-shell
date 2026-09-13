@@ -1,10 +1,41 @@
 #!/bin/sh
 set -eu
 
+dashboard_value() {
+	field="$1"
+	ubus call oum dashboardStatus 2>/dev/null | jsonfilter -e "@.$field" 2>/dev/null || true
+}
+
+sanitized_summary() {
+	board="$(ubus call system board 2>/dev/null || true)"
+	model="$(printf '%s' "$board" | jsonfilter -e '@.model' 2>/dev/null || true)"
+	kernel="$(printf '%s' "$board" | jsonfilter -e '@.kernel' 2>/dev/null || true)"
+	release="$(printf '%s' "$board" | jsonfilter -e '@.release.version' 2>/dev/null || true)"
+	wan_up="$(ubus call network.interface.wan status 2>/dev/null | jsonfilter -e '@.up' 2>/dev/null || true)"
+	printf '%s\n' 'OUM diagnostic support session'
+	printf 'model: %s\nrelease: %s\nkernel: %s\nuptime_seconds: %s\nwan_up: %s\n' \
+		"${model:-unknown}" "${release:-unknown}" "${kernel:-unknown}" \
+		"$(cut -d. -f1 /proc/uptime 2>/dev/null || printf unknown)" "${wan_up:-unknown}"
+	printf 'vpn_engine: %s\nvpn_enabled: %s\nvpn_ready: %s\n' \
+		"$(dashboard_value vpn_engine)" "$(dashboard_value vpn_enabled)" "$(dashboard_value vpn_ready)"
+}
+
+sanitized_logs() {
+	logread 2>/dev/null |
+		grep -Ei 'oum|passwall|podkop|zapret|dnsmasq|rpcd|uhttpd|netifd|firewall' |
+		tail -n 120 |
+		sed -E \
+			-e 's#([[:alnum:]+.-]+)://[^[:space:]]+#\1://<redacted>#g' \
+			-e 's#([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}#<mac>#g' \
+			-e 's#([0-9]{1,3}\.){3}[0-9]{1,3}#<ip>#g' \
+			-e 's#((password|passwd|token|secret|private_key|authorization|cookie|ssid)[=:][[:space:]]*)[^[:space:],;]+#\1<redacted>#g' \
+			-e 's#((PASSWORD|PASSWD|TOKEN|SECRET|PRIVATE_KEY|AUTHORIZATION|COOKIE|SSID)[=:][[:space:]]*)[^[:space:],;]+#\1<redacted>#g' \
+			-e 's#[A-Za-z0-9_+/=-]{32,}#<redacted-token>#g'
+}
+
 case "${SSH_ORIGINAL_COMMAND:-summary}" in
 	''|summary)
-		echo 'OUM diagnostic support session'
-		ubus call oum dashboardStatus 2>/dev/null || true
+		sanitized_summary
 		;;
 	services)
 		for service in network dnsmasq rpcd uhttpd; do
@@ -13,7 +44,7 @@ case "${SSH_ORIGINAL_COMMAND:-summary}" in
 		done
 		;;
 	logs)
-		logread 2>/dev/null | tail -n 120 | sed -E 's#(vless|ss|trojan|hysteria2?)://[^ ]+#<redacted>#g'
+		sanitized_logs
 		;;
 	stop)
 		(sleep 1; /usr/libexec/oum-support stop remote) >/dev/null 2>&1 &

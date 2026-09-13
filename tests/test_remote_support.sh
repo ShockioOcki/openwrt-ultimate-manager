@@ -6,6 +6,7 @@ RPC="$ROOT/luci-app-oum/root/usr/share/rpcd/ucode/oum"
 ACL="$ROOT/luci-app-oum/root/usr/share/rpcd/acl.d/luci-app-oum.json"
 HELP="$ROOT/luci-app-oum/htdocs/luci-static/resources/view/oum/help-v3.js"
 RUNTIME="$ROOT/luci-app-oum/root/usr/libexec/oum-support"
+SUPPORT_SHELL="$ROOT/luci-app-oum/root/usr/libexec/oum-support-shell"
 
 grep -Fq 'supportStatus:' "$RPC"
 grep -Fq 'startSupportSession:' "$RPC"
@@ -21,10 +22,14 @@ grep -Fq 'no-port-forwarding,no-agent-forwarding,no-X11-forwarding' "$RUNTIME"
 grep -Fq 'Время сеанса истекло' "$RUNTIME"
 grep -Fq 'cleanup-boot)' "$RUNTIME"
 grep -Fq 'stop remote' "$ROOT/luci-app-oum/root/usr/libexec/oum-support-shell"
+grep -Fq 'sanitized_summary' "$ROOT/luci-app-oum/root/usr/libexec/oum-support-shell"
+! grep -Fq 'ubus call oum dashboardStatus 2>/dev/null || true' "$ROOT/luci-app-oum/root/usr/libexec/oum-support-shell"
 grep -Fq 'restoreSupportBackup' "$HELP"
 grep -Fq 'Откатить изменения поддержки' "$HELP"
 grep -Fq 'oum-support cleanup-boot' "$ROOT/luci-app-oum/root/etc/init.d/oum-support"
 grep -Fq '+openssh-client' "$ROOT/luci-app-oum/Makefile"
+grep -Fq 'oum-support-repair-shell" /usr/libexec/oum-support-repair-shell' "$ROOT/tools/install-luci-dev.sh"
+grep -Fq 'support_key.pub" /etc/oum/support/support_key.pub' "$ROOT/tools/install-luci-dev.sh"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT INT TERM
@@ -79,5 +84,44 @@ printf 'original-key\nssh-ed25519 TEST oum-support-stale\n' >"$TMP/dropbear/auth
 env $SUPPORT_ENV "$RUNTIME" cleanup-boot
 grep -Fxq 'original-key' "$TMP/dropbear/authorized_keys"
 ! grep -Fq 'oum-support-' "$TMP/dropbear/authorized_keys"
+
+mkdir -p "$TMP/bin"
+cat >"$TMP/bin/ubus" <<'EOF'
+#!/bin/sh
+case "$*" in
+	'system board') printf '%s\n' board ;;
+	'network.interface.wan status') printf '%s\n' wan ;;
+	'oum dashboardStatus') printf '%s\n' dashboard ;;
+esac
+EOF
+cat >"$TMP/bin/jsonfilter" <<'EOF'
+#!/bin/sh
+while [ "$#" -gt 0 ]; do
+	[ "$1" != -e ] || { expression="$2"; break; }
+	shift
+done
+case "$expression" in
+	'@.model') echo 'Test Router' ;;
+	'@.kernel') echo '6.12-test' ;;
+	'@.release.version') echo '25.12-test' ;;
+	'@.up') echo true ;;
+	'@.vpn_engine') echo passwall ;;
+	'@.vpn_enabled'|'@.vpn_ready') echo true ;;
+esac
+EOF
+cat >"$TMP/bin/logread" <<'EOF'
+#!/bin/sh
+echo 'oum ssid=ax6s peer=192.168.5.20 mac=08:BF:B8:84:FF:43 token=abcdefghijklmnopqrstuvwxyz123456 url=vless://secret@example.test'
+EOF
+chmod 755 "$TMP/bin/ubus" "$TMP/bin/jsonfilter" "$TMP/bin/logread"
+PATH="$TMP/bin:$PATH" SSH_ORIGINAL_COMMAND=summary "$SUPPORT_SHELL" >"$TMP/summary"
+PATH="$TMP/bin:$PATH" SSH_ORIGINAL_COMMAND=logs "$SUPPORT_SHELL" >"$TMP/logs"
+grep -Fq 'model: Test Router' "$TMP/summary"
+grep -Fq 'vpn_engine: passwall' "$TMP/summary"
+! grep -Fq 'ax6s' "$TMP/summary"
+! grep -Eq 'ax6s|192\.168\.5\.20|08:BF:B8:84:FF:43|abcdefghijklmnopqrstuvwxyz123456|secret@example' "$TMP/logs"
+grep -Fq 'ssid=<redacted>' "$TMP/logs"
+grep -Fq 'peer=<ip>' "$TMP/logs"
+grep -Fq 'mac=<mac>' "$TMP/logs"
 
 printf 'remote support contracts: OK\n'
