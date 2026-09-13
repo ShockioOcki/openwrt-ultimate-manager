@@ -27,6 +27,7 @@ const callMountUsbStorage = rpc.declare({ object: 'oum', method: 'mountUsbStorag
 const callUnmountUsbStorage = rpc.declare({ object: 'oum', method: 'unmountUsbStorage', expect: { '': {} } });
 const callSetUsbSmb = rpc.declare({ object: 'oum', method: 'setUsbSmb', params: [ 'enabled' ], expect: { '': {} } });
 const callSetUsbAria2 = rpc.declare({ object: 'oum', method: 'setUsbAria2', params: [ 'enabled' ], expect: { '': {} } });
+const callSetUsbDlna = rpc.declare({ object: 'oum', method: 'setUsbDlna', params: [ 'enabled' ], expect: { '': {} } });
 const callScanWifi = rpc.declare({ object: 'oum', method: 'scanWifi', params: [ 'band' ], expect: { '': {} } });
 const callSetWisp = rpc.declare({ object: 'oum', method: 'setWisp', params: [ 'enabled', 'ssid', 'password', 'band' ], expect: { '': {} } });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
@@ -206,7 +207,7 @@ return view.extend({
 		const lan = settings.lan || { address: '192.168.5.1', prefix: 24, rollback: false, rollback_address: '' };
 		const mesh = settings.mesh || { enabled: false, id: '', band: '5g' };
 		const wisp = settings.wisp || { enabled: false, connected: false, ssid: '', ip: '', signal: null, band: '2g', rollback: false };
-		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '', aria2_installed: false, aria2_enabled: false, aria2_running: false, ariang_ready: false, aria2_dir: '', aria2_secret_b64: '' };
+		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '', aria2_installed: false, aria2_enabled: false, aria2_running: false, ariang_ready: false, aria2_dir: '', aria2_secret_b64: '', dlna_installed: false, dlna_enabled: false, dlna_running: false, dlna_media_dir: '' };
 		const project = settings.project || { version: 'development', rollback: false };
 		const projectUpdatable = project.version && project.version !== 'development';
 		const dns = settings.dns || {
@@ -381,7 +382,10 @@ return view.extend({
 							...(usb.aria2_running && usb.ariang_ready && usb.aria2_secret_b64 ? [ E('a', { 'class': 'btn cbi-button-action', href: ariangUrl, target: '_blank', rel: 'noopener' }, 'Открыть') ] : [])
 						])
 					]),
-					E('span', {}, [ E('strong', {}, 'miniDLNA'), E('small', {}, 'Видео, музыка и фото') ]),
+					E('article', { 'class': `oum-usb-service${usb.dlna_running ? ' is-active' : ''}` }, [
+						E('div', {}, [ E('strong', {}, 'miniDLNA'), E('small', {}, usb.dlna_running ? 'OUM Media · домашняя сеть' : 'Видео, музыка и фото') ]),
+						E('button', { 'class': `btn ${usb.dlna_running ? '' : 'cbi-button-action'}`, id: 'toggle-usb-dlna', 'data-system-action': '', disabled: usb.mounted || usb.dlna_running ? null : '' }, usb.dlna_running ? 'Выключить' : 'Включить')
+					]),
 					E('span', {}, [ E('strong', {}, 'Сортировщик'), E('small', {}, 'TMDB · фильмы и сериалы') ]),
 					E('span', {}, [ E('strong', {}, 'Swap'), E('small', {}, 'Отдельная настройка') ])
 				]),
@@ -1140,6 +1144,14 @@ return view.extend({
 			const description = enable ? 'OUM установит aria2 и AriaNg. Загрузки будут сохраняться в общей папке OUM/Downloads.' : 'Активные загрузки остановятся. Задания и скачанные файлы сохранятся.';
 			if (await confirmation(title, description, enable ? 'Включить aria2' : 'Выключить aria2', false))
 				start(callSetUsbAria2(enable));
+		});
+		const dlnaButton = root.querySelector('#toggle-usb-dlna');
+		if (dlnaButton) dlnaButton.addEventListener('click', async () => {
+			const enable = !usb.dlna_running;
+			const title = enable ? 'Включить медиасервер?' : 'Выключить медиасервер?';
+			const description = enable ? 'OUM создаст папки Movies, TV, Music и Pictures. Телевизоры и медиаплееры увидят сервер OUM Media в домашней сети.' : 'Медиасервер исчезнет из домашней сети. Все файлы и каталог останутся на накопителе.';
+			if (await confirmation(title, description, enable ? 'Включить miniDLNA' : 'Выключить miniDLNA', false))
+				start(callSetUsbDlna(enable));
 		});
 		root.querySelector('#create-backup').addEventListener('click', () => {
 			setBusy(true);

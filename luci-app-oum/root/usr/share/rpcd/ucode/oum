@@ -740,7 +740,11 @@ function usbStorageStatusData() {
 		aria2_running: false,
 		ariang_ready: false,
 		aria2_dir: '',
-		aria2_secret_b64: ''
+		aria2_secret_b64: '',
+		dlna_installed: false,
+		dlna_enabled: false,
+		dlna_running: false,
+		dlna_media_dir: ''
 	};
 	if (!result.available)
 		return result;
@@ -751,7 +755,7 @@ function usbStorageStatusData() {
 		let pair = match(line, /^([a-z0-9_]+)=(.*)$/);
 		if (!pair)
 			continue;
-		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted', 'smb_installed', 'smb_enabled', 'smb_running', 'aria2_installed', 'aria2_enabled', 'aria2_running', 'ariang_ready' ])
+		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted', 'smb_installed', 'smb_enabled', 'smb_running', 'aria2_installed', 'aria2_enabled', 'aria2_running', 'ariang_ready', 'dlna_installed', 'dlna_enabled', 'dlna_running' ])
 			result[pair[1]] = trim(pair[2]) == '1';
 		else if (pair[1] == 'size_bytes')
 			result.size_bytes = +(trim(pair[2]) || 0);
@@ -1856,6 +1860,21 @@ const methods = {
 			if (!enabled && !current.aria2_enabled && !current.aria2_running)
 				return failure('usb_aria2_stopped', 'aria2 уже выключен.');
 			return startSystemJob(enabled ? 'usb_aria2_enable' : 'usb_aria2_disable', {});
+		}
+	},
+
+	setUsbDlna: {
+		args: { enabled: false },
+		call: function(request) {
+			let enabled = request.args.enabled == true;
+			let current = usbStorageStatusData();
+			if (enabled && !current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (enabled && current.dlna_running)
+				return failure('usb_dlna_running', 'Медиасервер уже включён.');
+			if (!enabled && !current.dlna_enabled && !current.dlna_running)
+				return failure('usb_dlna_stopped', 'Медиасервер уже выключен.');
+			return startSystemJob(enabled ? 'usb_dlna_enable' : 'usb_dlna_disable', {});
 		}
 	},
 

@@ -13,6 +13,8 @@ SMB_SHARE_NAME=OUM
 ARIA2_PACKAGES='aria2 ariang'
 ARIA2_SECTION=main
 ARIA2_SECRET_FILE=/etc/oum/usb/aria2-secret
+DLNA_PACKAGES='minidlna'
+DLNA_SECTION=config
 
 clean_value() {
 	printf '%s' "${1:-}" | tr '\n\r\t' '   '
@@ -82,6 +84,13 @@ managed_mountpoint() {
 	printf '%s\n' "$target"
 }
 
+prepare_private_root() {
+	root="$1/.oum"
+	mkdir -p "$root"
+	chown root:root "$root"
+	chmod 0711 "$root"
+}
+
 status() {
 	disk="$(usb_disk 2>/dev/null || true)"
 	partition=""
@@ -127,6 +136,10 @@ status() {
 	emit ariang_ready "$([ -f /www/ariang/index.html ] && echo 1 || echo 0)"
 	emit aria2_dir "$([ -n "$mountpoint" ] && printf '%s/%s/Downloads' "$mountpoint" "$SMB_SHARE_NAME" || true)"
 	emit aria2_secret_b64 "$([ -s "$ARIA2_SECRET_FILE" ] && base64 < "$ARIA2_SECRET_FILE" | tr '+/' '-_' | tr -d '=\n' || true)"
+	emit dlna_installed "$(apk info -e minidlna >/dev/null 2>&1 && echo 1 || echo 0)"
+	emit dlna_enabled "$(service_enabled minidlna && echo 1 || echo 0)"
+	emit dlna_running "$(service_running minidlna && echo 1 || echo 0)"
+	emit dlna_media_dir "$([ -n "$mountpoint" ] && printf '%s/%s/Media' "$mountpoint" "$SMB_SHARE_NAME" || true)"
 }
 
 require_usb_disk() {
@@ -205,6 +218,7 @@ mount_partition() {
 		download_dir="$(uci -q get "aria2.$ARIA2_SECTION.dir" 2>/dev/null || true)"
 		config_dir="$(uci -q get "aria2.$ARIA2_SECTION.config_dir" 2>/dev/null || true)"
 		if [ "$download_dir" = "$target/$SMB_SHARE_NAME/Downloads" ] && [ "$config_dir" = "$target/.oum/aria2" ]; then
+			prepare_private_root "$target"
 			mkdir -p "$download_dir" "$config_dir"
 			chown aria2:nogroup "$download_dir"
 			chmod 2775 "$download_dir"
@@ -214,6 +228,17 @@ mount_partition() {
 			chmod 0700 "$config_dir"
 		else
 			/etc/init.d/aria2 disable
+		fi
+	fi
+	if service_enabled minidlna; then
+		media_root="$(uci -q get "minidlna.$DLNA_SECTION.media_root" 2>/dev/null || true)"
+		db_dir="$(uci -q get "minidlna.$DLNA_SECTION.db_dir" 2>/dev/null || true)"
+		if [ "$media_root" = "$target/$SMB_SHARE_NAME/Media" ] && [ "$db_dir" = "$target/.oum/minidlna" ]; then
+			prepare_private_root "$target"
+			prepare_dlna_dirs "$media_root" "$db_dir"
+			/etc/init.d/minidlna restart
+		else
+			/etc/init.d/minidlna disable
 		fi
 	fi
 }
@@ -267,6 +292,7 @@ aria2_enable() {
 	secret="$(cat "$ARIA2_SECRET_FILE")"
 	download_dir="$target/$SMB_SHARE_NAME/Downloads"
 	config_dir="$target/.oum/aria2"
+	prepare_private_root "$target"
 	mkdir -p "$download_dir" "$config_dir"
 	chown aria2:nogroup "$download_dir"
 	chmod 2775 "$download_dir"
@@ -300,11 +326,66 @@ aria2_disable() {
 	/etc/init.d/aria2 disable
 }
 
+prepare_dlna_dirs() {
+	media_root="$1"
+	db_dir="$2"
+	for directory in "$media_root" "$media_root/Movies" "$media_root/TV" "$media_root/Music" "$media_root/Pictures"; do
+		mkdir -p "$directory"
+		chown nobody:nogroup "$directory"
+		chmod 2775 "$directory"
+	done
+	mkdir -p "$db_dir"
+	chown minidlna:minidlna "$db_dir"
+	chmod 0700 "$db_dir"
+}
+
+dlna_enable() {
+	target="$(managed_mountpoint)" || { echo 'Mount the managed USB storage before enabling miniDLNA' >&2; return 1; }
+	apk info -e minidlna >/dev/null 2>&1 || apk -U add $DLNA_PACKAGES
+	mkdir -p /etc/oum/usb
+	[ -e /etc/oum/usb/minidlna-before-oum ] || cp -p /etc/config/minidlna /etc/oum/usb/minidlna-before-oum
+	media_root="$target/$SMB_SHARE_NAME/Media"
+	db_dir="$target/.oum/minidlna"
+	prepare_private_root "$target"
+	prepare_dlna_dirs "$media_root" "$db_dir"
+	uci -q batch <<-EOF
+		set minidlna.$DLNA_SECTION='minidlna'
+		set minidlna.$DLNA_SECTION.enabled='1'
+		set minidlna.$DLNA_SECTION.user='minidlna'
+		set minidlna.$DLNA_SECTION.port='8200'
+		set minidlna.$DLNA_SECTION.interface='br-lan'
+		set minidlna.$DLNA_SECTION.friendly_name='OUM Media'
+		set minidlna.$DLNA_SECTION.db_dir='$db_dir'
+		set minidlna.$DLNA_SECTION.media_root='$media_root'
+		set minidlna.$DLNA_SECTION.inotify='1'
+		set minidlna.$DLNA_SECTION.wide_links='0'
+		set minidlna.$DLNA_SECTION.strict_dlna='0'
+		set minidlna.$DLNA_SECTION.notify_interval='900'
+		delete minidlna.$DLNA_SECTION.media_dir
+		add_list minidlna.$DLNA_SECTION.media_dir='V,$media_root/Movies'
+		add_list minidlna.$DLNA_SECTION.media_dir='V,$media_root/TV'
+		add_list minidlna.$DLNA_SECTION.media_dir='A,$media_root/Music'
+		add_list minidlna.$DLNA_SECTION.media_dir='P,$media_root/Pictures'
+	EOF
+	uci -q commit minidlna
+	/etc/init.d/minidlna enable
+	/etc/init.d/minidlna restart
+	chmod 0700 "$db_dir"
+	service_running minidlna
+}
+
+dlna_disable() {
+	[ -x /etc/init.d/minidlna ] || return 0
+	/etc/init.d/minidlna stop
+	/etc/init.d/minidlna disable
+}
+
 format_disk() {
 	disk="$(require_usb_disk "${1:-}")"
 	[ "${2:-}" = ERASE ] || { echo 'Format confirmation is missing' >&2; return 1; }
-	# Formatting invalidates paths on the old filesystem. Leave SMB off until
-	# the user explicitly enables it for the freshly formatted disk.
+	# Formatting invalidates paths on the old filesystem. Leave USB services
+	# off until the user explicitly enables them for the freshly formatted disk.
+	dlna_disable
 	aria2_disable
 	smb_disable
 	unmount_disk_partitions "$disk"
@@ -339,6 +420,7 @@ unmount_managed() {
 	partition="$(uci -q get "fstab.$FSTAB_SECTION.uuid" 2>/dev/null || true)"
 	[ -n "$partition" ] || return 0
 	target="$(uci -q get "fstab.$FSTAB_SECTION.target" 2>/dev/null || true)"
+	service_running minidlna && /etc/init.d/minidlna stop
 	service_running aria2 && /etc/init.d/aria2 stop
 	service_running ksmbd && /etc/init.d/ksmbd stop
 	[ -z "$target" ] || ! grep -qs " $target " /proc/mounts || umount "$target"
@@ -356,5 +438,7 @@ case "$ACTION" in
 	smb-disable) smb_disable ;;
 	aria2-enable) aria2_enable ;;
 	aria2-disable) aria2_disable ;;
-	*) echo "usage: $0 {status|prepare|format DEVICE ERASE|mount DEVICE|unmount|smb-enable|smb-disable|aria2-enable|aria2-disable}" >&2; exit 2 ;;
+	dlna-enable) dlna_enable ;;
+	dlna-disable) dlna_disable ;;
+	*) echo "usage: $0 {status|prepare|format DEVICE ERASE|mount DEVICE|unmount|smb-enable|smb-disable|aria2-enable|aria2-disable|dlna-enable|dlna-disable}" >&2; exit 2 ;;
 esac
