@@ -33,7 +33,7 @@ latest_backup() {
 }
 
 update_project() {
-	curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$INSTALLER" "$UPDATE_URL"
+	curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$INSTALLER" "$UPDATE_URL?oum_update=$(date +%s)"
 	chmod 700 "$INSTALLER"
 	sh "$INSTALLER" --check
 	snapshot
