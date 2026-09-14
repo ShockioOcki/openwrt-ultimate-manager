@@ -25,6 +25,7 @@ fi
 cp "$SOURCE_DIR/htdocs/luci-static/oum/bootstrap-base.css" /www/luci-static/oum/bootstrap-base.css
 cp "$SOURCE_DIR/htdocs/luci-static/oum/bootstrap-mobile.css" /www/luci-static/oum/bootstrap-mobile.css
 cp "$SOURCE_DIR/htdocs/luci-static/oum/cascade.css" /www/luci-static/oum/cascade.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/stock-layout.css" /www/luci-static/oum/stock-layout.css
 cp "$SOURCE_DIR/htdocs/luci-static/oum/logo.svg" /www/luci-static/oum/logo.svg
 cp "$SOURCE_DIR/htdocs/luci-static/oum/brand.svg" /www/luci-static/oum/brand.svg
 cp "$SOURCE_DIR/htdocs/luci-static/oum/fonts/"* /www/luci-static/oum/fonts/
@@ -43,6 +44,7 @@ chmod 644 \
 	/www/luci-static/oum/bootstrap-base.css \
 	/www/luci-static/oum/bootstrap-mobile.css \
 	/www/luci-static/oum/cascade.css \
+	/www/luci-static/oum/stock-layout.css \
 	/www/luci-static/oum/logo.svg \
 	/www/luci-static/oum/brand.svg \
 	/www/luci-static/oum/fonts/* \
