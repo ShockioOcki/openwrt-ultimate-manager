@@ -38,6 +38,7 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-dns-manager" /usr/libexec/oum-dns-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-mesh-manager" /usr/libexec/oum-mesh-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-mesh-runtime" /usr/libexec/oum-mesh-runtime
 cp "$SOURCE_DIR/root/usr/libexec/oum-usb-manager" /usr/libexec/oum-usb-manager
+cp "$SOURCE_DIR/root/usr/libexec/oum-mobile-manager" /usr/libexec/oum-mobile-manager
 cp "$SOURCE_DIR/root/usr/libexec/oum-media-organizer" /usr/libexec/oum-media-organizer
 cp "$SOURCE_DIR/root/usr/libexec/oum-media-organizer-run" /usr/libexec/oum-media-organizer-run
 cp "$SOURCE_DIR/root/usr/libexec/oum-project-manager" /usr/libexec/oum-project-manager

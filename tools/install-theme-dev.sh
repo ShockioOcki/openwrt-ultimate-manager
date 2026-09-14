@@ -30,7 +30,10 @@ cp "$SOURCE_DIR/htdocs/luci-static/oum/brand.svg" /www/luci-static/oum/brand.svg
 cp "$SOURCE_DIR/htdocs/luci-static/oum/fonts/"* /www/luci-static/oum/fonts/
 cp "$SOURCE_DIR/htdocs/luci-static/oum/icons/"*.svg /www/luci-static/oum/icons/
 cp "$SOURCE_DIR/htdocs/luci-static/resources/menu-oum.js" /www/luci-static/resources/menu-oum.js
-cp "$SOURCE_DIR/ucode/template/themes/oum/"*.ut /usr/share/ucode/luci/template/themes/oum/
+# Preserve existing inodes: replacing templates can fail on upgraded overlayfs.
+for template in "$SOURCE_DIR/ucode/template/themes/oum/"*.ut; do
+	cat "$template" > "/usr/share/ucode/luci/template/themes/oum/${template##*/}"
+done
 cp "$SOURCE_DIR/root/usr/share/rpcd/acl.d/luci-theme-oum.json" /usr/share/rpcd/acl.d/luci-theme-oum.json
 
 [ -f /etc/config/oum_theme ] || cp "$SOURCE_DIR/root/etc/config/oum_theme" /etc/config/oum_theme
