@@ -5,6 +5,7 @@ umask 077
 
 ACTION="${1:-}"
 UPDATE_URL='https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/refs/heads/agent/podkop-zapret-engine/dist/oum-install.sh'
+REVISION_URL='https://api.github.com/repos/ShockioOcki/openwrt-ultimate-manager/commits/agent/podkop-zapret-engine'
 BACKUP_DIR=/etc/oum/project-rollback
 INSTALLER=/tmp/oum-project-update.sh
 MANAGED_PATHS='etc/config/luci etc/config/oum etc/config/oum_theme etc/oum/version etc/oum/base-packages etc/oum/theme-previous-mediaurlbase usr/share/luci/menu.d/luci-app-oum.json usr/share/ucode/luci/controller/oum.uc usr/share/ucode/luci/template/themes/oum usr/share/rpcd/acl.d/luci-app-oum.json usr/share/rpcd/acl.d/luci-theme-oum.json usr/share/rpcd/ucode/oum usr/libexec/oum usr/share/oum www/luci-static/oum www/luci-static/resources/menu-oum.js www/luci-static/resources/view/oum'
@@ -33,7 +34,11 @@ latest_backup() {
 }
 
 update_project() {
-	curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$INSTALLER" "$UPDATE_URL?oum_update=$(date +%s)"
+	revision="$(curl -fsSL --connect-timeout 15 --retry 3 "$REVISION_URL?oum_update=$(date +%s)" | jsonfilter -e '@.sha')"
+	[ "${#revision}" -eq 40 ] || return 1
+	case "$revision" in *[!a-f0-9]*) return 1 ;; esac
+	url="https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/$revision/dist/oum-install.sh"
+	curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$INSTALLER" "$url"
 	chmod 700 "$INSTALLER"
 	sh "$INSTALLER" --check
 	snapshot
