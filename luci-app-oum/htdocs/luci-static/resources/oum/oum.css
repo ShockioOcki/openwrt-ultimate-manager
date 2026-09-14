@@ -3519,6 +3519,8 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
 /* 3-tab apple segment inside sheets (beats global 1fr 1fr) */
 .oum-settings-sheet-content .oum-apple-segment-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; margin: 0 0 12px !important; padding: 3px !important; }
 .oum-settings-sheet-content .oum-apple-segment-3 .oum-apple-seg { font-size: 11px !important; padding: 7px 4px !important; }
+.oum-settings-sheet-content .oum-apple-segment-4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; margin: 0 0 12px !important; padding: 3px !important; }
+.oum-settings-sheet-content .oum-apple-segment-4 .oum-apple-seg { min-width: 0; font-size: 11px !important; padding: 7px 3px !important; }
 
 /* nodes30: all-nodes list lives in bottom-sheet on mobile (openclash); inline accordion stays for desktop + passwall. */
 @media (max-width: 900px){

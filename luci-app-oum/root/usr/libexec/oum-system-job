@@ -108,16 +108,71 @@ toggle_wifi() {
 	write_status success applied "$([ "$enabled" = true ] && echo 'Wi-Fi включён.' || echo 'Wi-Fi выключен. Для включения подключитесь кабелем к LAN-порту.')"
 }
 
+usb_network_device() {
+	for path in /sys/class/net/*/device; do
+		[ -e "$path" ] || continue
+		driver="$(basename "$(readlink -f "$path/driver" 2>/dev/null || true)")"
+		[ "$driver" = rndis_host ] || continue
+		basename "$(dirname "$path")"
+		return 0
+	done
+	return 1
+}
+
+prepare_usb_wan() {
+	if ! apk info -e kmod-usb-net-rndis >/dev/null 2>&1; then
+		apk -U add kmod-usb-net-rndis >/tmp/oum-usb-wan-apk.log 2>&1 || fail usb_driver_failed 'Не удалось установить драйвер Android USB-модема. Проверьте обычное подключение к интернету.'
+	fi
+	modprobe rndis_host 2>/dev/null || true
+	count=0
+	while [ "$count" -lt 10 ]; do
+		device="$(usb_network_device 2>/dev/null || true)"
+		[ -z "$device" ] || { printf '%s\n' "$device"; return 0; }
+		count=$((count + 1))
+		sleep 1
+	done
+	fail usb_tether_missing 'Телефон не создал сетевой интерфейс. Включите на Android режим USB-модема и повторите.'
+}
+
+restore_wan_backup() {
+	cp "$ROLLBACK/network" /etc/config/network
+	[ ! -f "$ROLLBACK/oum-wan" ] || cp "$ROLLBACK/oum-wan" /etc/config/oum
+	/etc/init.d/network reload >/dev/null 2>&1 || true
+}
+
 apply_wan() {
 	wan_type="$(json_value .wan_type)"
 	username="$(json_value .pppoe_user)"
 	password="$(json_value .pppoe_password)"
-	[ "$wan_type" = dhcp ] || [ "$wan_type" = pppoe ] || fail invalid_input 'Некорректный тип подключения.'
+	[ "$wan_type" = dhcp ] || [ "$wan_type" = pppoe ] || [ "$wan_type" = usb ] || fail invalid_input 'Некорректный тип подключения.'
 	[ "$wan_type" != pppoe ] || [ -n "$username" ] || fail invalid_input 'Логин PPPoE не задан.'
+	usb_device=""
+	[ "$wan_type" != usb ] || usb_device="$(prepare_usb_wan)"
+	case "$usb_device" in ''|*[!A-Za-z0-9_.-]*) [ "$wan_type" != usb ] || fail usb_device_invalid 'USB-модем создал интерфейс с неподдерживаемым именем.' ;; esac
 	mkdir -p "$ROLLBACK"
 	cp /etc/config/network "$ROLLBACK/network"
-	chmod 600 "$ROLLBACK/network"
-	uci -q set "network.wan.proto=$wan_type"
+	cp /etc/config/oum "$ROLLBACK/oum-wan"
+	chmod 600 "$ROLLBACK/network" "$ROLLBACK/oum-wan"
+	current_source="$(uci -q get oum.main.wan_source 2>/dev/null || echo wired)"
+	if [ "$current_source" != usb ]; then
+		wired_device="$(uci -q get network.wan.device 2>/dev/null || true)"
+		wired6_device="$(uci -q get network.wan6.device 2>/dev/null || true)"
+		[ -z "$wired_device" ] || uci -q set "oum.main.wired_wan_device=$wired_device"
+		[ -z "$wired6_device" ] || uci -q set "oum.main.wired_wan6_device=$wired6_device"
+	fi
+	if [ "$wan_type" = usb ]; then
+		uci -q set network.wan.proto='dhcp'
+		uci -q set "network.wan.device=$usb_device"
+		[ -z "$(uci -q get network.wan6 2>/dev/null || true)" ] || uci -q set "network.wan6.device=$usb_device"
+		uci -q set oum.main.wan_source='usb'
+	else
+		wired_device="$(uci -q get oum.main.wired_wan_device 2>/dev/null || true)"
+		wired6_device="$(uci -q get oum.main.wired_wan6_device 2>/dev/null || true)"
+		[ -z "$wired_device" ] || uci -q set "network.wan.device=$wired_device"
+		[ -z "$wired6_device" ] || [ -z "$(uci -q get network.wan6 2>/dev/null || true)" ] || uci -q set "network.wan6.device=$wired6_device"
+		uci -q set "network.wan.proto=$wan_type"
+		uci -q set oum.main.wan_source='wired'
+	fi
 	if [ "$wan_type" = pppoe ]; then
 		uci -q set "network.wan.username=$username"
 		[ -z "$password" ] || uci -q set "network.wan.password=$password"
@@ -125,13 +180,25 @@ apply_wan() {
 		uci -q delete network.wan.username || true
 		uci -q delete network.wan.password || true
 	fi
-	uci -q commit network || fail commit_failed 'Не удалось сохранить подключение.'
+	uci -q commit network || { restore_wan_backup; fail commit_failed 'Не удалось сохранить подключение.'; }
+	uci -q commit oum || { restore_wan_backup; fail commit_failed 'Не удалось сохранить источник подключения.'; }
 	if ! /etc/init.d/network reload >/dev/null 2>&1; then
-		cp "$ROLLBACK/network" /etc/config/network
-		/etc/init.d/network reload >/dev/null 2>&1 || true
+		restore_wan_backup
 		fail reload_failed 'Сеть не перезапустилась; предыдущие настройки восстановлены.'
 	fi
-	write_status success applied 'Настройки WAN применены. Проверяем подключение…'
+	if [ "$wan_type" = usb ]; then
+		connected=0
+		for delay in 1 2 3 4 5 6 7 8 9 10; do
+			sleep 1
+			[ "$(ubus call network.interface.wan status 2>/dev/null | jsonfilter -e '@.up' || true)" = true ] || continue
+			connected=1
+			break
+		done
+		[ "$connected" = 1 ] || { restore_wan_backup; fail usb_no_lease 'Телефон не выдал адрес. Проверьте мобильный интернет и режим USB-модема.'; }
+		write_status success applied 'Интернет через Android подключён. Кабельный WAN сохранён для возврата.'
+	else
+		write_status success applied 'Настройки WAN применены. Проверяем подключение…'
+	fi
 }
 
 apply_lan() {
@@ -272,6 +339,7 @@ rollback_config() {
 	kind="$1"
 	[ -f "$ROLLBACK/$kind" ] || fail rollback_missing 'Предыдущая конфигурация не найдена.'
 	cp "$ROLLBACK/$kind" "/etc/config/$kind"
+	[ "$kind" != network ] || [ ! -f "$ROLLBACK/oum-wan" ] || cp "$ROLLBACK/oum-wan" /etc/config/oum
 	if [ "$kind" = wireless ]; then wifi reload >/dev/null 2>&1; else /etc/init.d/network reload >/dev/null 2>&1; fi
 	write_status success rolled_back 'Предыдущие настройки восстановлены.'
 }

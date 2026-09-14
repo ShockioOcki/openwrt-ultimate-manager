@@ -210,6 +210,7 @@ return view.extend({
 		const lan = settings.lan || { address: '192.168.5.1', prefix: 24, rollback: false, rollback_address: '' };
 		const mesh = settings.mesh || { enabled: false, id: '', band: '5g' };
 		const wisp = settings.wisp || { enabled: false, connected: false, ssid: '', ip: '', signal: null, band: '2g', rollback: false };
+		const usbInternet = settings.usb_internet || { attached: false, runtime_ready: false, device: '', active: false, connected: false, ipv4: '' };
 		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '', aria2_installed: false, aria2_enabled: false, aria2_running: false, ariang_ready: false, aria2_dir: '', aria2_secret_b64: '', dlna_installed: false, dlna_enabled: false, dlna_running: false, dlna_media_dir: '', sorter_installed: false, sorter_enabled: false, tmdb_key_set: false, sorter_last_run: 0, sorter_result: '', sorter_message: '', swap_present: false, swap_enabled: false, swap_size_bytes: 0, swap_used_bytes: 0 };
 		const project = settings.project || { version: 'development', rollback: false };
 		const projectUpdatable = project.version && project.version !== 'development';
@@ -275,12 +276,17 @@ return view.extend({
 		const ariangUrl = `http://${ariaHost}/ariang/#!/settings/rpc/set?protocol=http&host=${ariaHost}&port=6800&interface=jsonrpc&secret=${usb.aria2_secret_b64 || ''}`;
 		const sorterNote = usb.sorter_enabled ? (usb.sorter_result === 'waiting' ? 'Ждёт завершения загрузок' : (usb.sorter_message || 'Проверка каждые 5 минут')) : 'TMDB · фильмы и сериалы';
 		const swapNote = usb.swap_enabled ? `${usb.swap_used_bytes > 0 ? formatBytes(usb.swap_used_bytes) : '0 Б'} занято из ${formatBytes(usb.swap_size_bytes)}` : (usb.swap_present ? '512 МБ · готов к включению' : '512 МБ · защита при нехватке RAM');
+		const wanMode = wisp.enabled ? 'wisp' : (wan.via === 'usb' || usbInternet.active ? 'usb' : (wan.proto === 'pppoe' ? 'pppoe' : 'dhcp'));
+		const internetModeCount = 2 + (capabilities.wisp_supported ? 1 : 0) + (capabilities.usb_host ? 1 : 0);
+		const usbInternetNote = usbInternet.connected ? `Подключено через ${usbInternet.device || 'USB'}${usbInternet.ipv4 ? ` · ${usbInternet.ipv4}` : ''}` :
+			(usbInternet.device ? `Android подключён · ${usbInternet.device} · готов к применению` :
+				(usbInternet.attached ? 'Android обнаружен · драйвер установится при применении' : 'Подключите Android и включите на телефоне режим USB-модема'));
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
 		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
 		const initialVpnTab = status.pending_source !== 'none' && status.active_source === 'none' ? 'connection' : 'engine';
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260914-usb05` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260914-usb06` }),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('div', {}, [ E('h2', {}, 'Настройки OUM'), E('p', { 'class': 'oum-muted' }, 'Сеть, Wi‑Fi и защищённое подключение') ])
 			]),
@@ -317,13 +323,15 @@ return view.extend({
 				]),
 				E('section', { 'class': 'oum-settings-panel oum-internet-panel' }, [
 					E('h3', {}, 'Подключение к интернету'),
-					E('div', { 'class': 'oum-apple-segment oum-internet-segment' + (capabilities.wisp_supported ? ' oum-apple-segment-3' : ''), style: 'background:#f1f5f9;padding:3px;border-radius:12px;display:grid;grid-template-columns:repeat(' + (capabilities.wisp_supported ? 3 : 2) + ',1fr);gap:4px;margin:0 0 8px;' }, [
-						E('input', { type: 'radio', name: 'wan_type', value: 'dhcp', checked: (!wisp.enabled && wan.proto !== 'pppoe') ? '' : null, style: 'display:none' }),
-						E('input', { type: 'radio', name: 'wan_type', value: 'pppoe', checked: (!wisp.enabled && wan.proto === 'pppoe') ? '' : null, style: 'display:none' }),
+					E('div', { 'class': `oum-apple-segment oum-internet-segment oum-apple-segment-${internetModeCount}`, style: `background:#f1f5f9;padding:3px;border-radius:12px;display:grid;grid-template-columns:repeat(${internetModeCount},1fr);gap:4px;margin:0 0 8px;` }, [
+						E('input', { type: 'radio', name: 'wan_type', value: 'dhcp', checked: wanMode === 'dhcp' ? '' : null, style: 'display:none' }),
+						E('input', { type: 'radio', name: 'wan_type', value: 'pppoe', checked: wanMode === 'pppoe' ? '' : null, style: 'display:none' }),
 						...(capabilities.wisp_supported ? [ E('input', { type: 'radio', name: 'wan_type', value: 'wisp', checked: wisp.enabled ? '' : null, style: 'display:none' }) ] : []),
-						E('button', { type: 'button', 'class': 'oum-apple-seg' + ((!wisp.enabled && wan.proto !== 'pppoe') ? ' is-active' : ''), 'data-wan-type-btn': 'dhcp' }, 'DHCP'),
-						E('button', { type: 'button', 'class': 'oum-apple-seg' + ((!wisp.enabled && wan.proto === 'pppoe') ? ' is-active' : ''), 'data-wan-type-btn': 'pppoe' }, 'PPPoE'),
-						...(capabilities.wisp_supported ? [ E('button', { type: 'button', 'class': 'oum-apple-seg' + (wisp.enabled ? ' is-active' : ''), 'data-wan-type-btn': 'wisp' }, 'Wi-Fi') ] : [])
+						...(capabilities.usb_host ? [ E('input', { type: 'radio', name: 'wan_type', value: 'usb', checked: wanMode === 'usb' ? '' : null, style: 'display:none' }) ] : []),
+						E('button', { type: 'button', 'class': 'oum-apple-seg' + (wanMode === 'dhcp' ? ' is-active' : ''), 'data-wan-type-btn': 'dhcp' }, 'DHCP'),
+						E('button', { type: 'button', 'class': 'oum-apple-seg' + (wanMode === 'pppoe' ? ' is-active' : ''), 'data-wan-type-btn': 'pppoe' }, 'PPPoE'),
+						...(capabilities.wisp_supported ? [ E('button', { type: 'button', 'class': 'oum-apple-seg' + (wanMode === 'wisp' ? ' is-active' : ''), 'data-wan-type-btn': 'wisp' }, 'Wi-Fi') ] : []),
+						...(capabilities.usb_host ? [ E('button', { type: 'button', 'class': 'oum-apple-seg' + (wanMode === 'usb' ? ' is-active' : ''), 'data-wan-type-btn': 'usb' }, 'USB') ] : [])
 					]),
 					E('div', { id: 'pppoe-settings' }, [
 						field('Логин PPPoE', E('input', { id: 'pppoe-user', maxlength: 128, autocomplete: 'username', value: wan.username || '' })),
@@ -348,7 +356,10 @@ return view.extend({
 							E('button', { type: 'button', 'class': 'btn oum-mobile-sheet-cancel' }, 'Отмена')
 						])
 					]) ] : []),
-					E('p', { 'class': 'oum-help' }, [ 'Сейчас: ', E('strong', {}, wan.up ? 'подключено' : 'нет соединения'), wan.ipv4 ? ` · ${wan.ipv4}` : '' ]),
+					...(capabilities.usb_host ? [ E('div', { id: 'usb-internet-settings', 'class': 'oum-wisp-inline', hidden: wanMode === 'usb' ? null : '' }, [
+						E('p', { 'class': 'oum-wisp-intro' }, [ E('strong', {}, 'Интернет с телефона по USB'), E('span', {}, usbInternetNote) ])
+					]) ] : []),
+					E('p', { 'class': 'oum-help' }, [ 'Сейчас: ', E('strong', {}, wan.up ? 'подключено' : 'нет соединения'), wanMode === 'usb' ? ' · USB' : '', wan.ipv4 ? ` · ${wan.ipv4}` : '' ]),
 					E('div', { 'class': 'oum-setting-actions', id: 'wan-wired-actions', hidden: wisp.enabled ? '' : null }, [
 						E('button', { 'class': 'btn cbi-button-action', id: 'apply-wan', 'data-system-action': '' }, 'Применить подключение'),
 						E('button', { 'class': 'btn oum-internet-secondary', id: 'rollback-wan', disabled: settings.rollback_wan ? null : '', 'data-system-action': '' }, 'Вернуть предыдущие'),
@@ -788,6 +799,8 @@ return view.extend({
 			root.querySelector('#pppoe-settings').hidden = mode !== 'pppoe';
 			const wispSettings = root.querySelector('#wisp-settings');
 			if (wispSettings) wispSettings.hidden = mode !== 'wisp';
+			const usbInternetSettings = root.querySelector('#usb-internet-settings');
+			if (usbInternetSettings) usbInternetSettings.hidden = mode !== 'usb';
 			root.querySelector('#wan-wired-actions').hidden = mode === 'wisp';
 		};
 		const stripSsidSuffix = (name) => (name || '').trim().replace(/_(2G|5G)$/i, '');
@@ -1110,7 +1123,8 @@ return view.extend({
 		root.querySelector('#apply-wan').addEventListener('click', async () => {
 			const type = selected('wan_type'), username = value('#pppoe-user'), password = rawValue('#pppoe-password');
 			if (type === 'pppoe' && !username) return ui.addNotification(null, E('p', {}, 'Введите логин PPPoE.'), 'warning');
-			if (!await confirmation('Изменить подключение?', 'Интернет кратковременно отключится. Предыдущую конфигурацию можно будет вернуть.', 'Применить', false)) return;
+			const description = type === 'usb' ? 'OUM установит драйвер Android RNDIS и переключит интернет на телефон. Возможен расход мобильного трафика; кабельный WAN сохранится для возврата.' : 'Интернет кратковременно отключится. Предыдущую конфигурацию можно будет вернуть.';
+			if (!await confirmation('Изменить подключение?', description, 'Применить', false)) return;
 			start(callApplyWan(type, username, password));
 		});
 		root.querySelector('#rollback-wifi').addEventListener('click', async () => {
@@ -1661,7 +1675,7 @@ return view.extend({
 			]),
 			E('div', { 'class': 'oum-mobile-settings-launchers' }, [
 				launcher('Wi-Fi', `${wifi.mode === 'separate' ? 'Две сети' : 'Одна сеть'} · ${wifi.ssid_24 || 'имя не задано'} · WPA2/WPA3 · ${wifi.enabled === false ? 'выключена' : 'включена'}`, () => openSheet('Wi-Fi', wifiPanel)),
-				launcher('Подключение к интернету', `${wisp.enabled ? 'Wi-Fi' : (wan.proto === 'pppoe' ? 'PPPoE' : 'DHCP')} · ${wan.up ? 'подключено' : 'нет соединения'}${wan.ipv4 ? ` · ${wan.ipv4}` : ''}`, () => openSheet('Подключение к интернету', internetPanel)),
+				launcher('Подключение к интернету', `${wanMode === 'wisp' ? 'Wi-Fi' : (wanMode === 'usb' ? 'USB' : (wanMode === 'pppoe' ? 'PPPoE' : 'DHCP'))} · ${wan.up ? 'подключено' : 'нет соединения'}${wan.ipv4 ? ` · ${wan.ipv4}` : ''}`, () => openSheet('Подключение к интернету', internetPanel)),
 				launcher('USB', usbSummary, () => openSheet('USB', usbPanel)),
 				launcher('Расширение сети', `Локальная сеть · ${mesh.enabled ? 'Mesh включена' : 'Mesh-сеть'}`, () => openNetworkSheet('Расширение сети'))
 			]),

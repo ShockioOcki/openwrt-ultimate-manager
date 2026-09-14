@@ -730,6 +730,40 @@ function scanWifiNetworks(uci, band) {
 	return sort(result, (a, b) => b.signal - a.signal || (a.ssid < b.ssid ? -1 : 1));
 }
 
+function usbNetworkDevice() {
+	let process = popen("for path in /sys/class/net/*/device; do driver=$(basename \"$(readlink -f \"$path/driver\")\") || continue; [ \"$driver\" = rndis_host ] || continue; basename \"$(dirname \"$path\")\"; exit 0; done");
+	if (!process)
+		return '';
+	let device = trim(process.read('line'));
+	process.close();
+	return match(device, /^[A-Za-z0-9_.-]+$/) ? device : '';
+}
+
+function rndisAttached() {
+	for (let path in glob('/sys/bus/usb/devices/*:*/bInterfaceClass')) {
+		if (lc(trim(readfile(path) ?? '')) != 'e0')
+			continue;
+		let root = replace(path, /\/bInterfaceClass$/, '');
+		if (trim(readfile(`${root}/bInterfaceSubClass`) ?? '') == '01' && trim(readfile(`${root}/bInterfaceProtocol`) ?? '') == '03')
+			return true;
+	}
+	return false;
+}
+
+function usbInternetStatusData(uci) {
+	let device = usbNetworkDevice();
+	let active = uci.get('oum', 'main', 'wan_source') == 'usb';
+	let status = active ? (connect()?.call('network.interface.wan', 'status') ?? {}) : {};
+	return {
+		attached: rndisAttached() || length(device) > 0,
+		runtime_ready: system("apk info -e kmod-usb-net-rndis >/dev/null 2>&1") == 0,
+		device,
+		active,
+		connected: active && status.up == true,
+		ipv4: active ? (status['ipv4-address']?.[0]?.address ?? '') : ''
+	};
+}
+
 function networkStatus() {
 	let uci = cursor();
 	let wisp = wispStatusData(uci);
@@ -744,11 +778,12 @@ function networkStatus() {
 	result.device = status.l3_device ?? status.device ?? '';
 	result.proto = status.proto ?? '';
 	result.ipv4 = status['ipv4-address']?.[0]?.address ?? '';
+	result.via = uci.get('oum', 'main', 'wan_source') == 'usb' ? 'usb' : 'wired';
 	return result;
 }
 
 function capabilityStatus() {
-	let usbNetwork = system("for path in /sys/class/net/*/device; do target=$(readlink -f \"$path\") || continue; case \"$target\" in */usb*/*) exit 0;; esac; done; exit 1") == 0;
+	let usbNetwork = length(usbNetworkDevice()) > 0;
 	let mobileControl = length(glob('/dev/cdc-wdm*')) > 0 || length(glob('/dev/ttyUSB*')) > 0;
 	return {
 		mesh_driver: system("iw list 2>/dev/null | grep -q 'mesh point'") == 0,
@@ -758,6 +793,7 @@ function capabilityStatus() {
 		usb_host: length(glob('/sys/bus/usb/devices/usb*')) > 0,
 		usb_storage: length(glob('/sys/class/block/sd*')) > 0,
 		usb_network: usbNetwork,
+		usb_tether: rndisAttached(),
 		usb_modem: mobileControl
 	};
 }
@@ -981,6 +1017,7 @@ function settingsStatusData() {
 		reboot_required: access('/etc/oum/reboot-required') ? true : false,
 		unmanaged_tunnels: unmanagedTunnels(uci),
 		capabilities: capabilityStatus(),
+		usb_internet: usbInternetStatusData(uci),
 		usb_storage: usbStorageStatusData(),
 		rollback_wifi: access('/etc/oum/rollback/wireless') ? true : false,
 		rollback_wan: access('/etc/oum/rollback/network') ? true : false
@@ -1732,8 +1769,8 @@ const methods = {
 		args: { wan_type: '', pppoe_user: '', pppoe_password: '' },
 		call: function(request) {
 			let args = request.args;
-			if (!(args.wan_type in [ 'dhcp', 'pppoe' ]))
-				return failure('invalid_wan', 'Выберите DHCP или PPPoE.');
+			if (!(args.wan_type in [ 'dhcp', 'pppoe', 'usb' ]))
+				return failure('invalid_wan', 'Выберите DHCP, PPPoE или USB.');
 			if (type(args.pppoe_user) != 'string' || length(args.pppoe_user) > 128 || match(args.pppoe_user, /[\r\n]/) ||
 				type(args.pppoe_password) != 'string' || length(args.pppoe_password) > 256 || match(args.pppoe_password, /[\r\n]/))
 				return failure('invalid_pppoe', 'Некорректные данные PPPoE.');
@@ -1742,6 +1779,10 @@ const methods = {
 			let current = settingsStatusData();
 			if (args.wan_type == 'pppoe' && !length(args.pppoe_password) && !current.wan.password_set)
 				return failure('pppoe_password_missing', 'Введите пароль PPPoE.');
+			if (args.wan_type == 'usb' && !current.usb_internet.attached)
+				return failure('usb_tether_missing', 'Подключите Android и включите на телефоне режим USB-модема.');
+			if (args.wan_type == 'usb' && current.wisp.enabled)
+				return failure('wisp_active', 'Сначала отключите интернет по Wi-Fi, затем выберите USB.');
 			return startSystemJob('wan', {
 				wan_type: args.wan_type,
 				pppoe_user: args.pppoe_user,
