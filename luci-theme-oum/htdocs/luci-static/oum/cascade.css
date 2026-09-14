@@ -4126,3 +4126,2003 @@ body.theme-oum[data-page="admin-network-network"] #cbi-network-globals .cbi-chec
     color: #7dd3fc !important;
   }
 }
+/* UNIFY-41 v2: one button language everywhere (both themes).
+   Lesson: generic selectors lose to old !important layers — every rule below
+   reuses the rival's exact selector prefix, changing VALUES only.
+   Targets (user-approved): primary #2563eb 42px, danger flat #402121 dark /
+   #fbe8e6 light, geometry 42px/9px/13px/600, titles 17px/700.
+   Page-actions (Применить/Сохранить/Сброс) already uniform — NOT touched. */
+@media (max-width: 900px) {
+  /* 1. wireless list buttons (rival 4571: 40px/12px) */
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td.cbi-section-actions .cbi-button {
+    min-height: 42px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td.cbi-section-actions .cbi-button-action {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+    color: #fff !important;
+  }
+  /* 2. wireless assoc row remove (rival ~4990: 32px/9999) */
+  body.theme-oum [data-page="admin-network-wireless"] table.assoclist td.td:last-child .cbi-button,
+  body.theme-oum .table.assoclist .cbi-button-remove {
+    height: 42px !important;
+    min-height: 42px !important;
+    border-radius: 9px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  /* 3. wireless client giant disconnect (rival ~4701: 48px/10px) */
+  body.theme-oum[data-page="admin-network-wireless"] #wifi_assoclist_table td.td:last-child .cbi-button {
+    min-height: 42px !important;
+    height: 42px !important;
+    border-radius: 9px !important;
+  }
+  /* 4. overview assoc action (rival ~4704: 32px/9999) */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+    min-width: 0 !important;
+    min-height: 42px !important;
+    height: 42px !important;
+    border-radius: 9px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  /* 5. network interface tab buttons (rival ~4002: 36px/8px/12.5px/550) */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button {
+    height: 42px !important;
+    min-height: 42px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    border-radius: 9px !important;
+  }
+  /* 6. network device tab radius (rival ~4745: 9999) */
+  body.theme-oum #cbi-network-device .td.cbi-section-actions .cbi-button,
+  body.theme-oum #cbi-network-device .td.cbi-section-actions button {
+    border-radius: 9px !important;
+  }
+  body.theme-oum #cbi-network-device .td.cbi-section-actions button.cbi-button-edit,
+  body.theme-oum #cbi-network-device .td.cbi-section-actions button:first-child {
+    min-height: 42px !important;
+  }
+}
+/* danger flat, both viewports. Light default first, dark override wins by spec. */
+body.theme-oum [data-page="admin-network-wireless"] table.assoclist td.td:last-child .cbi-button,
+body.theme-oum .table.assoclist .cbi-button-remove,
+body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button,
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button.cbi-button-remove,
+body.theme-oum #cbi-network-interface .td.cbi-section-actions button.cbi-button-remove {
+  background-color: #fbe8e6 !important;
+  border-radius: 9px !important;
+}
+[data-theme="dark"] body.theme-oum [data-page="admin-network-wireless"] table.assoclist td.td:last-child .cbi-button,
+[data-theme="dark"] body.theme-oum .table.assoclist .cbi-button-remove,
+[data-theme="dark"] body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button,
+[data-theme="dark"] body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button.cbi-button-remove,
+[data-theme="dark"] body.theme-oum #cbi-network-interface .td.cbi-section-actions button.cbi-button-remove,
+[data-darkmode="true"] body.theme-oum [data-page="admin-network-wireless"] table.assoclist td.td:last-child .cbi-button,
+[data-darkmode="true"] body.theme-oum .table.assoclist .cbi-button-remove,
+[data-darkmode="true"] body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+  background-color: #402121 !important;
+}
+/* desktop: radius 4->9 + one blue. Density (32px) stays desktop. */
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button,
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-create button,
+  body.theme-oum #cbi-network-interface .cbi-section-create button,
+  body.theme-oum #cbi-network-device .td.cbi-section-actions .cbi-button,
+  body.theme-oum #cbi-network-device .td.cbi-section-actions button {
+    border-radius: 9px !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button.cbi-button-edit,
+  body.theme-oum #cbi-network-device .td.cbi-section-actions button.cbi-button-edit,
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td.cbi-section-actions .cbi-button-action {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+    color: #fff !important;
+  }
+}
+/* titles 17/700 (rivals: 16.5/650 network, stock 18px bare h3) */
+body.theme-oum[data-page="admin-network-network"] #cbi-network-device > h3,
+body.theme-oum #cbi-network-device > h3,
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface > h3,
+body.theme-oum #cbi-network-interface > h3,
+body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-title > h3,
+body.theme-oum[data-page="admin-network-wireless"] #maincontent h3 {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+}
+@media (max-width: 900px) {
+  /* network add button (rival ~3153: 38px) */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-button-add,
+  body.theme-oum #cbi-network-interface .cbi-button-add,
+  body.theme-oum .cbi-section-create .cbi-button-add,
+  body.theme-oum .cbi-button-add {
+    height: 42px !important;
+    min-height: 42px !important;
+  }
+  /* overview title-row ghost (14px outlier) */
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-title .cbi-button,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent td.cbi-section-actions .cbi-button {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  /* firewall zone table buttons (14px outlier) */
+  body.theme-oum[data-page^="admin-network-firewall"] #maincontent .cbi-button {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  /* system control-group buttons (8px radius outlier) */
+  body.theme-oum[data-page="admin-system-system"] #maincontent .control-group .cbi-button {
+    border-radius: 9px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+}
+/* UNIFY-42: thin buttons + outline edit everywhere + dynlist fix.
+   User: "кнопки тоньше, возможно даже в 2 раза" -> list 42->28px,
+   page-actions 42->36px (hierarchy kept, desktop density untouched).
+   "Изменить везде как в интерфейсах" -> all edit/action list buttons become
+   blue outline (was: solid on wireless, ghost on firewall).
+   Hanging "+" (dhcp Dnsmasq dynlist kept stock 210px) -> full width.
+   Appended AFTER unify-41, same selectors win by order. */
+@media (max-width: 900px) {
+  /* A. thin list buttons (unify-41 rules 1-5 + add, same selectors) */
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td.cbi-section-actions .cbi-button,
+  body.theme-oum [data-page="admin-network-wireless"] table.assoclist td.td:last-child .cbi-button,
+  body.theme-oum .table.assoclist .cbi-button-remove,
+  body.theme-oum[data-page="admin-network-wireless"] #wifi_assoclist_table td.td:last-child .cbi-button,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button,
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button,
+  body.theme-oum #cbi-network-interface .td.cbi-section-actions button,
+  body.theme-oum #cbi-network-device .td.cbi-section-actions button.cbi-button-edit,
+  body.theme-oum #cbi-network-device .td.cbi-section-actions button:first-child {
+    height: 28px !important;
+    min-height: 28px !important;
+  }
+  /* NOTE: input-attached "+" (cbi-button-add in create/add-item rows) stays 42
+     to match input height — thinning applies to standalone grid buttons only. */
+  /* firewall/system/overview/dhcp ghosts thin too */
+  body.theme-oum[data-page^="admin-network-firewall"] #maincontent .cbi-button,
+  body.theme-oum[data-page="admin-system-system"] #maincontent .control-group .cbi-button,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent .cbi-title .cbi-button,
+  body.theme-oum[data-page="admin-status-overview"] #maincontent td.cbi-section-actions .cbi-button,
+  body.theme-oum[data-page="admin-network-dhcp"] #maincontent .cbi-button {
+    height: 28px !important;
+    min-height: 28px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  /* B. page-actions slimmer: #maincontent prefix beats page-specific 38px */
+  body.theme-oum[data-page] #maincontent .cbi-page-actions .btn,
+  body.theme-oum[data-page] #maincontent .cbi-page-actions .cbi-button,
+  body.theme-oum[data-page] #maincontent .cbi-page-actions .cbi-button-reset,
+  body.theme-oum[data-page] #maincontent .cbi-page-actions .cbi-button-save,
+  body.theme-oum[data-page] #maincontent .cbi-page-actions .cbi-dropdown.cbi-button-apply,
+  body.theme-oum[data-page] #maincontent .cbi-page-actions .btn-group,
+  body.theme-oum[data-page] #maincontent .cbi-page-actions > .cbi-button-apply {
+    height: 36px !important;
+    min-height: 36px !important;
+  }
+  /* standalone "Добавить новый" (interface create, NOT input-attached) */
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-button-add,
+  body.theme-oum #cbi-network-interface .cbi-button-add {
+    height: 28px !important;
+    min-height: 28px !important;
+  }
+  /* D. dynlist full width (stock 210-400px hung the "+" over help text) */
+  body.theme-oum #maincontent .cbi-dynlist {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+  /* dhcp table layout shrink-wraps the dynlist wrapper (177px) — stretch it */
+  body.theme-oum[data-page="admin-network-dhcp"] #maincontent td.cbi-value-field > div {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    grid-column: 1 / -1 !important;
+  }
+  /* the value-TD itself is a 2-col grid (114px + 177px) — single column */
+  body.theme-oum[data-page="admin-network-dhcp"] #maincontent td.cbi-value-field {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body.theme-oum #maincontent .cbi-dynlist > .add-item {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+  body.theme-oum #maincontent .cbi-dynlist > .add-item > input {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+  /* "+" sits NEXT to the input (not below): square, stretches to input height */
+  body.theme-oum #maincontent .cbi-dynlist > .add-item > .cbi-button-add,
+  body.theme-oum #maincontent .cbi-dynlist > .add-item > button {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 48px !important;
+    align-self: stretch !important;
+  }
+  body.theme-oum #maincontent .cbi-dynlist .cbi-button-add {
+    border-radius: 9px !important;
+  }
+  /* adguard table rows: stack label over dynlist (row carries section class) */
+  body.theme-oum[data-page="admin-network-dhcp"] #maincontent tr[class*="oum_adguard"] {
+    display: block !important;
+    width: 100% !important;
+  }
+  body.theme-oum[data-page="admin-network-dhcp"] #maincontent tr[class*="oum_adguard"] > td,
+  body.theme-oum[data-page="admin-network-dhcp"] #maincontent tr[class*="oum_adguard"] > .td {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+/* C. outline edit/action, both viewports. Light default, dark override. */
+body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td.cbi-section-actions .cbi-button-action,
+body.theme-oum[data-page^="admin-network-firewall"] #maincontent .cbi-button-edit,
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button.cbi-button-edit,
+body.theme-oum #cbi-network-device .td.cbi-section-actions button.cbi-button-edit,
+body.theme-oum[data-page="admin-network-dhcp"] #maincontent button.cbi-button-edit {
+  background-color: #fff !important;
+  color: #2563eb !important;
+  border: 1px solid #2563eb !important;
+}
+[data-theme="dark"] body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td.cbi-section-actions .cbi-button-action,
+[data-theme="dark"] body.theme-oum[data-page^="admin-network-firewall"] #maincontent .cbi-button-edit,
+[data-theme="dark"] body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button.cbi-button-edit,
+[data-theme="dark"] body.theme-oum #cbi-network-device .td.cbi-section-actions button.cbi-button-edit,
+[data-theme="dark"] body.theme-oum[data-page="admin-network-dhcp"] #maincontent button.cbi-button-edit,
+[data-darkmode="true"] body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device td.cbi-section-actions .cbi-button-action,
+[data-darkmode="true"] body.theme-oum[data-page^="admin-network-firewall"] #maincontent .cbi-button-edit,
+[data-darkmode="true"] body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button.cbi-button-edit,
+[data-darkmode="true"] body.theme-oum #cbi-network-device .td.cbi-section-actions button.cbi-button-edit,
+[data-darkmode="true"] body.theme-oum[data-page="admin-network-dhcp"] #maincontent button.cbi-button-edit {
+  background-color: #151d2c !important;
+}
+/* UNIFY-43: modal buttons in the same language.
+   Modal footer (.button-row: Закрыть/Сохранить) ~= page-actions -> 36px;
+   modal content buttons ~= list buttons -> 28px.
+   Roles: save solid #2563eb, footer danger flat, edit/apply outline,
+   rest ghost. Desktop modal heights untouched. */
+@media (max-width: 900px) {
+  body.theme-oum #modal_overlay .modal > .button-row {
+    gap: 8px !important;
+  }
+  body.theme-oum #modal_overlay .modal > .button-row > .cbi-button,
+  body.theme-oum #modal_overlay .modal > .button-row > .btn {
+    height: 36px !important;
+    min-height: 36px !important;
+    border-radius: 9px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  /* modal content buttons */
+  body.theme-oum #modal_overlay .modal .cbi-button-apply,
+  body.theme-oum #modal_overlay .modal .cbi-section-create .cbi-button-add {
+    height: 28px !important;
+    min-height: 28px !important;
+    border-radius: 9px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  body.theme-oum #modal_overlay .modal .cbi-dynlist .cbi-button-add {
+    border-radius: 9px !important;
+  }
+  /* modal dynlist twin of unify-42 D-fix (overlay is outside #maincontent) */
+  body.theme-oum #modal_overlay .modal .cbi-dynlist {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+  body.theme-oum #modal_overlay .modal .cbi-dynlist > .add-item {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+  body.theme-oum #modal_overlay .modal .cbi-dynlist > .add-item > input {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+  body.theme-oum #modal_overlay .modal .cbi-dynlist > .add-item > .cbi-button-add,
+  body.theme-oum #modal_overlay .modal .cbi-dynlist > .add-item > button {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 48px !important;
+    align-self: stretch !important;
+  }
+}
+/* footer save solid (both viewports) */
+body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-save,
+body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-positive {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #fff !important;
+}
+/* footer danger flat */
+body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-remove,
+body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-negative {
+  background-color: #fbe8e6 !important;
+  border-radius: 9px !important;
+}
+[data-theme="dark"] body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-remove,
+[data-theme="dark"] body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-negative,
+[data-darkmode="true"] body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-remove,
+[data-darkmode="true"] body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-negative {
+  background-color: #402121 !important;
+}
+/* modal content apply/edit -> outline (both viewports) */
+body.theme-oum #modal_overlay .modal .cbi-button-apply {
+  background-color: #fff !important;
+  color: #2563eb !important;
+  border: 1px solid #2563eb !important;
+}
+[data-theme="dark"] body.theme-oum #modal_overlay .modal .cbi-button-apply,
+[data-darkmode="true"] body.theme-oum #modal_overlay .modal .cbi-button-apply {
+  background-color: #151d2c !important;
+}
+/* UNIFY-44: modal footer exactly like the SSID-card row (user screenshot):
+   ghost / blue-outline / flat-red, thin 28px. Overrides unify-43 footer
+   (36px + solid save). */
+@media (max-width: 900px) {
+  body.theme-oum #modal_overlay .modal > .button-row > .cbi-button,
+  body.theme-oum #modal_overlay .modal > .button-row > .btn {
+    height: 28px !important;
+    min-height: 28px !important;
+  }
+}
+body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-save,
+body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-positive {
+  background-color: #fff !important;
+  color: #2563eb !important;
+  border: 1px solid #2563eb !important;
+}
+[data-theme="dark"] body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-save,
+[data-theme="dark"] body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-positive,
+[data-darkmode="true"] body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-save,
+[data-darkmode="true"] body.theme-oum #modal_overlay .modal > .button-row > .cbi-button-positive {
+  background-color: #151d2c !important;
+}
+/* UNIFY-45: page-actions Save as blue outline (user: form bar like the
+   SSID-card row — no solid fill). Overrides the "Save button (Primary Blue)"
+   solid rule 2567. Hover kept outline (no dark fill). */
+body.theme-oum[data-page] #maincontent .cbi-page-actions .cbi-button-save {
+  background: #fff !important;
+  border: 1px solid #2563eb !important;
+  color: #2563eb !important;
+  box-shadow: none !important;
+}
+body.theme-oum[data-page] #maincontent .cbi-page-actions .cbi-button-save:hover {
+  background: rgba(37, 99, 235, 0.08) !important;
+  border-color: #2563eb !important;
+  color: #2563eb !important;
+}
+[data-theme="dark"] body.theme-oum[data-page] #maincontent .cbi-page-actions .cbi-button-save,
+[data-darkmode="true"] body.theme-oum[data-page] #maincontent .cbi-page-actions .cbi-button-save {
+  background-color: #151d2c !important;
+}
+[data-theme="dark"] body.theme-oum[data-page] #maincontent .cbi-page-actions .cbi-button-save:hover,
+[data-darkmode="true"] body.theme-oum[data-page] #maincontent .cbi-page-actions .cbi-button-save:hover {
+  background-color: rgba(37, 99, 235, 0.16) !important;
+  border-color: #2563eb !important;
+  color: #2563eb !important;
+}
+/* UNIFY-46: passwall node_list.
+   (1) All buttons thin 28px like Изменить (top toolbar + node cards).
+   (2) Current-node wash: solid-ish blue fill -> subtle tint + accent bar,
+       readable text (2-ID selector beats the unknown painter). */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent .cbi-button {
+    height: 28px !important;
+    min-height: 28px !important;
+    border-radius: 9px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+}
+body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent #cbi-passwall-nodes-default-table tr._now_use_bg,
+body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent #cbi-passwall-nodes-default-table tr._now_use_bg > td {
+  background-color: rgba(37, 99, 235, 0.07) !important;
+  background-image: none !important;
+}
+body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent #cbi-passwall-nodes-default-table tr._now_use_bg > td:first-child {
+  box-shadow: inset 3px 0 0 #2563eb !important;
+}
+[data-theme="dark"] body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent #cbi-passwall-nodes-default-table tr._now_use_bg,
+[data-theme="dark"] body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent #cbi-passwall-nodes-default-table tr._now_use_bg > td,
+[data-darkmode="true"] body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent #cbi-passwall-nodes-default-table tr._now_use_bg,
+[data-darkmode="true"] body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent #cbi-passwall-nodes-default-table tr._now_use_bg > td {
+  background-color: rgba(37, 99, 235, 0.12) !important;
+  background-image: none !important;
+}
+/* UNIFY-47: vertical centering of labels in thin buttons.
+   Height overrides kept old line-height/padding -> text sat ~1px high.
+   Flex-centers all mobile list buttons (page-actions already centered). */
+@media (max-width: 900px) {
+  body.theme-oum[data-page] #maincontent .cbi-button.cbi-button,
+  body.theme-oum[data-page] #maincontent .btn.btn {
+    line-height: 1 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  /* padding rival carries an extra element (td) — match it */
+  body.theme-oum[data-page] #maincontent button.cbi-button.cbi-button {
+    padding-top: 1px !important;
+  }
+}
+/* UNIFY-48: passwall shunt tables en masse.
+   Gemini fixed ONLY #cbi-passwall-nodes-default-table (desktop columns +
+   action row); OUM + any future shunt tables (<name>) squeezed buttons into
+   vertical letter-columns. Mirror of the default-table block with a prefix
+   selector covering every shunt table. Desktop only; mobile cards untouched. */
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] {
+    width: 100% !important;
+    min-width: 925px !important;
+    table-layout: fixed !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] th,
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] td {
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 10px 8px !important;
+    vertical-align: middle !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr > :nth-child(1) {
+    width: 44px !important;
+    text-align: center !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr > :nth-child(2) {
+    width: 287px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr > :nth-child(3),
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr > :nth-child(4),
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr > :nth-child(5) {
+    width: 58px !important;
+    text-align: center !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr > :nth-child(6) {
+    width: 420px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] .node-wrapper {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 6px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] .node-wrapper > input.btn {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 9px !important;
+    white-space: nowrap !important;
+    word-break: normal !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] .drag-handle {
+    display: inline-flex !important;
+    flex: 0 0 24px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 24px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+  }
+}
+/* current-node wash for every shunt table (extends unify-46 default-table) */
+body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr._now_use_bg,
+body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr._now_use_bg > td {
+  background-color: rgba(37, 99, 235, 0.07) !important;
+  background-image: none !important;
+}
+body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr._now_use_bg > td:first-child {
+  box-shadow: inset 3px 0 0 #2563eb !important;
+}
+[data-theme="dark"] body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr._now_use_bg,
+[data-theme="dark"] body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr._now_use_bg > td,
+[data-darkmode="true"] body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr._now_use_bg,
+[data-darkmode="true"] body.theme-oum[data-page="admin-services-passwall-node_list"] #maincontent table[id^="cbi-passwall-nodes-"] tr._now_use_bg > td {
+  background-color: rgba(37, 99, 235, 0.12) !important;
+  background-image: none !important;
+}
+/* UNIFY-49: passwall node_subscribe table (same sickness as node_list OUM:
+   action inputs squeezed into letter-columns). Desktop fixed columns +
+   nowrap action row. Table has no ID — scoped by data-page (single table). */
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent .cbi-section {
+    overflow-x: auto !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table {
+    width: 100% !important;
+    min-width: 1120px !important;
+    table-layout: fixed !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table th,
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table td {
+    min-width: 0 !important;
+    padding: 10px 8px !important;
+    vertical-align: middle !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table tr > :nth-child(1) {
+    width: auto !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table tr > :nth-child(2),
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table tr > :nth-child(3) {
+    width: 100px !important;
+    text-align: center !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table tr > :nth-child(4) {
+    width: 170px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table tr > :nth-child(5) {
+    width: 160px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table tr > :nth-child(6) {
+    width: 360px !important;
+  }
+  /* action inputs: no squeeze, nowrap */
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table input.btn {
+    width: auto !important;
+    min-width: 0 !important;
+    white-space: nowrap !important;
+    word-break: normal !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table td:nth-child(4) input.cbi-button-remove {
+    min-width: 150px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table td:nth-child(5) input.cbi-button-apply {
+    min-width: 140px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table td:nth-child(6) > div {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 6px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table td:nth-child(6) input.cbi-button-edit,
+  body.theme-oum[data-page="admin-services-passwall-node_subscribe"] #maincontent table.cbi-section-table td:nth-child(6) input.cbi-button-remove {
+    min-width: 88px !important;
+  }
+}
+/* UNIFY-50: the common rule behind all passwall letter-column buttons.
+   GENERAL (desktop, every passwall table incl. future ones): action cells
+   are flex rows, buttons never wrap per letter. Harmless to already-fixed
+   tables (node_list/subscribe keep their widths/justify — this sets no
+   justify/width, only flow + nowrap).
+   WIDTHS (page-specific, the actual squeeze): shunt actions 220px,
+   acl actions 490px (up/down keep full text) with table scroll. */
+@media (min-width: 901px) {
+  body.theme-oum[data-page^="admin-services-passwall"] #maincontent table.cbi-section-table td.cbi-section-table-cell > div {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+  body.theme-oum[data-page^="admin-services-passwall"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.btn,
+  body.theme-oum[data-page^="admin-services-passwall"] #maincontent table.cbi-section-table td.cbi-section-table-cell button.cbi-button {
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    flex: 0 0 auto !important;
+  }
+  /* shunt rules page (data-page is "rule") */
+  body.theme-oum[data-page="admin-services-passwall-rule"] #maincontent table.cbi-section-table {
+    min-width: 900px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-rule"] #maincontent table.cbi-section-table td.cbi-section-table-cell {
+    width: 220px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-rule"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-edit,
+  body.theme-oum[data-page="admin-services-passwall-rule"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-remove {
+    min-width: 88px !important;
+  }
+  /* acl page */
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent .cbi-section {
+    overflow-x: auto !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table {
+    min-width: 1180px !important;
+    table-layout: fixed !important;
+    width: 100% !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell {
+    width: 490px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-up,
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-down {
+    min-width: 130px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-edit,
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-remove {
+    min-width: 88px !important;
+  }
+}
+/* UNIFY-51: acl table back to no-scroll.
+   unify-50 gave it 1180px + full-text move buttons -> horizontal scroll,
+   form "fell apart". Move buttons become 40px arrow-icon inputs
+   (input elements can't use ::after, so SVG background-image; text hidden
+   via font-size:0). Actions cell 310px, table fits viewport. */
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table {
+    min-width: 0 !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell {
+    width: 310px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-up,
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-down {
+    font-size: 0 !important;
+    color: transparent !important;
+    min-width: 40px !important;
+    width: 40px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 16px 16px !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-up {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2317231f' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 15l-6-6-6 6'/%3E%3C/svg%3E") !important;
+  }
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-down {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2317231f' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+  }
+  [data-theme="dark"] body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-up,
+  [data-darkmode="true"] body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-up {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23edeff3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 15l-6-6-6 6'/%3E%3C/svg%3E") !important;
+  }
+  [data-theme="dark"] body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-down,
+  [data-darkmode="true"] body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell input.cbi-button-down {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23edeff3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+  }
+}
+/* UNIFY-52: acl actions cell — TH fix.
+   Root cause of "rule matches but doesn't apply": with table-layout:fixed
+   the FIRST ROW (TH, not TD) defines column widths. unify-51 targeted only
+   TD, header THs split evenly (188px). Actions column is :last-child. */
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table th.cbi-section-table-cell:last-child,
+  body.theme-oum[data-page="admin-services-passwall-acl"] #maincontent table.cbi-section-table td.cbi-section-table-cell:last-child {
+    width: 310px !important;
+  }
+}
+/* UNIFY-53: OUM app guard.
+   Root cause of "phantom" Zashboard / duplicate picker / Отключить button:
+   OUM pages drive visibility via JS (hidden attr + inline display:none),
+   but stock unify display:!important rules (notably unify-47) beat both
+   and force hidden controls visible. OUM app has its own design system —
+   stock layers must never unhide there.
+   data-page on OUM pages is SHORT ("oum", "oum-*") — NOT admin-oum-*
+   (proven via CDP: guard never matched). Doubled [data-page] ties the
+   strongest unify rule (1,4,1); later wins. */
+body.theme-oum[data-page^="admin-oum-"][data-page] #maincontent [hidden],
+body.theme-oum[data-page^="admin-oum-"][data-page] #modal_overlay [hidden],
+body.theme-oum[data-page="oum"][data-page] #maincontent [hidden],
+body.theme-oum[data-page="oum"][data-page] #modal_overlay [hidden],
+body.theme-oum[data-page^="oum-"][data-page] #maincontent [hidden],
+body.theme-oum[data-page^="oum-"][data-page] #modal_overlay [hidden] {
+  display: none !important;
+}
+/* UNIFY-54: OUM app guard, corrected.
+   unify-53 scoped to data-page^="admin-oum-" but real OUM pages carry SHORT
+   data-page ("oum") — proven via CDP (guard absent from matched rules,
+   unify-47 !important won). Correct scopes below (old lines inert). */
+body.theme-oum[data-page="oum"][data-page] #maincontent [hidden],
+body.theme-oum[data-page="oum"][data-page] #modal_overlay [hidden],
+body.theme-oum[data-page^="oum-"][data-page] #maincontent [hidden],
+body.theme-oum[data-page^="oum-"][data-page] #modal_overlay [hidden] {
+  display: none !important;
+}
+/* UNIFY-55: thin-button text truly centered + wireless action gap.
+   (1) Centering: base .cbi-button keeps padding-bottom:8px while unify-47 set
+   only padding-top:1px -> at fixed 28px height the label sat high (measured
+   text top=1 / bottom=9). Symmetric 1px top+bottom centers via flex.
+   Applies to all mobile thin/fixed buttons (28px lists, 36px page-actions,
+   42px add) — same 8px-bottom leftover everywhere.
+   (2) Wireless gap: Wless-D designed 12px between last fact hairline and the
+   action row, but generic `tr[id^=...] > td{padding:0}` (1,3,3) beats
+   `td.cbi-section-actions{padding-top:12px}` (1,3,2) -> gap measured 0px,
+   buttons glued to the divider (radio card + SSID card). Strengthened
+   selector (1,4,3) restores the designed 12px, nothing else changes. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page] #maincontent button.cbi-button.cbi-button {
+    padding-bottom: 1px !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #cbi-wireless-wifi-device tr[id^="cbi-wireless-"] > td.cbi-section-actions {
+    padding-top: 12px !important;
+  }
+}
+/* OVERVIEW-HOME: polished overview duplicated onto stock landing
+   (/cgi-bin/luci/ renders the same view with data-page="" — twin of every
+   data-page="admin-status-overview" rule. Generated, do not hand-edit.) */
+@media (max-width: 900px) {
+  body.theme-oum[data-page=""] #maincontent > div > .cbi-section:first-child .table, body.theme-oum[data-page=""] #maincontent > div > .cbi-section:first-child .table > tbody {
+    display: table;
+    width: 100% !important;
+    table-layout: fixed;
+  }
+  body.theme-oum[data-page=""] #maincontent > div > .cbi-section:first-child .table .tr, body.theme-oum[data-page=""] #maincontent > div > .cbi-section:first-child .table tr {
+    display: table-row;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page=""] #maincontent > div > .cbi-section:first-child .table .td, body.theme-oum[data-page=""] #maincontent > div > .cbi-section:first-child .table td {
+    display: table-cell;
+    width: auto !important;
+    padding: 10px 8px;
+    border: 0;
+    border-bottom: 1px solid var(--oum-line);
+    background: transparent;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+  body.theme-oum[data-page=""] #maincontent > div > .cbi-section:first-child .table tr:last-child td { border-bottom: 0; }
+  body.theme-oum[data-page=""] #maincontent > div > .cbi-section:first-child .table td:first-child {
+    width: 38% !important;
+    padding-left: 0;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  body.theme-oum[data-page=""] #maincontent > div > .cbi-section:first-child .table td:last-child {
+    padding-right: 0;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr {
+    display: grid;
+    grid-template-columns: 124px minmax(0, 1fr);
+    gap: 4px 12px;
+    align-items: center;
+    margin: 0;
+    padding: 9px 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > .td, body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow-wrap: anywhere;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr + tr {
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > .td:first-child, body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > td:first-child {
+    padding-left: 0;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > .td:last-child, body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > td:last-child {
+    padding-right: 0;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page=""] #maincontent table.leases, body.theme-oum[data-page=""] #maincontent table.leases6 {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-progressbar {
+    height: 6px;
+    margin-top: 6px;
+    border: 0;
+    border-radius: 99px;
+    background: var(--oum-line);
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-progressbar::before {
+    position: static;
+    display: block;
+    margin-bottom: 3px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--oum-ink);
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-progressbar > div { border-radius: 99px; }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr {
+    display: block;
+    margin: 0 0 8px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--oum-line);
+    border-radius: 10px;
+    background: transparent;
+    overflow: visible;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr + tr {
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td, body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:first-child, body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:first-child {
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--oum-line);
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:last-child, body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:last-child {
+    padding-top: 8px;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar {
+    height: 8px;
+    margin-top: 8px;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar::before {
+    margin-bottom: 2px;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "label numbers" "bar bar";
+    column-gap: 10px;
+    margin: 0;
+    padding: 8px 2px 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr + tr {
+    border-top: 0;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr::after {
+    content: "";
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    bottom: 12px;
+    z-index: 0;
+    height: 10px;
+    border-radius: 99px;
+    background: var(--oum-line);
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td, body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:first-child, body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:first-child {
+    grid-area: label;
+    align-self: baseline;
+    padding: 0;
+    border: 0;
+    color: var(--oum-subtle);
+    font-size: 13px;
+    font-weight: 600;
+    overflow-wrap: normal;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:last-child, body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:last-child {
+    display: contents;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar {
+    display: contents;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar::before {
+    position: static;
+    display: block;
+    grid-area: numbers;
+    align-self: baseline;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.6;
+    color: var(--oum-ink);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  body.theme-oum[data-page=""] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar > div {
+    position: relative;
+    z-index: 1;
+    grid-area: bar;
+    height: 10px;
+    margin-top: 8px;
+    border-radius: 99px;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) > div > div {
+    display: block !important;
+    margin: 0 !important;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name speed" "stats stats";
+    column-gap: 10px;
+    align-items: baseline;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 8px 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox + .ifacebox {
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(1) {
+    grid-area: name;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(1)::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    vertical-align: baseline;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) > div:nth-child(1)::before {
+    background: var(--oum-line-strong);
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) {
+    grid-area: speed;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: right;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) img, body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) br {
+    display: none;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(3) {
+    display: none !important;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) {
+    grid-area: stats;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) br, body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) .cbi-tooltip {
+    display: none;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) {
+    opacity: .55;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) > div:nth-child(4) {
+    display: none;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) span {
+    display: inline-block;
+    padding: 2px 10px;
+    border: 1px solid var(--oum-line-strong);
+    border-radius: 99px;
+    background: transparent;
+    color: var(--oum-ink);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    white-space: nowrap;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:not(:has(img[src*="port_down"])) > div:nth-child(1)::before {
+    box-shadow: 0 0 6px rgba(34, 197, 94, .6);
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) br {
+    display: inline;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) .cbi-tooltip {
+    display: none;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox {
+    grid-template-rows: auto auto;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) {
+    display: block;
+    min-height: 0;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist, body.theme-oum[data-page=""] #maincontent table.assoclist > tbody {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100%;
+    overflow: visible;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr.table-titles {
+    display: none !important;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "host signal" "net net" "speed speed" "btn btn";
+    column-gap: 10px;
+    margin: 0 0 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--oum-line);
+    border-radius: 14px;
+    background: var(--oum-paper);
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow-wrap: anywhere;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title]::before {
+    display: none;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Хост"] {
+    grid-area: host;
+    align-self: center;
+    color: var(--oum-ink);
+    font-size: 15px;
+    font-weight: 700;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сигнал / Шум"] {
+    grid-area: signal;
+    align-self: center;
+    justify-self: end;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сигнал / Шум"] span.ifacebadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--oum-line-strong);
+    border-radius: 99px;
+    background: transparent;
+    box-shadow: none;
+    padding: 3px 10px 3px 8px;
+    color: var(--oum-ink);
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сигнал / Шум"] span.ifacebadge img {
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сеть"] {
+    grid-area: net;
+    margin-top: 4px;
+    color: var(--oum-subtle);
+    font-size: 12px;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сеть"] span.ifacebadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    color: var(--oum-subtle);
+    font-size: 12px;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сеть"] span.ifacebadge img {
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] {
+    grid-area: speed;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 10px;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > br {
+    display: none;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > span {
+    display: block;
+    min-width: 0;
+    color: var(--oum-ink);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > span:first-child::before {
+    content: "Приём";
+    display: block;
+    margin-bottom: 2px;
+    color: var(--oum-faint);
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > span:last-child::before {
+    content: "Передача";
+    display: block;
+    margin-bottom: 2px;
+    color: var(--oum-faint);
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions {
+    grid-area: btn;
+    padding-top: 10px;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid rgba(220, 80, 80, .45);
+    border-radius: 10px;
+    background: transparent;
+    color: #e06868;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: none;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+    min-width: 0 !important;
+    min-height: 42px !important;
+    height: 42px !important;
+    border-radius: 9px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-title .cbi-button, body.theme-oum[data-page=""] #maincontent td.cbi-section-actions .cbi-button {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+    height: 28px !important;
+    min-height: 28px !important;
+  }
+  body.theme-oum[data-page=""] #maincontent .cbi-title .cbi-button, body.theme-oum[data-page=""] #maincontent td.cbi-section-actions .cbi-button {
+    height: 28px !important;
+    min-height: 28px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+}
+  body.theme-oum[data-page=""] h3 > span.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  margin: 0;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--oum-faint);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+  body.theme-oum[data-page=""] h3 > span.label::before {
+  content: '\203A';
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform .16s ease;
+}
+  body.theme-oum[data-page=""] h3 > span.label.notice::before {
+  transform: rotate(0deg);
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox {
+  overflow: hidden;
+  border: 1px solid var(--oum-line);
+  border-radius: 14px;
+  background: var(--oum-paper);
+  box-shadow: none;
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox > .ifacebox-head:first-child {
+  padding: 12px 14px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--oum-line);
+  background: transparent;
+  text-align: left !important;
+  text-shadow: none;
+  color: var(--oum-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox > .ifacebox-head:first-child::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, .6);
+  vertical-align: baseline;
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox > .ifacebox-body {
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px 10px;
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > br {
+  display: none;
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > span.nowrap {
+  display: block;
+  min-width: 0;
+  white-space: normal;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > span.nowrap > strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--oum-faint);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > span.nowrap {
+  color: var(--oum-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox > .ifacebox-body > div {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--oum-line);
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox span.ifacebadge {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--oum-subtle);
+  font-size: 12px;
+}
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox span.ifacebadge img {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  vertical-align: -4px;
+}
+  body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+  background-color: #fbe8e6 !important;
+  border-radius: 9px !important;
+}
+  [data-theme="dark"] body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button, [data-darkmode="true"] body.theme-oum[data-page=""] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+  background-color: #402121 !important;
+}
+  body.theme-oum[data-page=""] #maincontent .cbi-title > h3 {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+}
+@media (min-width: 901px) {
+  body.theme-oum[data-page=""] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+/* OVERVIEW-HOME-ADMIN: polished overview duplicated onto /admin landing
+   (/cgi-bin/luci/admin renders the same view with data-page="admin" — twin of every
+   data-page="admin-status-overview" rule. Generated, do not hand-edit.) */
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin"] #maincontent > div > .cbi-section:first-child .table, body.theme-oum[data-page="admin"] #maincontent > div > .cbi-section:first-child .table > tbody {
+    display: table;
+    width: 100% !important;
+    table-layout: fixed;
+  }
+  body.theme-oum[data-page="admin"] #maincontent > div > .cbi-section:first-child .table .tr, body.theme-oum[data-page="admin"] #maincontent > div > .cbi-section:first-child .table tr {
+    display: table-row;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page="admin"] #maincontent > div > .cbi-section:first-child .table .td, body.theme-oum[data-page="admin"] #maincontent > div > .cbi-section:first-child .table td {
+    display: table-cell;
+    width: auto !important;
+    padding: 10px 8px;
+    border: 0;
+    border-bottom: 1px solid var(--oum-line);
+    background: transparent;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+  body.theme-oum[data-page="admin"] #maincontent > div > .cbi-section:first-child .table tr:last-child td { border-bottom: 0; }
+  body.theme-oum[data-page="admin"] #maincontent > div > .cbi-section:first-child .table td:first-child {
+    width: 38% !important;
+    padding-left: 0;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  body.theme-oum[data-page="admin"] #maincontent > div > .cbi-section:first-child .table td:last-child {
+    padding-right: 0;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr {
+    display: grid;
+    grid-template-columns: 124px minmax(0, 1fr);
+    gap: 4px 12px;
+    align-items: center;
+    margin: 0;
+    padding: 9px 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > .td, body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow-wrap: anywhere;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr + tr {
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > .td:first-child, body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > td:first-child {
+    padding-left: 0;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > .td:last-child, body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist) > tr > td:last-child {
+    padding-right: 0;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.leases, body.theme-oum[data-page="admin"] #maincontent table.leases6 {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-progressbar {
+    height: 6px;
+    margin-top: 6px;
+    border: 0;
+    border-radius: 99px;
+    background: var(--oum-line);
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-progressbar::before {
+    position: static;
+    display: block;
+    margin-bottom: 3px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--oum-ink);
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-progressbar > div { border-radius: 99px; }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr {
+    display: block;
+    margin: 0 0 8px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--oum-line);
+    border-radius: 10px;
+    background: transparent;
+    overflow: visible;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr + tr {
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td, body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:first-child, body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:first-child {
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--oum-line);
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:last-child, body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:last-child {
+    padding-top: 8px;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar {
+    height: 8px;
+    margin-top: 8px;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar::before {
+    margin-bottom: 2px;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "label numbers" "bar bar";
+    column-gap: 10px;
+    margin: 0;
+    padding: 8px 2px 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr + tr {
+    border-top: 0;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr::after {
+    content: "";
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    bottom: 12px;
+    z-index: 0;
+    height: 10px;
+    border-radius: 99px;
+    background: var(--oum-line);
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td, body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:first-child, body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:first-child {
+    grid-area: label;
+    align-self: baseline;
+    padding: 0;
+    border: 0;
+    color: var(--oum-subtle);
+    font-size: 13px;
+    font-weight: 600;
+    overflow-wrap: normal;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > .td:last-child, body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) > tr > td:last-child {
+    display: contents;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar {
+    display: contents;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar::before {
+    position: static;
+    display: block;
+    grid-area: numbers;
+    align-self: baseline;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.6;
+    color: var(--oum-ink);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .table:not(.leases):not(.leases6):not(.assoclist):has(.cbi-progressbar) .cbi-progressbar > div {
+    position: relative;
+    z-index: 1;
+    grid-area: bar;
+    height: 10px;
+    margin-top: 8px;
+    border-radius: 99px;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) > div > div {
+    display: block !important;
+    margin: 0 !important;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name speed" "stats stats";
+    column-gap: 10px;
+    align-items: baseline;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 8px 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox + .ifacebox {
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(1) {
+    grid-area: name;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    color: var(--oum-ink);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(1)::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    vertical-align: baseline;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) > div:nth-child(1)::before {
+    background: var(--oum-line-strong);
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) {
+    grid-area: speed;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: right;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) img, body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) br {
+    display: none;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(3) {
+    display: none !important;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) {
+    grid-area: stats;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--oum-subtle);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) br, body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) .cbi-tooltip {
+    display: none;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) {
+    opacity: .55;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) > div:nth-child(4) {
+    display: none;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) span {
+    display: inline-block;
+    padding: 2px 10px;
+    border: 1px solid var(--oum-line-strong);
+    border-radius: 99px;
+    background: transparent;
+    color: var(--oum-ink);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    white-space: nowrap;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:not(:has(img[src*="port_down"])) > div:nth-child(1)::before {
+    box-shadow: 0 0 6px rgba(34, 197, 94, .6);
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) br {
+    display: inline;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(4) .cbi-tooltip {
+    display: none;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox:has(img[src*="port_down"]) {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox {
+    grid-template-rows: auto auto;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-section:has(> div > div:not(.network-status-table) > .ifacebox) .ifacebox > div:nth-child(2) {
+    display: block;
+    min-height: 0;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist, body.theme-oum[data-page="admin"] #maincontent table.assoclist > tbody {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100%;
+    overflow: visible;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr.table-titles {
+    display: none !important;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "host signal" "net net" "speed speed" "btn btn";
+    column-gap: 10px;
+    margin: 0 0 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--oum-line);
+    border-radius: 14px;
+    background: var(--oum-paper);
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td {
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow-wrap: anywhere;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title]::before {
+    display: none;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Хост"] {
+    grid-area: host;
+    align-self: center;
+    color: var(--oum-ink);
+    font-size: 15px;
+    font-weight: 700;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сигнал / Шум"] {
+    grid-area: signal;
+    align-self: center;
+    justify-self: end;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сигнал / Шум"] span.ifacebadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--oum-line-strong);
+    border-radius: 99px;
+    background: transparent;
+    box-shadow: none;
+    padding: 3px 10px 3px 8px;
+    color: var(--oum-ink);
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сигнал / Шум"] span.ifacebadge img {
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сеть"] {
+    grid-area: net;
+    margin-top: 4px;
+    color: var(--oum-subtle);
+    font-size: 12px;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сеть"] span.ifacebadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    color: var(--oum-subtle);
+    font-size: 12px;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title="Сеть"] span.ifacebadge img {
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] {
+    grid-area: speed;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--oum-line);
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 10px;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > br {
+    display: none;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > span {
+    display: block;
+    min-width: 0;
+    color: var(--oum-ink);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > span:first-child::before {
+    content: "Приём";
+    display: block;
+    margin-bottom: 2px;
+    color: var(--oum-faint);
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td[data-title^="Скорость"] > span > span:last-child::before {
+    content: "Передача";
+    display: block;
+    margin-bottom: 2px;
+    color: var(--oum-faint);
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions {
+    grid-area: btn;
+    padding-top: 10px;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid rgba(220, 80, 80, .45);
+    border-radius: 10px;
+    background: transparent;
+    color: #e06868;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: none;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+    min-width: 0 !important;
+    min-height: 42px !important;
+    height: 42px !important;
+    border-radius: 9px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-title .cbi-button, body.theme-oum[data-page="admin"] #maincontent td.cbi-section-actions .cbi-button {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+    height: 28px !important;
+    min-height: 28px !important;
+  }
+  body.theme-oum[data-page="admin"] #maincontent .cbi-title .cbi-button, body.theme-oum[data-page="admin"] #maincontent td.cbi-section-actions .cbi-button {
+    height: 28px !important;
+    min-height: 28px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+}
+  body.theme-oum[data-page="admin"] h3 > span.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  margin: 0;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--oum-faint);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+  body.theme-oum[data-page="admin"] h3 > span.label::before {
+  content: '\203A';
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform .16s ease;
+}
+  body.theme-oum[data-page="admin"] h3 > span.label.notice::before {
+  transform: rotate(0deg);
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox {
+  overflow: hidden;
+  border: 1px solid var(--oum-line);
+  border-radius: 14px;
+  background: var(--oum-paper);
+  box-shadow: none;
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox > .ifacebox-head:first-child {
+  padding: 12px 14px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--oum-line);
+  background: transparent;
+  text-align: left !important;
+  text-shadow: none;
+  color: var(--oum-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox > .ifacebox-head:first-child::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, .6);
+  vertical-align: baseline;
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox > .ifacebox-body {
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px 10px;
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > br {
+  display: none;
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > span.nowrap {
+  display: block;
+  min-width: 0;
+  white-space: normal;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > span.nowrap > strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--oum-faint);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span > span.nowrap {
+  color: var(--oum-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > div {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--oum-line);
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox span.ifacebadge {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--oum-subtle);
+  font-size: 12px;
+}
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox span.ifacebadge img {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  vertical-align: -4px;
+}
+  body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+  background-color: #fbe8e6 !important;
+  border-radius: 9px !important;
+}
+  [data-theme="dark"] body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button, [data-darkmode="true"] body.theme-oum[data-page="admin"] #maincontent table.assoclist tr:not(.table-titles) > .td.cbi-section-actions .cbi-button {
+  background-color: #402121 !important;
+}
+  body.theme-oum[data-page="admin"] #maincontent .cbi-title > h3 {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+}
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin"] #maincontent .network-status-table > .ifacebox > .ifacebox-body > span {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
