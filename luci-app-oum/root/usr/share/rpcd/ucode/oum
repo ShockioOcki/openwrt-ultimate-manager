@@ -750,14 +750,45 @@ function rndisAttached() {
 	return false;
 }
 
+function mobileManagerStatus() {
+	if (!access('/usr/libexec/oum-mobile-manager'))
+		return {};
+	let process = popen('/usr/libexec/oum-mobile-manager status 2>/dev/null');
+	if (!process)
+		return {};
+	let result = {};
+	let allowed = [ 'attached', 'family', 'device', 'vendor', 'product', 'vid', 'pid', 'storage_mode', 'needs_prepare' ];
+	for (let line in split(process.read('all'), '\n')) {
+		let pair = match(line, /^([a-z_]+)=(.*)$/);
+		if (pair && pair[1] in allowed)
+			result[pair[1]] = pair[2];
+	}
+	process.close();
+	return result;
+}
+
 function usbInternetStatusData(uci) {
-	let device = usbNetworkDevice();
+	let mobile = mobileManagerStatus();
+	let device = mobile.device ?? usbNetworkDevice();
 	let active = uci.get('oum', 'main', 'wan_source') == 'usb';
 	let status = active ? (connect()?.call('network.interface.wan', 'status') ?? {}) : {};
+	let family = mobile.family ?? (length(device) ? 'rndis' : 'none');
 	return {
-		attached: rndisAttached() || length(device) > 0,
-		runtime_ready: system("apk info -e kmod-usb-net-rndis >/dev/null 2>&1") == 0,
+		attached: mobile.attached == '1' || rndisAttached() || length(device) > 0,
+		runtime_ready: mobile.needs_prepare == '0' || (family == 'rndis' && system("apk info -e kmod-usb-net-rndis >/dev/null 2>&1") == 0),
 		device,
+		family: active ? (uci.get('oum', 'main', 'usb_wan_family') ?? family) : family,
+		vendor: mobile.vendor ?? '',
+		product: mobile.product ?? '',
+		vid: mobile.vid ?? '',
+		pid: mobile.pid ?? '',
+		storage_mode: mobile.storage_mode == '1',
+		needs_prepare: mobile.needs_prepare == '1',
+		apn: uci.get('network', 'wan', 'apn') ?? 'internet',
+		pin_set: length(uci.get('network', 'wan', 'pincode') ?? '') > 0,
+		username: uci.get('network', 'wan', 'username') ?? '',
+		password_set: length(uci.get('network', 'wan', 'password') ?? '') > 0,
+		auth: uci.get('network', 'wan', 'auth') ?? 'none',
 		active,
 		connected: active && status.up == true,
 		ipv4: active ? (status['ipv4-address']?.[0]?.address ?? '') : ''
@@ -1766,7 +1797,7 @@ const methods = {
 	},
 
 	applyWanSettings: {
-		args: { wan_type: '', pppoe_user: '', pppoe_password: '' },
+		args: { wan_type: '', pppoe_user: '', pppoe_password: '', mobile_apn: '', mobile_pin: '', mobile_username: '', mobile_password: '', mobile_auth: 'none' },
 		call: function(request) {
 			let args = request.args;
 			if (!(args.wan_type in [ 'dhcp', 'pppoe', 'usb' ]))
@@ -1780,13 +1811,31 @@ const methods = {
 			if (args.wan_type == 'pppoe' && !length(args.pppoe_password) && !current.wan.password_set)
 				return failure('pppoe_password_missing', 'Введите пароль PPPoE.');
 			if (args.wan_type == 'usb' && !current.usb_internet.attached)
-				return failure('usb_tether_missing', 'Подключите Android и включите на телефоне режим USB-модема.');
+				return failure('usb_tether_missing', 'Подключите телефон или USB-модем и повторите.');
 			if (args.wan_type == 'usb' && current.wisp.enabled)
 				return failure('wisp_active', 'Сначала отключите интернет по Wi-Fi, затем выберите USB.');
+			let mobileFamily = current.usb_internet.family ?? 'none';
+			let mobileModem = !(mobileFamily in [ 'rndis', 'ethernet' ]);
+			if (args.wan_type == 'usb' && mobileModem &&
+				(type(args.mobile_apn) != 'string' || !length(args.mobile_apn) || length(args.mobile_apn) > 100 || match(args.mobile_apn, /[\r\n]/)))
+				return failure('invalid_apn', 'Введите APN оператора без перевода строки.');
+			if (args.wan_type == 'usb' &&
+				(type(args.mobile_pin) != 'string' || (length(args.mobile_pin) && !match(args.mobile_pin, /^[0-9]{4,8}$/))))
+				return failure('invalid_pin', 'PIN должен содержать от 4 до 8 цифр либо быть пустым.');
+			if (args.wan_type == 'usb' &&
+				(type(args.mobile_username) != 'string' || length(args.mobile_username) > 128 || match(args.mobile_username, /[\r\n]/) ||
+				type(args.mobile_password) != 'string' || length(args.mobile_password) > 256 || match(args.mobile_password, /[\r\n]/) ||
+				!(args.mobile_auth in [ 'none', 'pap', 'chap', 'both' ])))
+				return failure('invalid_mobile_auth', 'Некорректные параметры авторизации мобильной сети.');
 			return startSystemJob('wan', {
 				wan_type: args.wan_type,
 				pppoe_user: args.pppoe_user,
-				pppoe_password: args.pppoe_password
+				pppoe_password: args.pppoe_password,
+				mobile_apn: args.mobile_apn,
+				mobile_pin: args.mobile_pin,
+				mobile_username: args.mobile_username,
+				mobile_password: args.mobile_password,
+				mobile_auth: args.mobile_auth
 			});
 		}
 	},

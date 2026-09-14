@@ -49,12 +49,15 @@ OUM detects the device before offering a protocol. Supported families are:
 - QMI.
 
 The form contains APN, optional PIN and credentials as write-only fields. The
-user chooses whether mobile WAN is the primary connection or a backup. Backup
-mode is the default and uses health checks plus controlled failover; it must not
-silently send traffic through a metered modem while wired WAN is healthy.
+initial implementation switches mobile WAN explicitly and preserves the wired
+configuration for rollback. Automatic backup mode remains a separate step: it
+needs health checks and controlled failover so OUM never silently sends traffic
+through a metered modem while wired WAN is healthy.
 
-Drivers are selected from the detected USB identifiers and interfaces. OUM
-does not install all modem packages blindly. DNS supplied by a modem does not
+Drivers are selected in stages from the detected USB interfaces. OUM handles
+RNDIS and CDC Ethernet as DHCP, recognizes MBIM and NCM class descriptors, and
+probes vendor-specific interfaces for QMI before falling back to serial PPP.
+It does not install every modem stack blindly. DNS supplied by a modem does not
 replace the router-wide OUM DNS policy without an explicit design change.
 
 ## USB storage

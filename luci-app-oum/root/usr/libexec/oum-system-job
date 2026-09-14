@@ -108,30 +108,12 @@ toggle_wifi() {
 	write_status success applied "$([ "$enabled" = true ] && echo 'Wi-Fi включён.' || echo 'Wi-Fi выключен. Для включения подключитесь кабелем к LAN-порту.')"
 }
 
-usb_network_device() {
-	for path in /sys/class/net/*/device; do
-		[ -e "$path" ] || continue
-		driver="$(basename "$(readlink -f "$path/driver" 2>/dev/null || true)")"
-		[ "$driver" = rndis_host ] || continue
-		basename "$(dirname "$path")"
-		return 0
-	done
-	return 1
-}
-
 prepare_usb_wan() {
-	if ! apk info -e kmod-usb-net-rndis >/dev/null 2>&1; then
-		apk -U add kmod-usb-net-rndis >/tmp/oum-usb-wan-apk.log 2>&1 || fail usb_driver_failed 'Не удалось установить драйвер Android USB-модема. Проверьте обычное подключение к интернету.'
+	if ! info="$(/usr/libexec/oum-mobile-manager prepare 2>/tmp/oum-mobile-error)"; then
+		message="$(cat /tmp/oum-mobile-error 2>/dev/null || true)"
+		fail usb_prepare_failed "${message:-Не удалось подготовить USB-модем. Проверьте подключение и повторите.}"
 	fi
-	modprobe rndis_host 2>/dev/null || true
-	count=0
-	while [ "$count" -lt 10 ]; do
-		device="$(usb_network_device 2>/dev/null || true)"
-		[ -z "$device" ] || { printf '%s\n' "$device"; return 0; }
-		count=$((count + 1))
-		sleep 1
-	done
-	fail usb_tether_missing 'Телефон не создал сетевой интерфейс. Включите на Android режим USB-модема и повторите.'
+	printf '%s\n' "$info"
 }
 
 restore_wan_backup() {
@@ -144,11 +126,23 @@ apply_wan() {
 	wan_type="$(json_value .wan_type)"
 	username="$(json_value .pppoe_user)"
 	password="$(json_value .pppoe_password)"
+	mobile_apn="$(json_value .mobile_apn)"
+	mobile_pin="$(json_value .mobile_pin)"
+	mobile_username="$(json_value .mobile_username)"
+	mobile_password="$(json_value .mobile_password)"
+	mobile_auth="$(json_value .mobile_auth)"
 	[ "$wan_type" = dhcp ] || [ "$wan_type" = pppoe ] || [ "$wan_type" = usb ] || fail invalid_input 'Некорректный тип подключения.'
 	[ "$wan_type" != pppoe ] || [ -n "$username" ] || fail invalid_input 'Логин PPPoE не задан.'
+	usb_info=""
+	usb_family=""
 	usb_device=""
-	[ "$wan_type" != usb ] || usb_device="$(prepare_usb_wan)"
-	case "$usb_device" in ''|*[!A-Za-z0-9_.-]*) [ "$wan_type" != usb ] || fail usb_device_invalid 'USB-модем создал интерфейс с неподдерживаемым именем.' ;; esac
+	if [ "$wan_type" = usb ]; then
+		usb_info="$(prepare_usb_wan)"
+		usb_family="${usb_info%% *}"
+		usb_device="${usb_info#* }"
+		[ "$usb_device" != "$usb_info" ] || fail usb_device_invalid 'Не удалось определить управляющий интерфейс USB-модема.'
+	fi
+	case "$usb_device" in ''|*[!A-Za-z0-9_./-]*) [ "$wan_type" != usb ] || fail usb_device_invalid 'USB-модем создал интерфейс с неподдерживаемым именем.' ;; esac
 	mkdir -p "$ROLLBACK"
 	cp /etc/config/network "$ROLLBACK/network"
 	cp /etc/config/oum "$ROLLBACK/oum-wan"
@@ -161,10 +155,27 @@ apply_wan() {
 		[ -z "$wired6_device" ] || uci -q set "oum.main.wired_wan6_device=$wired6_device"
 	fi
 	if [ "$wan_type" = usb ]; then
-		uci -q set network.wan.proto='dhcp'
+		case "$usb_family" in
+			rndis|ethernet) modem_proto=dhcp ;;
+			qmi|mbim|ncm) modem_proto="$usb_family" ;;
+			ppp) modem_proto=3g ;;
+			*) restore_wan_backup; fail usb_protocol_unknown 'Режим USB-модема не поддерживается.' ;;
+		esac
+		uci -q set "network.wan.proto=$modem_proto"
 		uci -q set "network.wan.device=$usb_device"
-		[ -z "$(uci -q get network.wan6 2>/dev/null || true)" ] || uci -q set "network.wan6.device=$usb_device"
+		if [ "$modem_proto" = dhcp ]; then
+			[ -z "$(uci -q get network.wan6 2>/dev/null || true)" ] || uci -q set "network.wan6.device=$usb_device"
+		else
+			uci -q set "network.wan.apn=$mobile_apn"
+			uci -q set "network.wan.auth=$mobile_auth"
+			uci -q set network.wan.pdptype='ipv4'
+			[ -z "$mobile_pin" ] || uci -q set "network.wan.pincode=$mobile_pin"
+			[ -z "$mobile_username" ] || uci -q set "network.wan.username=$mobile_username"
+			[ -z "$mobile_password" ] || uci -q set "network.wan.password=$mobile_password"
+			[ "$modem_proto" != 3g ] || uci -q set network.wan.service='umts'
+		fi
 		uci -q set oum.main.wan_source='usb'
+		uci -q set "oum.main.usb_wan_family=$usb_family"
 	else
 		wired_device="$(uci -q get oum.main.wired_wan_device 2>/dev/null || true)"
 		wired6_device="$(uci -q get oum.main.wired_wan6_device 2>/dev/null || true)"
@@ -172,13 +183,19 @@ apply_wan() {
 		[ -z "$wired6_device" ] || [ -z "$(uci -q get network.wan6 2>/dev/null || true)" ] || uci -q set "network.wan6.device=$wired6_device"
 		uci -q set "network.wan.proto=$wan_type"
 		uci -q set oum.main.wan_source='wired'
+		uci -q delete oum.main.usb_wan_family || true
 	fi
 	if [ "$wan_type" = pppoe ]; then
 		uci -q set "network.wan.username=$username"
 		[ -z "$password" ] || uci -q set "network.wan.password=$password"
-	else
+	elif [ "$wan_type" != usb ]; then
 		uci -q delete network.wan.username || true
 		uci -q delete network.wan.password || true
+		uci -q delete network.wan.apn || true
+		uci -q delete network.wan.auth || true
+		uci -q delete network.wan.pincode || true
+		uci -q delete network.wan.pdptype || true
+		uci -q delete network.wan.service || true
 	fi
 	uci -q commit network || { restore_wan_backup; fail commit_failed 'Не удалось сохранить подключение.'; }
 	uci -q commit oum || { restore_wan_backup; fail commit_failed 'Не удалось сохранить источник подключения.'; }
@@ -188,14 +205,18 @@ apply_wan() {
 	fi
 	if [ "$wan_type" = usb ]; then
 		connected=0
-		for delay in 1 2 3 4 5 6 7 8 9 10; do
+		wait_total=10
+		[ "$modem_proto" = dhcp ] || wait_total=45
+		delay=0
+		while [ "$delay" -lt "$wait_total" ]; do
 			sleep 1
+			delay=$((delay + 1))
 			[ "$(ubus call network.interface.wan status 2>/dev/null | jsonfilter -e '@.up' || true)" = true ] || continue
 			connected=1
 			break
 		done
-		[ "$connected" = 1 ] || { restore_wan_backup; fail usb_no_lease 'Телефон не выдал адрес. Проверьте мобильный интернет и режим USB-модема.'; }
-		write_status success applied 'Интернет через Android подключён. Кабельный WAN сохранён для возврата.'
+		[ "$connected" = 1 ] || { restore_wan_backup; fail usb_no_lease 'USB-модем не подключился к сети. Проверьте SIM-карту, PIN и APN; предыдущий WAN восстановлен.'; }
+		write_status success applied "$([ "$usb_family" = rndis ] && echo 'Интернет через Android подключён. Кабельный WAN сохранён для возврата.' || echo 'Мобильный USB-модем подключён. Кабельный WAN сохранён для возврата.')"
 	else
 		write_status success applied 'Настройки WAN применены. Проверяем подключение…'
 	fi

@@ -16,7 +16,7 @@ const callApplyWifi = rpc.declare({
 });
 const callSetWifiEnabled = rpc.declare({ object: 'oum', method: 'setWifiEnabled', params: [ 'enabled' ], expect: { '': {} } });
 const callApplyWan = rpc.declare({
-	object: 'oum', method: 'applyWanSettings', params: [ 'wan_type', 'pppoe_user', 'pppoe_password' ], expect: { '': {} }
+	object: 'oum', method: 'applyWanSettings', params: [ 'wan_type', 'pppoe_user', 'pppoe_password', 'mobile_apn', 'mobile_pin', 'mobile_username', 'mobile_password', 'mobile_auth' ], expect: { '': {} }
 });
 const callApplyLan = rpc.declare({ object: 'oum', method: 'applyLanSettings', params: [ 'address' ], expect: { '': {} } });
 const callApplyMesh = rpc.declare({ object: 'oum', method: 'applyMeshSettings', params: [ 'enabled', 'mesh_id', 'password', 'band' ], expect: { '': {} } });
@@ -210,7 +210,7 @@ return view.extend({
 		const lan = settings.lan || { address: '192.168.5.1', prefix: 24, rollback: false, rollback_address: '' };
 		const mesh = settings.mesh || { enabled: false, id: '', band: '5g' };
 		const wisp = settings.wisp || { enabled: false, connected: false, ssid: '', ip: '', signal: null, band: '2g', rollback: false };
-		const usbInternet = settings.usb_internet || { attached: false, runtime_ready: false, device: '', active: false, connected: false, ipv4: '' };
+		const usbInternet = settings.usb_internet || { attached: false, runtime_ready: false, device: '', family: 'none', vendor: '', product: '', storage_mode: false, needs_prepare: false, apn: 'internet', pin_set: false, username: '', password_set: false, auth: 'none', active: false, connected: false, ipv4: '' };
 		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '', aria2_installed: false, aria2_enabled: false, aria2_running: false, ariang_ready: false, aria2_dir: '', aria2_secret_b64: '', dlna_installed: false, dlna_enabled: false, dlna_running: false, dlna_media_dir: '', sorter_installed: false, sorter_enabled: false, tmdb_key_set: false, sorter_last_run: 0, sorter_result: '', sorter_message: '', swap_present: false, swap_enabled: false, swap_size_bytes: 0, swap_used_bytes: 0 };
 		const project = settings.project || { version: 'development', rollback: false };
 		const projectUpdatable = project.version && project.version !== 'development';
@@ -266,7 +266,9 @@ return view.extend({
 		const usbState = !capabilities.usb_host ? '' :
 			[ capabilities.usb_storage ? 'накопитель' : '', capabilities.usb_network ? 'сетевое устройство' : '', capabilities.usb_modem ? 'модем' : '' ].filter(Boolean).join(', ') || 'USB-порт доступен, подключённых устройств нет.';
 		const usbName = [ usb.vendor, usb.model ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim() || 'USB-накопитель';
+		const modemWithoutDisk = usbInternet.attached && !usb.disk;
 		const usbSummary = !usb.host_present ? 'USB-порт не обнаружен' :
+			modemWithoutDisk ? 'Подключено USB-устройство для интернета · накопитель не обнаружен' :
 			(!usb.storage_attached ? 'Накопитель не подключён' :
 				(!usb.runtime_ready ? 'Накопитель найден · нужны драйверы' :
 					(!usb.disk ? 'Драйверы установлены · переподключите накопитель' :
@@ -278,15 +280,18 @@ return view.extend({
 		const swapNote = usb.swap_enabled ? `${usb.swap_used_bytes > 0 ? formatBytes(usb.swap_used_bytes) : '0 Б'} занято из ${formatBytes(usb.swap_size_bytes)}` : (usb.swap_present ? '512 МБ · готов к включению' : '512 МБ · защита при нехватке RAM');
 		const wanMode = wisp.enabled ? 'wisp' : (wan.via === 'usb' || usbInternet.active ? 'usb' : (wan.proto === 'pppoe' ? 'pppoe' : 'dhcp'));
 		const internetModeCount = 2 + (capabilities.wisp_supported ? 1 : 0) + (capabilities.usb_host ? 1 : 0);
+		const mobileModem = usbInternet.attached && ![ 'rndis', 'ethernet' ].includes(usbInternet.family);
+		const mobileFamilyLabels = { storage: 'нужно переключение', unknown: 'режим определяется', qmi: 'QMI', mbim: 'MBIM', ncm: 'NCM', ppp: '3G / PPP', ethernet: 'USB Ethernet', rndis: 'Android RNDIS' };
+		const mobileName = [ usbInternet.vendor, usbInternet.product ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 		const usbInternetNote = usbInternet.connected ? `Подключено через ${usbInternet.device || 'USB'}${usbInternet.ipv4 ? ` · ${usbInternet.ipv4}` : ''}` :
-			(usbInternet.device ? `Android подключён · ${usbInternet.device} · готов к применению` :
-				(usbInternet.attached ? 'Android обнаружен · драйвер установится при применении' : 'Подключите Android и включите на телефоне режим USB-модема'));
+			(usbInternet.device ? `${mobileName || (mobileModem ? 'USB-модем' : 'Android')} · ${mobileFamilyLabels[usbInternet.family] || usbInternet.family} · готов к применению` :
+				(usbInternet.attached ? `${mobileName || 'USB-модем'} · ${mobileFamilyLabels[usbInternet.family] || 'нужна подготовка'}` : 'Подключите Android или USB-модем'));
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
 		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
 		const initialVpnTab = status.pending_source !== 'none' && status.active_source === 'none' ? 'connection' : 'engine';
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260914-usb06` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260914-usb07` }),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('div', {}, [ E('h2', {}, 'Настройки OUM'), E('p', { 'class': 'oum-muted' }, 'Сеть, Wi‑Fi и защищённое подключение') ])
 			]),
@@ -357,7 +362,24 @@ return view.extend({
 						])
 					]) ] : []),
 					...(capabilities.usb_host ? [ E('div', { id: 'usb-internet-settings', 'class': 'oum-wisp-inline', hidden: wanMode === 'usb' ? null : '' }, [
-						E('p', { 'class': 'oum-wisp-intro' }, [ E('strong', {}, 'Интернет с телефона по USB'), E('span', {}, usbInternetNote) ])
+						E('p', { 'class': 'oum-wisp-intro' }, [ E('strong', {}, mobileModem ? 'Мобильный интернет по USB' : 'Интернет с телефона по USB'), E('span', {}, usbInternetNote) ]),
+						...(mobileModem ? [
+							field('APN', E('input', { id: 'mobile-apn', maxlength: 100, autocomplete: 'off', value: usbInternet.apn || 'internet', placeholder: 'internet' })),
+							E('details', { 'class': 'oum-mobile-auth' }, [
+								E('summary', {}, 'PIN и авторизация'),
+								E('div', { 'class': 'oum-mobile-auth-fields' }, [
+									field('PIN SIM-карты', E('input', { id: 'mobile-pin', type: 'password', inputmode: 'numeric', pattern: '[0-9]*', minlength: 4, maxlength: 8, autocomplete: 'off', placeholder: usbInternet.pin_set ? 'Не изменять' : 'Не задан' })),
+									field('Авторизация', E('select', { id: 'mobile-auth' }, [
+										E('option', { value: 'none', selected: usbInternet.auth === 'none' ? '' : null }, 'Не требуется'),
+										E('option', { value: 'pap', selected: usbInternet.auth === 'pap' ? '' : null }, 'PAP'),
+										E('option', { value: 'chap', selected: usbInternet.auth === 'chap' ? '' : null }, 'CHAP'),
+										E('option', { value: 'both', selected: usbInternet.auth === 'both' ? '' : null }, 'PAP или CHAP')
+									])),
+									field('Логин', E('input', { id: 'mobile-username', maxlength: 128, autocomplete: 'username', value: usbInternet.username || '', placeholder: 'Не требуется' })),
+									field('Новый пароль', E('input', { id: 'mobile-password', type: 'password', maxlength: 256, autocomplete: 'new-password', placeholder: usbInternet.password_set ? 'Не изменять' : 'Не требуется' }))
+								])
+							])
+						] : [])
 					]) ] : []),
 					E('p', { 'class': 'oum-help' }, [ 'Сейчас: ', E('strong', {}, wan.up ? 'подключено' : 'нет соединения'), wanMode === 'usb' ? ' · USB' : '', wan.ipv4 ? ` · ${wan.ipv4}` : '' ]),
 					E('div', { 'class': 'oum-setting-actions', id: 'wan-wired-actions', hidden: wisp.enabled ? '' : null }, [
@@ -370,15 +392,15 @@ return view.extend({
 			E('section', { 'class': 'oum-settings-panel oum-usb-panel' }, [
 				E('div', { 'class': 'oum-usb-head' }, [
 					E('div', {}, [ E('h3', {}, 'USB'), E('p', { 'class': 'oum-help' }, 'Накопитель, общий доступ, загрузки и медиатека.') ]),
-					E('span', { 'class': 'oum-network-status', 'data-state': usb.mounted ? 'active' : (usb.storage_attached ? 'warning' : '') }, usb.mounted ? 'Подключён' : (usb.storage_attached ? 'Найден' : 'Нет устройства'))
+					E('span', { 'class': 'oum-network-status', 'data-state': usb.mounted ? 'active' : (!modemWithoutDisk && usb.storage_attached ? 'warning' : '') }, usb.mounted ? 'Подключён' : (modemWithoutDisk ? 'Нет накопителя' : (usb.storage_attached ? 'Найден' : 'Нет устройства')))
 				]),
 				E('div', { 'class': 'oum-usb-device' }, [
 					E('strong', {}, usbSummary),
 					...(usb.disk ? [ E('small', {}, `${usb.disk}${usb.partition ? ` · ${usb.partition}` : ''}${usb.fs_type ? ` · ${usb.fs_type}` : ''}${usb.mountpoint ? ` · ${usb.mountpoint}` : ''}`) ] : []),
-					...(!usb.runtime_ready && usb.storage_attached ? [ E('p', { 'class': 'oum-help' }, 'OUM установит только драйверы USB-storage, ext4 и средства безопасного монтирования.') ] : [])
+					...(!modemWithoutDisk && !usb.runtime_ready && usb.storage_attached ? [ E('p', { 'class': 'oum-help' }, 'OUM установит только драйверы USB-storage, ext4 и средства безопасного монтирования.') ] : [])
 				]),
 				E('div', { 'class': 'oum-setting-actions oum-usb-actions' }, [
-					...(!usb.runtime_ready ? [ E('button', { 'class': 'btn cbi-button-action', id: 'prepare-usb-storage', 'data-system-action': '', disabled: usb.storage_attached ? null : '' }, 'Установить поддержку') ] : []),
+					...(!modemWithoutDisk && !usb.runtime_ready ? [ E('button', { 'class': 'btn cbi-button-action', id: 'prepare-usb-storage', 'data-system-action': '', disabled: usb.storage_attached ? null : '' }, 'Установить поддержку') ] : []),
 					...(usb.runtime_ready && usb.disk && !usb.mounted && usb.fs_type === 'ext4' ? [ E('button', { 'class': 'btn cbi-button-action', id: 'mount-usb-storage', 'data-system-action': '' }, 'Подключить') ] : []),
 					...(usb.mounted ? [ E('button', { 'class': 'btn', id: 'unmount-usb-storage', 'data-system-action': '' }, 'Безопасно отключить') ] : []),
 					...(usb.runtime_ready && usb.disk ? [ E('button', { 'class': 'btn cbi-button-negative', id: 'format-usb-storage', 'data-system-action': '' }, 'Форматировать ext4') ] : [])
@@ -1123,9 +1145,16 @@ return view.extend({
 		root.querySelector('#apply-wan').addEventListener('click', async () => {
 			const type = selected('wan_type'), username = value('#pppoe-user'), password = rawValue('#pppoe-password');
 			if (type === 'pppoe' && !username) return ui.addNotification(null, E('p', {}, 'Введите логин PPPoE.'), 'warning');
-			const description = type === 'usb' ? 'OUM установит драйвер Android RNDIS и переключит интернет на телефон. Возможен расход мобильного трафика; кабельный WAN сохранится для возврата.' : 'Интернет кратковременно отключится. Предыдущую конфигурацию можно будет вернуть.';
+			const apn = root.querySelector('#mobile-apn') ? value('#mobile-apn') : '';
+			const pin = root.querySelector('#mobile-pin') ? rawValue('#mobile-pin') : '';
+			const mobileUsername = root.querySelector('#mobile-username') ? value('#mobile-username') : '';
+			const mobilePassword = root.querySelector('#mobile-password') ? rawValue('#mobile-password') : '';
+			const mobileAuth = root.querySelector('#mobile-auth') ? value('#mobile-auth') : 'none';
+			if (type === 'usb' && mobileModem && !apn) return ui.addNotification(null, E('p', {}, 'Введите APN оператора.'), 'warning');
+			if (type === 'usb' && pin && !/^[0-9]{4,8}$/.test(pin)) return ui.addNotification(null, E('p', {}, 'PIN должен содержать от 4 до 8 цифр.'), 'warning');
+			const description = type === 'usb' ? (mobileModem ? 'OUM определит протокол модема, установит только нужные компоненты и попробует подключиться. Кабельный WAN сохранится и автоматически вернётся при ошибке.' : 'OUM установит драйвер Android RNDIS и переключит интернет на телефон. Возможен расход мобильного трафика; кабельный WAN сохранится для возврата.') : 'Интернет кратковременно отключится. Предыдущую конфигурацию можно будет вернуть.';
 			if (!await confirmation('Изменить подключение?', description, 'Применить', false)) return;
-			start(callApplyWan(type, username, password));
+			start(callApplyWan(type, username, password, apn, pin, mobileUsername, mobilePassword, mobileAuth));
 		});
 		root.querySelector('#rollback-wifi').addEventListener('click', async () => {
 			if (await confirmation('Вернуть Wi-Fi?', 'Будет восстановлена конфигурация до последнего изменения через OUM.', 'Восстановить', false)) start(callRollback('wifi'));

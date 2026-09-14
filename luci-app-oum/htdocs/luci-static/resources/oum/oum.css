@@ -1858,6 +1858,31 @@ body.dark .oum-help-page {
   color: var(--oum-subtle);
   line-height: 1.45;
 }
+.oum-mobile-auth {
+  margin-top: 10px;
+  border-top: 1px solid var(--oum-line);
+}
+.oum-mobile-auth > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  cursor: pointer;
+  color: var(--oum-subtle);
+  font-weight: 600;
+  list-style: none;
+}
+.oum-mobile-auth > summary::-webkit-details-marker { display: none; }
+.oum-mobile-auth > summary::after { content: "+"; color: var(--oum-action); font-size: 1rem; }
+.oum-mobile-auth[open] > summary::after { content: "−"; }
+.oum-mobile-auth-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 10px;
+}
+.oum-mobile-auth-fields .oum-setting-field { min-width: 0; margin: 5px 0; }
+.oum-mobile-auth-fields input,
+.oum-mobile-auth-fields select { width: 100%; min-width: 0; box-sizing: border-box; }
 .oum-wisp-inline .oum-wisp-status {
   margin: 0 0 12px;
   border: 1px solid var(--oum-line);
@@ -3451,6 +3476,12 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
 
 /* Optimize WISP sheet (mobile): compact one-screen layout, scan row in one line. */
 @media (max-width: 900px) {
+  #usb-internet-settings.oum-wisp-inline { margin: 10px 0 0 !important; padding: 12px !important; }
+  #usb-internet-settings .oum-wisp-intro { margin-bottom: 8px !important; }
+  #usb-internet-settings > .oum-setting-field { margin: 8px 0 0 !important; }
+  #usb-internet-settings .oum-mobile-auth-fields { gap: 0 8px; }
+  #usb-internet-settings .oum-mobile-auth-fields input,
+  #usb-internet-settings .oum-mobile-auth-fields select { font-size: 16px; }
   #wisp-settings.oum-wisp-inline { margin: 10px 0 0 !important; padding: 12px !important; border-radius: 12px !important; }
   #wisp-settings .oum-wisp-intro { margin: 0 0 8px !important; gap: 2px !important; }
   #wisp-settings .oum-wisp-intro strong { font-size: 12.5px !important; }
