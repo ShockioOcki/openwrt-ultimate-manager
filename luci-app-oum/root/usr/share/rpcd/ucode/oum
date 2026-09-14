@@ -797,7 +797,11 @@ function usbStorageStatusData() {
 		tmdb_key_set: false,
 		sorter_last_run: 0,
 		sorter_result: '',
-		sorter_message: ''
+		sorter_message: '',
+		swap_present: false,
+		swap_enabled: false,
+		swap_size_bytes: 0,
+		swap_used_bytes: 0
 	};
 	if (!result.available)
 		return result;
@@ -808,9 +812,9 @@ function usbStorageStatusData() {
 		let pair = match(line, /^([a-z0-9_]+)=(.*)$/);
 		if (!pair)
 			continue;
-		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted', 'smb_installed', 'smb_enabled', 'smb_running', 'aria2_installed', 'aria2_enabled', 'aria2_running', 'ariang_ready', 'dlna_installed', 'dlna_enabled', 'dlna_running', 'sorter_installed', 'sorter_enabled', 'tmdb_key_set' ])
+		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted', 'smb_installed', 'smb_enabled', 'smb_running', 'aria2_installed', 'aria2_enabled', 'aria2_running', 'ariang_ready', 'dlna_installed', 'dlna_enabled', 'dlna_running', 'sorter_installed', 'sorter_enabled', 'tmdb_key_set', 'swap_present', 'swap_enabled' ])
 			result[pair[1]] = trim(pair[2]) == '1';
-		else if (pair[1] in [ 'size_bytes', 'sorter_last_run' ])
+		else if (pair[1] in [ 'size_bytes', 'sorter_last_run', 'swap_size_bytes', 'swap_used_bytes' ])
 			result[pair[1]] = +(trim(pair[2]) || 0);
 		else if (pair[1] in result)
 			result[pair[1]] = trim(pair[2]);
@@ -1961,6 +1965,21 @@ const methods = {
 			if (!current.sorter_enabled)
 				return failure('usb_sorter_stopped', 'Сначала включите сортировщик.');
 			return startSystemJob('usb_sorter_run', {});
+		}
+	},
+
+	setUsbSwap: {
+		args: { enabled: false },
+		call: function(request) {
+			let enabled = request.args.enabled == true;
+			let current = usbStorageStatusData();
+			if (enabled && !current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (enabled && current.swap_enabled)
+				return failure('usb_swap_running', 'Swap уже включён.');
+			if (!enabled && !current.swap_enabled)
+				return failure('usb_swap_stopped', 'Swap уже выключен.');
+			return startSystemJob(enabled ? 'usb_swap_enable' : 'usb_swap_disable', {});
 		}
 	},
 

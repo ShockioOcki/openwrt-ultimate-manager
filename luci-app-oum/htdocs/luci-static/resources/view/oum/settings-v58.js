@@ -30,6 +30,7 @@ const callSetUsbAria2 = rpc.declare({ object: 'oum', method: 'setUsbAria2', para
 const callSetUsbDlna = rpc.declare({ object: 'oum', method: 'setUsbDlna', params: [ 'enabled' ], expect: { '': {} } });
 const callConfigureUsbSorter = rpc.declare({ object: 'oum', method: 'configureUsbSorter', params: [ 'enabled', 'tmdb_key' ], expect: { '': {} } });
 const callRunUsbSorter = rpc.declare({ object: 'oum', method: 'runUsbSorter', expect: { '': {} } });
+const callSetUsbSwap = rpc.declare({ object: 'oum', method: 'setUsbSwap', params: [ 'enabled' ], expect: { '': {} } });
 const callScanWifi = rpc.declare({ object: 'oum', method: 'scanWifi', params: [ 'band' ], expect: { '': {} } });
 const callSetWisp = rpc.declare({ object: 'oum', method: 'setWisp', params: [ 'enabled', 'ssid', 'password', 'band' ], expect: { '': {} } });
 const callRollback = rpc.declare({ object: 'oum', method: 'rollbackSettings', params: [ 'kind' ], expect: { '': {} } });
@@ -209,7 +210,7 @@ return view.extend({
 		const lan = settings.lan || { address: '192.168.5.1', prefix: 24, rollback: false, rollback_address: '' };
 		const mesh = settings.mesh || { enabled: false, id: '', band: '5g' };
 		const wisp = settings.wisp || { enabled: false, connected: false, ssid: '', ip: '', signal: null, band: '2g', rollback: false };
-		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '', aria2_installed: false, aria2_enabled: false, aria2_running: false, ariang_ready: false, aria2_dir: '', aria2_secret_b64: '', dlna_installed: false, dlna_enabled: false, dlna_running: false, dlna_media_dir: '', sorter_installed: false, sorter_enabled: false, tmdb_key_set: false, sorter_last_run: 0, sorter_result: '', sorter_message: '' };
+		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '', aria2_installed: false, aria2_enabled: false, aria2_running: false, ariang_ready: false, aria2_dir: '', aria2_secret_b64: '', dlna_installed: false, dlna_enabled: false, dlna_running: false, dlna_media_dir: '', sorter_installed: false, sorter_enabled: false, tmdb_key_set: false, sorter_last_run: 0, sorter_result: '', sorter_message: '', swap_present: false, swap_enabled: false, swap_size_bytes: 0, swap_used_bytes: 0 };
 		const project = settings.project || { version: 'development', rollback: false };
 		const projectUpdatable = project.version && project.version !== 'development';
 		const dns = settings.dns || {
@@ -273,12 +274,13 @@ return view.extend({
 		const ariaHost = lan.address || '192.168.5.1';
 		const ariangUrl = `http://${ariaHost}/ariang/#!/settings/rpc/set?protocol=http&host=${ariaHost}&port=6800&interface=jsonrpc&secret=${usb.aria2_secret_b64 || ''}`;
 		const sorterNote = usb.sorter_enabled ? (usb.sorter_result === 'waiting' ? 'Ждёт завершения загрузок' : (usb.sorter_message || 'Проверка каждые 5 минут')) : 'TMDB · фильмы и сериалы';
+		const swapNote = usb.swap_enabled ? `${usb.swap_used_bytes > 0 ? formatBytes(usb.swap_used_bytes) : '0 Б'} занято из ${formatBytes(usb.swap_size_bytes)}` : (usb.swap_present ? '512 МБ · готов к включению' : '512 МБ · защита при нехватке RAM');
 		let selectedSource = status.pending_source !== 'none' ? status.pending_source :
 			(status.active_source !== 'none' ? status.active_source : 'subscription');
 		if (engines.current === 'passwall' && selectedSource === 'awg') selectedSource = 'subscription';
 		const initialVpnTab = status.pending_source !== 'none' && status.active_source === 'none' ? 'connection' : 'engine';
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260914-usb04` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260914-usb05` }),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('div', {}, [ E('h2', {}, 'Настройки OUM'), E('p', { 'class': 'oum-muted' }, 'Сеть, Wi‑Fi и защищённое подключение') ])
 			]),
@@ -393,7 +395,10 @@ return view.extend({
 						E('div', {}, [ E('strong', {}, 'Сортировщик'), E('small', {}, sorterNote) ]),
 						E('button', { 'class': `btn ${usb.sorter_enabled ? '' : 'cbi-button-action'}`, id: 'configure-usb-sorter', 'data-system-action': '', disabled: usb.mounted || usb.sorter_enabled ? null : '' }, usb.sorter_enabled ? 'Управление' : 'Настроить')
 					]),
-					E('span', {}, [ E('strong', {}, 'Swap'), E('small', {}, 'Отдельная настройка') ])
+					E('article', { 'class': `oum-usb-service${usb.swap_enabled ? ' is-active' : ''}` }, [
+						E('div', {}, [ E('strong', {}, 'Swap'), E('small', {}, swapNote) ]),
+						E('button', { 'class': `btn ${usb.swap_enabled ? '' : 'cbi-button-action'}`, id: 'toggle-usb-swap', 'data-system-action': '', disabled: usb.mounted || usb.swap_enabled ? null : '' }, usb.swap_enabled ? 'Выключить' : 'Включить')
+					])
 				]),
 				E('p', { 'class': 'oum-help oum-usb-next' }, usb.mounted ? 'Каждая служба включается отдельно; отключение службы не удаляет файлы.' : 'Сначала подготовьте и подключите накопитель — сервисы останутся выключенными.')
 			]),
@@ -1192,6 +1197,16 @@ return view.extend({
 					} }, usb.sorter_enabled ? 'Сохранить' : 'Включить')
 				])
 			]);
+		});
+		const swapButton = root.querySelector('#toggle-usb-swap');
+		if (swapButton) swapButton.addEventListener('click', async () => {
+			const enable = !usb.swap_enabled;
+			const title = enable ? 'Включить swap?' : 'Выключить swap?';
+			const description = enable ?
+				(usb.swap_present ? 'OUM включит сохранённый swap-файл на USB-накопителе.' : 'OUM создаст на USB-накопителе swap-файл 512 МБ. Первый запуск может занять несколько минут.') :
+				'Swap будет безопасно отключён. Файл останется на накопителе для быстрого повторного включения.';
+			if (await confirmation(title, description, enable ? 'Включить swap' : 'Выключить swap', false))
+				start(callSetUsbSwap(enable));
 		});
 		root.querySelector('#create-backup').addEventListener('click', () => {
 			setBusy(true);

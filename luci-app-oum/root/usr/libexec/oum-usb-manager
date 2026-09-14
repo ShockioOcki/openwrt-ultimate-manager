@@ -20,6 +20,8 @@ SORTER_CONFIG=/etc/oum/media-organizer.conf
 SORTER_KEY=/etc/oum/tmdb_api_key
 SORTER_COMMAND=/usr/libexec/oum-media-organizer-run
 SORTER_CRON="*/5 * * * * $SORTER_COMMAND"
+SWAP_SECTION=oum_usb_swap
+SWAP_SIZE_MB=512
 
 clean_value() {
 	printf '%s' "${1:-}" | tr '\n\r\t' '   '
@@ -106,6 +108,15 @@ sorter_value() {
 	sed -n "s/^$key=//p" "$SORTER_CONFIG" | head -n 1
 }
 
+swap_active() {
+	path="${1:-}"
+	[ -n "$path" ] && awk -v path="$path" '$1 == path { found=1 } END { exit !found }' /proc/swaps
+}
+
+configured_swap_path() {
+	uci -q get "fstab.$SWAP_SECTION.device" 2>/dev/null || true
+}
+
 status() {
 	disk="$(usb_disk 2>/dev/null || true)"
 	partition=""
@@ -158,6 +169,25 @@ status() {
 	emit sorter_installed "$(apk info -e python3-light >/dev/null 2>&1 && [ -x /usr/libexec/oum-media-organizer ] && echo 1 || echo 0)"
 	emit sorter_enabled "$(sorter_enabled && echo 1 || echo 0)"
 	emit tmdb_key_set "$([ -s "$SORTER_KEY" ] && echo 1 || echo 0)"
+	swap_file=""
+	swap_size=0
+	swap_used=0
+	if [ -n "$mountpoint" ]; then
+		swap_file="$mountpoint/.oum/swapfile"
+		swap_values="$(awk -v path="$swap_file" '$1 == path { print $3 " " $4; exit }' /proc/swaps)"
+		if [ -n "$swap_values" ]; then
+			set -- $swap_values
+			swap_size="$((${1:-0} * 1024))"
+			swap_used="$((${2:-0} * 1024))"
+		elif [ -f "$swap_file" ]; then
+			swap_kb="$(du -k "$swap_file" 2>/dev/null | awk 'NR == 1 { print $1 + 0 }')"
+			swap_size="$(( ${swap_kb:-0} * 1024 ))"
+		fi
+	fi
+	emit swap_present "$([ -n "$swap_file" ] && [ -f "$swap_file" ] && echo 1 || echo 0)"
+	emit swap_enabled "$(swap_active "$swap_file" && echo 1 || echo 0)"
+	emit swap_size_bytes "$swap_size"
+	emit swap_used_bytes "$swap_used"
 	state_dir="$(sorter_value STATE_DIR)"
 	if [ -n "$state_dir" ] && [ -f "$state_dir/status" ]; then
 		emit sorter_last_run "$(sed -n 's/^last_run=//p' "$state_dir/status" | head -n 1)"
@@ -453,11 +483,73 @@ sorter_run() {
 	"$SORTER_COMMAND"
 }
 
+swap_enable() {
+	target="$(managed_mountpoint)" || { echo 'Mount the managed USB storage before enabling swap' >&2; return 1; }
+	prepare_private_root "$target"
+	swap_file="$target/.oum/swapfile"
+	swap_active "$swap_file" && return 0
+	created=0
+	if [ ! -f "$swap_file" ]; then
+		available_kb="$(df -Pk "$target" | awk 'NR == 2 { print $4 + 0 }')"
+		required_kb="$((SWAP_SIZE_MB * 1024 + 65536))"
+		[ "$available_kb" -ge "$required_kb" ] || { echo 'Not enough free space for the swap file' >&2; return 1; }
+		temporary="$swap_file.new.$$"
+		rm -f "$temporary"
+		trap 'rm -f "$temporary"' EXIT INT TERM
+		dd if=/dev/zero of="$temporary" bs=1M count="$SWAP_SIZE_MB" conv=fsync
+		chmod 0600 "$temporary"
+		mkswap "$temporary" >/dev/null
+		mv "$temporary" "$swap_file"
+		trap - EXIT INT TERM
+		created=1
+	else
+		chmod 0600 "$swap_file"
+	fi
+	if ! swapon "$swap_file"; then
+		[ "$created" -eq 0 ] || rm -f "$swap_file"
+		return 1
+	fi
+	uci -q batch <<-EOF
+		delete fstab.$SWAP_SECTION
+		set fstab.$SWAP_SECTION='swap'
+		set fstab.$SWAP_SECTION.device='$swap_file'
+		set fstab.$SWAP_SECTION.enabled='1'
+	EOF
+	uci -q commit fstab
+}
+
+swap_disable() {
+	swap_file="$(configured_swap_path)"
+	if [ -z "$swap_file" ]; then
+		target="$(managed_mountpoint 2>/dev/null || true)"
+		[ -z "$target" ] || swap_file="$target/.oum/swapfile"
+	fi
+	! swap_active "$swap_file" || swapoff "$swap_file"
+	uci -q delete "fstab.$SWAP_SECTION" 2>/dev/null || true
+	uci -q commit fstab
+}
+
+restore_swap() {
+	target="$1"
+	swap_file="$(configured_swap_path)"
+	enabled="$(uci -q get "fstab.$SWAP_SECTION.enabled" 2>/dev/null || true)"
+	[ "$enabled" = 1 ] && [ "$swap_file" = "$target/.oum/swapfile" ] && [ -f "$swap_file" ] || return 0
+	swap_active "$swap_file" || swapon "$swap_file"
+}
+
+deactivate_swap() {
+	target="$1"
+	swap_file="$(configured_swap_path)"
+	[ "$swap_file" = "$target/.oum/swapfile" ] || return 0
+	! swap_active "$swap_file" || swapoff "$swap_file"
+}
+
 format_disk() {
 	disk="$(require_usb_disk "${1:-}")"
 	[ "${2:-}" = ERASE ] || { echo 'Format confirmation is missing' >&2; return 1; }
 	# Formatting invalidates paths on the old filesystem. Leave USB services
 	# off until the user explicitly enables them for the freshly formatted disk.
+	swap_disable
 	sorter_disable
 	dlna_disable
 	aria2_disable
@@ -488,12 +580,15 @@ mount_disk() {
 	partition="$(disk_partition "$disk" 2>/dev/null || true)"
 	[ -n "$partition" ] || { echo 'USB disk has no partition' >&2; return 1; }
 	mount_partition "$partition"
+	target="$(managed_mountpoint)"
+	restore_swap "$target"
 }
 
 unmount_managed() {
 	partition="$(uci -q get "fstab.$FSTAB_SECTION.uuid" 2>/dev/null || true)"
 	[ -n "$partition" ] || return 0
 	target="$(uci -q get "fstab.$FSTAB_SECTION.target" 2>/dev/null || true)"
+	[ -z "$target" ] || deactivate_swap "$target"
 	service_running minidlna && /etc/init.d/minidlna stop
 	service_running aria2 && /etc/init.d/aria2 stop
 	service_running ksmbd && /etc/init.d/ksmbd stop
@@ -517,5 +612,7 @@ case "$ACTION" in
 	sorter-enable) sorter_enable ;;
 	sorter-disable) sorter_disable ;;
 	sorter-run) sorter_run ;;
-	*) echo "usage: $0 {status|prepare|format DEVICE ERASE|mount DEVICE|unmount|smb-enable|smb-disable|aria2-enable|aria2-disable|dlna-enable|dlna-disable|sorter-enable|sorter-disable|sorter-run}" >&2; exit 2 ;;
+	swap-enable) swap_enable ;;
+	swap-disable) swap_disable ;;
+	*) echo "usage: $0 {status|prepare|format DEVICE ERASE|mount DEVICE|unmount|smb-enable|smb-disable|aria2-enable|aria2-disable|dlna-enable|dlna-disable|sorter-enable|sorter-disable|sorter-run|swap-enable|swap-disable}" >&2; exit 2 ;;
 esac
