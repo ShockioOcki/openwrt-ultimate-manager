@@ -11,11 +11,11 @@ OUM-generated providers contain credentials and must retain mode `0600`.
 Diagnostic output must identify a provider by its generated ID and must never
 print the provider body or source URL.
 
-The LuCI `admin` account is intentionally separate from root and is limited to
-the `luci-app-oum` rpcd ACL. Do not grant it generic `file.exec`, wildcard ubus
-or direct write access to system UCI configurations. `admin/admin` and the
-`FirstRun/admin123` wireless network are temporary bootstrap credentials only;
-the first-run wizard must replace the panel password and the wireless network.
+OUM uses the stock OpenWrt `root` account for OUM, full LuCI and SSH. The
+first-run wizard may set one shared root password or deliberately leave it
+empty for a trusted LAN-only installation. Never expose LuCI, SSH or ubus to
+WAN while the password is empty. The `FirstRun/admin123` wireless network is a
+temporary bootstrap credential and must be replaced by the wizard.
 
 LuCI VPN input is written only to `/tmp/oum-vpn-job/input` with mode `0600`.
 The background importer must remove this file on every exit path. Status files

@@ -1,0 +1,11 @@
+{
+	"luci-theme-oum": {
+		"description": "OUM theme — read theme settings",
+		"read": {
+			"uci": [ "oum_theme", "luci" ]
+		},
+		"write": {
+			"uci": [ "oum_theme" ]
+		}
+	}
+}

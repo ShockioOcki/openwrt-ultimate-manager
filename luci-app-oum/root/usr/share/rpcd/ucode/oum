@@ -4,7 +4,7 @@ import { access, basename, dirname, glob, open, popen, readfile } from 'fs';
 import { cursor } from 'uci';
 import { connect } from 'ubus';
 
-const CONFIGS = [ 'network', 'wireless', 'rpcd', 'oum' ];
+const CONFIGS = [ 'network', 'wireless', 'rpcd', 'dropbear', 'oum' ];
 const BACKUP_DIR = '/tmp/oum-setup-backup';
 const VPN_JOB_DIR = '/tmp/oum-vpn-job';
 const VPN_JOB_LOCK = '/tmp/oum-vpn-job.lock';
@@ -14,6 +14,13 @@ const SYSTEM_JOB_LOCK = '/tmp/oum-system-job.lock';
 const BACKUP_ENCODED = '/tmp/oum-backup.b64';
 const RESTORE_INPUT = '/tmp/oum-restore.b64';
 const PASSWALL_NODE_CACHE = '/tmp/oum-passwall-nodes.cache';
+const OPENCLASH_NODE_CACHE = '/tmp/oum-openclash-nodes.cache';
+const ZAPRET_STRATEGY_STATE = '/etc/oum/zapret-strategy-state';
+const TRAFFIC_CURRENT = '/tmp/oum-traffic-current.tsv';
+const TRAFFIC_HISTORY = '/tmp/oum-traffic-history.tsv';
+const TRAFFIC_TIMESTAMP = '/tmp/oum-traffic-timestamp';
+const SUPPORT_DIR = '/tmp/oum-support';
+const SUPPORT_AUDIT = '/etc/oum/support/audit.log';
 
 function shellquote(value) {
 	return `'${replace(value ?? '', "'", "'\\''")}'`;
@@ -60,12 +67,100 @@ function readKeyValues(path, allowed) {
 }
 
 function systemJobStatus() {
-	let values = readKeyValues(`${SYSTEM_JOB_DIR}/status`, [ 'state', 'action', 'code', 'message' ]);
+	let values = readKeyValues(`${SYSTEM_JOB_DIR}/status`, [ 'state', 'action', 'code', 'message', 'progress', 'total', 'best' ]);
 	return {
 		state: values.state ?? 'idle',
 		action: values.action ?? '',
 		code: values.code ?? '',
-		message: values.message ?? ''
+		message: values.message ?? '',
+		progress: +(values.progress ?? 0),
+		total: +(values.total ?? 0),
+		best: values.best ?? ''
+	};
+}
+
+function clearSystemJobStatus(action, code) {
+	if (access(SYSTEM_JOB_LOCK))
+		return failure('configuration_busy', 'Системная операция ещё выполняется.');
+	let current = systemJobStatus();
+	if (current.state == 'running')
+		return failure('configuration_busy', 'Системная операция ещё выполняется.');
+	if (length(action ?? '') && current.action != action)
+		return failure('status_changed', 'Состояние уже относится к другой операции.');
+	if (length(code ?? '') && current.code != code)
+		return failure('status_changed', 'Состояние операции уже изменилось.');
+	if (system(`rm -f ${SYSTEM_JOB_DIR}/status`) != 0)
+		return failure('status_clear_failed', 'Не удалось очистить завершённое уведомление.');
+	return { ok: true };
+}
+
+function supportStatusData() {
+	if (!access('/usr/libexec/oum-support'))
+		return { available: false, state: 'unavailable', message: 'Компонент удалённой поддержки не установлен.' };
+	let process = popen('/usr/libexec/oum-support status 2>/dev/null');
+	if (process) {
+		process.read('all');
+		process.close();
+	}
+	let value = readKeyValues(`${SUPPORT_DIR}/status`, [ 'state', 'mode', 'hostname', 'port', 'connect_command', 'web_command', 'web_url', 'provider', 'started_at', 'expires_at', 'message', 'backup_available' ]);
+	return {
+		available: true,
+		client_ready: system("ssh -V 2>&1 | grep -qi OpenSSH") == 0,
+		state: value.state ?? 'idle',
+		mode: value.mode ?? '',
+		hostname: value.hostname ?? '',
+		port: +(value.port ?? 0),
+		connect_command: value.connect_command ?? '',
+		web_command: value.web_command ?? '',
+		web_url: value.web_url ?? '',
+		provider: value.provider ?? 'pinggy',
+		started_at: +(value.started_at ?? 0),
+		expires_at: +(value.expires_at ?? 0),
+		message: value.message ?? 'Удалённая поддержка выключена.',
+		backup_available: value.backup_available == '1',
+		audit: readfile(SUPPORT_AUDIT) ?? ''
+	};
+}
+
+function zapretOptions() {
+	const uci = cursor();
+	let config = null;
+	uci.foreach('zapret', 'main', (section) => {
+		if (!config && section.NFQWS_OPT != null)
+			config = section;
+	});
+	return config?.NFQWS_OPT ?? '';
+}
+
+function zapretStrategyData() {
+	let strategies = [];
+	for (let index = 1; index <= 27; index++)
+		push(strategies, { id: sprintf('Yv%02d', index), label: sprintf('Yv%02d', index) });
+	let options = zapretOptions();
+	let marker = null;
+	for (let line in split(options, '\n')) {
+		let candidate = match(line, /^#OUM_YOUTUBE (Yv[0-9][0-9])$/);
+		if (candidate) marker = candidate;
+	}
+	let state = readKeyValues(ZAPRET_STRATEGY_STATE, [ 'catalog_revision', 'current', 'last_mode', 'last_ok', 'last_total', 'last_elapsed_ms', 'last_checked' ]);
+	let job = systemJobStatus();
+	return {
+		available: access('/usr/libexec/oum-zapret-strategy') && access('/etc/init.d/zapret') ? true : false,
+		running: system("pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1") == 0,
+		current: marker ? marker[1] : '',
+		catalog_revision: state.catalog_revision ?? '189abafd50aed17f8c7414695d0d47d129a6b0dd',
+		catalog_total: 27,
+		rollback: access('/etc/oum/rollback/zapret-before-strategy') ? true : false,
+		last_mode: state.last_mode ?? '',
+		last_ok: +(state.last_ok ?? 0),
+		last_total: +(state.last_total ?? 0),
+		last_elapsed_ms: +(state.last_elapsed_ms ?? 0),
+		last_checked: +(state.last_checked ?? 0),
+		busy: match(job.action ?? '', /^zapret_/) && job.state == 'running' ? true : false,
+		progress: job.progress ?? 0,
+		total: job.total ?? 0,
+		best: job.best ?? '',
+		strategies
 	};
 }
 
@@ -104,28 +199,123 @@ function startSystemJob(action, payload, inputPath, inputData) {
 
 function wirelessStations() {
 	let stations = {};
-	for (let path in glob('/sys/class/net/*/wireless')) {
-		let device = basename(dirname(path));
-		let process = popen(`/usr/bin/iwinfo ${device} assoclist 2>/dev/null`);
-		if (!process)
+	let bus = connect();
+	let process = popen("/bin/ubus list 'hostapd.*' 2>/dev/null");
+	if (!process)
+		return stations;
+	for (let line = process.read('line'); length(line); line = process.read('line')) {
+		let object = trim(line);
+		if (!match(object, /^hostapd\.[A-Za-z0-9_.-]+$/))
 			continue;
-		for (let line = process.read('line'); length(line); line = process.read('line')) {
-			let mac = match(line, /^([0-9A-Fa-f:]{17})\s/);
-			if (mac)
-				stations[uc(mac[1])] = true;
+		let status = bus?.call(object, 'get_clients') ?? {};
+		for (let mac in (status.clients ?? {})) {
+			if (match(mac, /^[0-9A-Fa-f:]{17}$/))
+				stations[uc(mac)] = true;
 		}
-		process.close();
 	}
+	process.close();
 	return stations;
 }
 
+function deviceAliasLength(value) {
+	let count = 0;
+	for (let i = 0; i < length(value); i++) {
+		let byte = ord(substr(value, i, 1));
+		if ((byte & 0xc0) != 0x80)
+			count++;
+	}
+	return count;
+}
+
+function validDeviceAlias(value) {
+	if (type(value) != 'string')
+		return false;
+	let count = deviceAliasLength(value);
+	if (count > 32)
+		return false;
+	for (let i = 0; i < length(value); i++) {
+		let byte = ord(substr(value, i, 1));
+		if (byte >= 0x80)
+			continue;
+		let allowed = byte == 32 || byte == 45 || byte == 46 || byte == 95 ||
+			(byte >= 48 && byte <= 57) || (byte >= 65 && byte <= 90) ||
+			(byte >= 97 && byte <= 122);
+		if (!allowed)
+			return false;
+	}
+	return true;
+}
+
+function deviceSectionHasState(uci, section) {
+	return (uci.get('oum', section, 'policy') ?? 'default') != 'default' ||
+		uci.get('oum', section, 'parental_managed') == '1' ||
+		uci.get('oum', section, 'paused') == '1' ||
+		uci.get('oum', section, 'manual_paused') == '1' ||
+		uci.get('oum', section, 'schedule_paused') == '1' ||
+		uci.get('oum', section, 'sched_enabled') == '1' ||
+		(uci.get('oum', section, 'adblock') ?? 'inherit') != 'inherit';
+}
+
+function validScheduleTime(value) {
+	let found = match(value ?? '', /^([01][0-9]|2[0-3]):([0-5][0-9])$/);
+	return found ? true : false;
+}
+
+function validScheduleDays(value) {
+	if (type(value) != 'string' || !match(value, /^[1-7](,[1-7])*$/))
+		return false;
+	let seen = {};
+	for (let day in split(value, ',')) {
+		if (seen[day]) return false;
+		seen[day] = true;
+	}
+	return true;
+}
+
 function connectedClients(uci) {
-	let result = [];
+	let clients = {};
 	let stations = wirelessStations();
 	let policies = {};
+	let paused = {};
+	let aliases = {};
+	let parental = {};
+	let dhcpNames = {};
+	let aliasMigrated = false;
+	let lanValue = uci.get('network', 'lan', 'ipaddr') ?? '';
+	let lanAddress = replace(type(lanValue) == 'array' ? (lanValue[0] ?? '') : lanValue, /\/.*/, '');
+	let lanPrefix = replace(lanAddress, /\.[0-9]+$/, '.');
+	let lanDevice = uci.get('network', 'lan', 'device') ?? 'br-lan';
 	uci.foreach('oum', 'device', (device) => {
-		if (match(device.mac ?? '', /^[0-9A-Fa-f:]{17}$/))
-			policies[uc(device.mac)] = device.policy ?? 'default';
+		if (match(device.mac ?? '', /^[0-9A-Fa-f:]{17}$/)) {
+			let mac = uc(device.mac);
+			policies[mac] = device.policy ?? 'default';
+			paused[mac] = device.paused == '1';
+			let alias = trim(device.alias ?? '');
+			let legacy = trim(device.name ?? '');
+			if (!length(alias) && length(legacy) && legacy != '*' && lc(legacy) != 'unknown' && validDeviceAlias(legacy)) {
+				alias = legacy;
+				uci.set('oum', device['.name'], 'alias', alias);
+				aliasMigrated = true;
+			}
+			if (length(alias)) aliases[mac] = alias;
+			parental[mac] = {
+				managed: device.parental_managed == '1',
+				manual_paused: device.manual_paused == '1' || (device.paused == '1' && device.schedule_paused != '1' && device.manual_paused == null),
+				schedule_paused: device.schedule_paused == '1', sched_enabled: device.sched_enabled == '1',
+				sched_days: device.sched_days ?? '1,2,3,4,5', start: device.sched_start ?? '22:00', stop: device.sched_stop ?? '07:00',
+				adblock: device.adblock ?? 'inherit'
+			};
+		}
+	});
+	if (aliasMigrated)
+		uci.commit('oum');
+	uci.foreach('dhcp', 'host', (host) => {
+		let name = trim(host.name ?? '');
+		let hostMacs = type(host.mac) == 'array' ? host.mac : [ host.mac ];
+		if (!length(name)) return;
+		for (let hostMac in hostMacs)
+			if (match(hostMac ?? '', /^[0-9A-Fa-f:]{17}$/))
+				dhcpNames[uc(hostMac)] = name;
 	});
 	let leases = readfile('/tmp/dhcp.leases') ?? '';
 	for (let line in split(leases, '\n')) {
@@ -133,16 +323,122 @@ function connectedClients(uci) {
 		if (!fields)
 			continue;
 		let mac = uc(fields[2]);
-		push(result, {
-			name: fields[4] == '*' ? 'Неизвестное устройство' : fields[4],
+		let leaseName = fields[4] ?? '';
+		let usefulLeaseName = leaseName != '*' && length(leaseName) >= 2 && length(leaseName) <= 32 &&
+			!match(leaseName, /^android-[0-9a-f]+$/i);
+		clients[mac] = {
+			name: aliases[mac] ?? dhcpNames[mac] ?? (usefulLeaseName ? leaseName : ''),
+			alias: aliases[mac] ?? '',
 			mac,
 			ip: fields[3],
-			medium: stations[mac] ? 'wifi' : 'ethernet',
+			medium: stations[mac] ? 'wifi' : 'unknown',
 			expires: +fields[1],
-			policy: policies[mac] ?? 'default'
+			policy: policies[mac] ?? 'default',
+			paused: paused[mac] ?? false,
+			seen: stations[mac] ? true : false
+		};
+	}
+	let process = popen('/sbin/ip -4 neigh show 2>/dev/null');
+	if (process) {
+		for (let line = process.read('line'); length(line); line = process.read('line')) {
+			let fields = match(line, /^(\d+\.\d+\.\d+\.\d+)\s+dev\s+(\S+).*\slladdr\s+([0-9A-Fa-f:]{17}).*\s(REACHABLE|STALE|DELAY|PROBE|PERMANENT|NOARP)\s*$/);
+			if (!fields) continue;
+			if (fields[2] != lanDevice) continue;
+			if (length(lanPrefix) && substr(fields[1], 0, length(lanPrefix)) != lanPrefix) continue;
+			let mac = uc(fields[3]);
+			let current = clients[mac] ?? {};
+			clients[mac] = {
+				name: current.name ?? aliases[mac] ?? dhcpNames[mac] ?? '',
+				alias: aliases[mac] ?? '',
+				mac,
+				ip: fields[1],
+				medium: stations[mac] ? 'wifi' : 'ethernet',
+				expires: current.expires ?? 0,
+				policy: policies[mac] ?? 'default',
+				paused: paused[mac] ?? false,
+				seen: true
+			};
+		}
+		process.close();
+	}
+	let result = [];
+	for (let mac, client in clients) {
+		if (!client.seen)
+			continue;
+		if (!length(client.name ?? '')) client.name = `Устройство ${replace(substr(mac, 9), /:/g, '-')}`;
+		push(result, {
+			name: client.name,
+			alias: client.alias ?? '',
+			mac: client.mac,
+			ip: client.ip,
+			medium: client.medium,
+			expires: client.expires,
+			policy: client.policy,
+			paused: client.paused ?? false,
+			manual_paused: parental[mac]?.manual_paused ?? false,
+			schedule_paused: parental[mac]?.schedule_paused ?? false,
+			sched_enabled: parental[mac]?.sched_enabled ?? false,
+			sched_days: parental[mac]?.sched_days ?? '1,2,3,4,5',
+			start: parental[mac]?.start ?? '22:00',
+			stop: parental[mac]?.stop ?? '07:00',
+			adblock: parental[mac]?.adblock ?? 'inherit',
+			parental_managed: parental[mac]?.managed ?? false,
+			online: true,
+			seen: client.seen
 		});
 	}
-	return result;
+	return sort(result, (a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0));
+}
+
+function offlineClients(uci, online) {
+	let active = {};
+	for (let client in online)
+		active[client.mac] = true;
+	let result = [];
+	uci.foreach('oum', 'device', (device) => {
+		let mac = uc(device.mac ?? '');
+		if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/) || active[mac])
+			return;
+		let alias = trim(device.alias ?? '');
+		let policy = device.policy ?? 'default';
+		let isPaused = device.paused == '1';
+		if (!length(alias) && policy == 'default' && !isPaused && !deviceSectionHasState(uci, device['.name']))
+			return;
+		push(result, {
+			name: length(alias) ? alias : `Устройство ${replace(substr(mac, 9), /:/g, '-')}`,
+			alias,
+			mac,
+			ip: device.ip ?? '',
+			medium: 'offline',
+			expires: 0,
+			policy,
+			paused: isPaused,
+			manual_paused: device.manual_paused == '1' || (isPaused && device.schedule_paused != '1' && device.manual_paused == null),
+			schedule_paused: device.schedule_paused == '1',
+			sched_enabled: device.sched_enabled == '1',
+			sched_days: device.sched_days ?? '1,2,3,4,5',
+			start: device.sched_start ?? '22:00',
+			stop: device.sched_stop ?? '07:00',
+			adblock: device.adblock ?? 'inherit',
+			parental_managed: device.parental_managed == '1',
+			online: false,
+			seen: false
+		});
+	});
+	return sort(result, (a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0));
+}
+
+function parentalStatusData(uci) {
+	let online = connectedClients(uci);
+	let result = [];
+	for (let client in online)
+		if (client.parental_managed) push(result, client);
+	for (let client in offlineClients(uci, online))
+		if (client.parental_managed) push(result, client);
+	return {
+		mode: uci.get('oum', 'main', 'adguard_mode') ?? 'off',
+		devices: sort(result, (a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0))
+	};
 }
 
 function thermalStatus() {
@@ -162,13 +458,146 @@ function thermalStatus() {
 	return { maximum, sensors };
 }
 
+function mountedFilesystemUsage(target) {
+	if (!match(target ?? '', /^\/mnt\/oum-[A-Za-z0-9._-]+$/))
+		return null;
+	let source = '';
+	for (let line in split(readfile('/proc/mounts') ?? '', '\n')) {
+		let fields = match(line, /^(\S+)\s+(\S+)\s+/);
+		if (fields && fields[2] == target) {
+			source = fields[1];
+			break;
+		}
+	}
+	if (!length(source))
+		return null;
+	let process = popen(`df -P ${shellquote(target)} 2>/dev/null`);
+	if (!process)
+		return null;
+	let total = 0, used = 0;
+	for (let line = process.read('line'); length(line); line = process.read('line')) {
+		let fields = match(line, /^\S+\s+(\d+)\s+(\d+)\s+\d+\s+\d+%\s+\S+/);
+		if (fields) {
+			total = +fields[1] * 1024;
+			used = +fields[2] * 1024;
+		}
+	}
+	process.close();
+	return total > 0 ? { mounted: true, device: source, mountpoint: target, total, used } : null;
+}
+
+function healthStatus() {
+	let bus = connect();
+	let info = bus?.call('system', 'info') ?? {};
+	let board = bus?.call('system', 'board') ?? {};
+	let memory = info.memory ?? {};
+	let total = +(memory.total ?? 0);
+	let available = +(memory.available ?? memory.free ?? 0);
+	let used = total > available ? total - available : 0;
+	let thermal = thermalStatus();
+	let temperature = thermal.maximum;
+	let ports = [];
+	let portDevices = {};
+	for (let path in glob('/sys/class/net/*')) {
+		let name = basename(path);
+		if (!match(name, /^(wan|lan[0-9]+)$/))
+			continue;
+		let state = trim(readfile(`${path}/operstate`) ?? 'down');
+		let speed = +(trim(readfile(`${path}/speed`) ?? '0'));
+		push(ports, {
+			name,
+			device: name,
+			up: state == 'up',
+			speed: speed > 0 ? speed : 0,
+			rx_bytes: +(trim(readfile(`${path}/statistics/rx_bytes`) ?? '0')),
+			tx_bytes: +(trim(readfile(`${path}/statistics/tx_bytes`) ?? '0'))
+		});
+		portDevices[name] = true;
+	}
+	let wan = bus?.call('network.interface.wan', 'status') ?? {};
+	let wanDevice = wan.device ?? wan.l3_device ?? cursor().get('network', 'wan', 'device') ?? '';
+	if (match(wanDevice, /^[A-Za-z0-9_.-]+$/) && !portDevices[wanDevice] && access(`/sys/class/net/${wanDevice}`)) {
+		let state = trim(readfile(`/sys/class/net/${wanDevice}/operstate`) ?? 'down');
+		let speed = +(trim(readfile(`/sys/class/net/${wanDevice}/speed`) ?? '0'));
+		push(ports, {
+			name: 'wan',
+			device: wanDevice,
+			up: state == 'up',
+			speed: speed > 0 ? speed : 0,
+			rx_bytes: +(trim(readfile(`/sys/class/net/${wanDevice}/statistics/rx_bytes`) ?? '0')),
+			tx_bytes: +(trim(readfile(`/sys/class/net/${wanDevice}/statistics/tx_bytes`) ?? '0'))
+		});
+	}
+	ports = sort(ports, (a, b) => a.name == 'wan' ? -1 : (b.name == 'wan' ? 1 : (a.name < b.name ? -1 : 1)));
+	let root = info.root ?? {};
+	let tmp = info.tmp ?? {};
+	let usbStorage = mountedFilesystemUsage(cursor().get('fstab', 'oum_usb', 'target') ?? '');
+	return {
+		uptime: +(info.uptime ?? 0),
+		load: +(info.load?.[0] ?? 0) / 65535,
+		memory_total: total,
+		memory_available: available,
+		memory_used: used,
+		memory_cached: +(memory.cached ?? 0),
+		memory_buffered: +(memory.buffered ?? 0),
+		memory_percent: total > 0 ? used * 100 / total : 0,
+		root_total: +(root.total ?? 0) * 1024,
+		root_used: +(root.used ?? 0) * 1024,
+		tmp_total: +(tmp.total ?? 0) * 1024,
+		tmp_used: +(tmp.used ?? 0) * 1024,
+		usb_storage: usbStorage,
+		model: board.model ?? '',
+		kernel: board.kernel ?? '',
+		ports,
+		temperature,
+		temperature_state: temperature == null ? 'unknown' : (temperature < 65 ? 'normal' : (temperature <= 75 ? 'warm' : 'hot'))
+	};
+}
+
+function trafficStatusData() {
+	let last = +(trim(readfile(TRAFFIC_TIMESTAMP) ?? '0'));
+	if (access('/usr/libexec/oum-traffic') && !access('/tmp/oum-traffic.lock') && time() - last >= 60)
+		system('(/usr/libexec/oum-traffic) >/tmp/oum-traffic.log 2>&1 &');
+	let current = {}, first = {}, points = {};
+	for (let line in split(readfile(TRAFFIC_CURRENT) ?? '', '\n')) {
+		let fields = match(line, /^(\d+\.\d+\.\d+\.\d+)\t(\d+)\t(\d+)$/);
+		if (fields) current[fields[1]] = { down: +fields[2], up: +fields[3] };
+	}
+	let cutoff = time() - 86400;
+	for (let line in split(readfile(TRAFFIC_HISTORY) ?? '', '\n')) {
+		let fields = match(line, /^(\d+)\t(\d+\.\d+\.\d+\.\d+)\t(\d+)\t(\d+)$/);
+		if (!fields || +fields[1] < cutoff) continue;
+		let ip = fields[2], total = +fields[3] + +fields[4];
+		if (!first[ip]) first[ip] = { down: +fields[3], up: +fields[4] };
+		if (!points[ip]) points[ip] = [];
+		push(points[ip], total);
+	}
+	let result = {};
+	for (let ip, value in current) {
+		let base = first[ip] ?? { down: 0, up: 0 };
+		let down = value.down >= base.down ? value.down - base.down : value.down;
+		let up = value.up >= base.up ? value.up - base.up : value.up;
+		result[ip] = { down, up, points: slice(points[ip] ?? [], -24) };
+	}
+	return result;
+}
+
 function wifiStatus(uci) {
 	let networks = [];
 	uci.foreach('wireless', 'wifi-iface', (iface) => {
 		if (iface.mode == 'ap' && iface.disabled != '1' && length(iface.ssid ?? ''))
-			push(networks, { ssid: iface.ssid, device: iface.device ?? '' });
+			push(networks, {
+				ssid: iface.ssid,
+				device: iface.device ?? '',
+				password_set: length(iface.key ?? '') > 0,
+				encryption: iface.encryption ?? 'none'
+			});
 	});
 	return networks;
+}
+
+function podkopInstalled() {
+	return access('/etc/init.d/podkop') && access('/etc/config/podkop') && access('/etc/init.d/zapret');
 }
 
 function unmanagedTunnels(uci) {
@@ -179,13 +608,206 @@ function unmanagedTunnels(uci) {
 		let name = section['.name'] ?? '';
 		if (!(proto in [ 'amneziawg', 'wireguard' ]) || !match(name, /^[A-Za-z0-9_]+$/))
 			return;
+		// OUM keeps its own AWG interface between engine changes so Podkop can
+		// reuse it. It is managed by OUM even while another engine is active.
+		if (section.oum_managed == '1')
+			return;
+		if (podkopInstalled() && (uci.get('podkop', 'main', 'interface') ?? '') == name)
+			return;
 		let state = bus?.call(`network.interface.${name}`, 'status') ?? {};
 		push(result, { name, proto, up: state.up == true });
 	});
 	return result;
 }
 
+function radioPhyForBand(uci, band) {
+ let phy = '';
+ uci.foreach('wireless', 'wifi-device', (radio) => {
+  if (length(phy) || radio.band != band) return;
+  phy = radio.phy || '';
+  let section = radio['.name'];
+  if (!length(phy) && match(section, /^[A-Za-z0-9_-]+$/)) {
+   // Calling rpcd's iwinfo through ubus from inside rpcd deadlocks. The CLI
+   // resolves UCI path/macaddr to PHY directly, including disabled radios.
+   let process = popen(`/usr/bin/iwinfo nl80211 phyname ${section} 2>/dev/null`);
+   if (process) { phy = trim(process.read('all') || ''); process.close(); }
+  }
+ });
+ return match(phy, /^[A-Za-z0-9_-]+$/) ? phy : '';
+}
+
+function radioInterfaceForBand(uci, band) {
+	let phy = radioPhyForBand(uci, band);
+	if (!match(phy, /^[A-Za-z0-9_-]+$/))
+		return '';
+	let process = popen('/usr/bin/iwinfo 2>/dev/null');
+	if (!process)
+		return '';
+	let iface = '';
+	for (let line = process.read('line'); length(line); line = process.read('line')) {
+		let found = match(line, /^(\S+)\s+ESSID:/);
+		if (found && (found[1] == phy || substr(found[1], 0, length(phy) + 1) == `${phy}-`)) {
+			iface = found[1];
+			break;
+		}
+	}
+	process.close();
+	return iface;
+}
+
+function wispStatusData(uci) {
+	let enabled = uci.get('wireless', 'oum_wisp', 'mode') == 'sta' && uci.get('wireless', 'oum_wisp', 'disabled') != '1';
+	let bus = connect();
+	let state = enabled ? (bus?.call('network.interface.wwan', 'status') ?? {}) : {};
+	let device = uci.get('wireless', 'oum_wisp', 'device') ?? '';
+	let band = uci.get('wireless', device, 'band') ?? '2g';
+	let signal = null;
+	let iface = radioInterfaceForBand(uci, band);
+	if (enabled && length(iface)) {
+		let process = popen(`/usr/bin/iwinfo ${iface} info 2>/dev/null`);
+		if (process) {
+			for (let line = process.read('line'); length(line); line = process.read('line')) {
+				let found = match(line, /Signal:\s*(-?[0-9]+)\s*dBm/);
+				if (found) signal = +found[1];
+			}
+			process.close();
+		}
+	}
+	return {
+		enabled,
+		connected: enabled && state.up == true,
+		ssid: enabled ? (uci.get('wireless', 'oum_wisp', 'ssid') ?? '') : '',
+		ip: state['ipv4-address']?.[0]?.address ?? '',
+		signal,
+		band,
+		rollback: access('/etc/oum/rollback/wireless-wisp') ? true : false
+	};
+}
+
+function scanWifiNetworks(uci, band) {
+	let iface = radioInterfaceForBand(uci, band);
+	let temporaryIface = '';
+	if (!length(iface)) {
+		let phy = radioPhyForBand(uci, band);
+		if (!match(phy, /^[A-Za-z0-9_-]+$/))
+			return [];
+		temporaryIface = band == '5g' ? 'oum_scan5' : 'oum_scan2';
+		system(`/usr/sbin/iw dev ${temporaryIface} del >/dev/null 2>&1`);
+		if (system(`/usr/sbin/iw phy ${phy} interface add ${temporaryIface} type managed >/dev/null 2>&1`) != 0)
+			return [];
+		if (system(`/sbin/ip link set ${temporaryIface} up >/dev/null 2>&1`) != 0) {
+			system(`/usr/sbin/iw dev ${temporaryIface} del >/dev/null 2>&1`);
+			return [];
+		}
+		system('/bin/sleep 1');
+		iface = temporaryIface;
+	}
+	let process = popen(`/usr/bin/iwinfo ${iface} scan 2>/dev/null`);
+	if (!process) {
+		if (length(temporaryIface))
+			system(`/usr/sbin/iw dev ${temporaryIface} del >/dev/null 2>&1`);
+		return [];
+	}
+	let result = [], current = null;
+	let finish = () => {
+		if (!current || !length(current.ssid ?? '')) return;
+		let existing = filter(result, (item) => item.ssid == current.ssid)[0];
+		if (!existing || (current.signal ?? -200) > (existing.signal ?? -200)) {
+			if (existing) result = filter(result, (item) => item !== existing);
+			push(result, current);
+		}
+	};
+	for (let line = process.read('line'); length(line); line = process.read('line')) {
+		if (match(line, /^Cell [0-9]+ - Address:/)) {
+			finish();
+			current = { ssid: '', signal: -200, encryption: 'Неизвестно', band };
+			continue;
+		}
+		if (!current) continue;
+		let ssid = match(line, /^\s*ESSID:\s*"(.*)"\s*$/);
+		if (ssid) current.ssid = ssid[1];
+		let signal = match(line, /Signal:\s*(-?[0-9]+)\s*dBm/);
+		if (signal) current.signal = +signal[1];
+		let encryption = match(line, /^\s*Encryption:\s*(.+?)\s*$/);
+		if (encryption) current.encryption = trim(encryption[1]);
+	}
+	finish();
+	process.close();
+	if (length(temporaryIface))
+		system(`/usr/sbin/iw dev ${temporaryIface} del >/dev/null 2>&1`);
+	return sort(result, (a, b) => b.signal - a.signal || (a.ssid < b.ssid ? -1 : 1));
+}
+
+function usbNetworkDevice() {
+	let process = popen("for path in /sys/class/net/*/device; do driver=$(basename \"$(readlink -f \"$path/driver\")\") || continue; [ \"$driver\" = rndis_host ] || continue; basename \"$(dirname \"$path\")\"; exit 0; done");
+	if (!process)
+		return '';
+	let device = trim(process.read('line'));
+	process.close();
+	return match(device, /^[A-Za-z0-9_.-]+$/) ? device : '';
+}
+
+function rndisAttached() {
+	for (let path in glob('/sys/bus/usb/devices/*:*/bInterfaceClass')) {
+		if (lc(trim(readfile(path) ?? '')) != 'e0')
+			continue;
+		let root = replace(path, /\/bInterfaceClass$/, '');
+		if (trim(readfile(`${root}/bInterfaceSubClass`) ?? '') == '01' && trim(readfile(`${root}/bInterfaceProtocol`) ?? '') == '03')
+			return true;
+	}
+	return false;
+}
+
+function mobileManagerStatus() {
+	if (!access('/usr/libexec/oum-mobile-manager'))
+		return {};
+	let process = popen('/usr/libexec/oum-mobile-manager status 2>/dev/null');
+	if (!process)
+		return {};
+	let result = {};
+	let allowed = [ 'attached', 'family', 'device', 'vendor', 'product', 'vid', 'pid', 'storage_mode', 'needs_prepare' ];
+	for (let line in split(process.read('all'), '\n')) {
+		let pair = match(line, /^([a-z_]+)=(.*)$/);
+		if (pair && pair[1] in allowed)
+			result[pair[1]] = pair[2];
+	}
+	process.close();
+	return result;
+}
+
+function usbInternetStatusData(uci) {
+	let mobile = mobileManagerStatus();
+	let device = mobile.device ?? usbNetworkDevice();
+	let active = uci.get('oum', 'main', 'wan_source') == 'usb';
+	let status = active ? (connect()?.call('network.interface.wan', 'status') ?? {}) : {};
+	let family = mobile.family ?? (length(device) ? 'rndis' : 'none');
+	return {
+		attached: mobile.attached == '1' || rndisAttached() || length(device) > 0,
+		runtime_ready: mobile.needs_prepare == '0' || (family == 'rndis' && system("apk info -e kmod-usb-net-rndis >/dev/null 2>&1") == 0),
+		device,
+		family: active ? (uci.get('oum', 'main', 'usb_wan_family') ?? family) : family,
+		vendor: mobile.vendor ?? '',
+		product: mobile.product ?? '',
+		vid: mobile.vid ?? '',
+		pid: mobile.pid ?? '',
+		storage_mode: mobile.storage_mode == '1',
+		needs_prepare: mobile.needs_prepare == '1',
+		apn: uci.get('network', 'wan', 'apn') ?? 'internet',
+		pin_set: length(uci.get('network', 'wan', 'pincode') ?? '') > 0,
+		username: uci.get('network', 'wan', 'username') ?? '',
+		password_set: length(uci.get('network', 'wan', 'password') ?? '') > 0,
+		auth: uci.get('network', 'wan', 'auth') ?? 'none',
+		active,
+		connected: active && status.up == true,
+		ipv4: active ? (status['ipv4-address']?.[0]?.address ?? '') : ''
+	};
+}
+
 function networkStatus() {
+	let uci = cursor();
+	let wisp = wispStatusData(uci);
+	if (wisp.connected)
+		return { up: true, ipv4: wisp.ip, device: 'wwan', proto: 'dhcp', via: 'wifi', ssid: wisp.ssid };
 	let result = { up: false, ipv4: '', device: '', proto: '' };
 	let bus = connect();
 	let status = bus?.call('network.interface.wan', 'status');
@@ -195,20 +817,85 @@ function networkStatus() {
 	result.device = status.l3_device ?? status.device ?? '';
 	result.proto = status.proto ?? '';
 	result.ipv4 = status['ipv4-address']?.[0]?.address ?? '';
+	result.via = uci.get('oum', 'main', 'wan_source') == 'usb' ? 'usb' : 'wired';
 	return result;
 }
 
 function capabilityStatus() {
-	let usbNetwork = system("for path in /sys/class/net/*/device; do target=$(readlink -f \"$path\") || continue; case \"$target\" in */usb*/*) exit 0;; esac; done; exit 1") == 0;
+	let usbNetwork = length(usbNetworkDevice()) > 0;
 	let mobileControl = length(glob('/dev/cdc-wdm*')) > 0 || length(glob('/dev/ttyUSB*')) > 0;
 	return {
 		mesh_driver: system("iw list 2>/dev/null | grep -q 'mesh point'") == 0,
+		wisp_supported: system("iw list 2>/dev/null | grep -qE '\\* (managed|STA)$'") == 0,
 		mesh_runtime: system("apk info 2>/dev/null | grep -Eq '^wpad($|-(mesh-)?(mbedtls|openssl|wolfssl)$)'") == 0,
+		mesh_runtime_bundle: system("/usr/libexec/oum-mesh-runtime status >/dev/null 2>&1") == 0,
 		usb_host: length(glob('/sys/bus/usb/devices/usb*')) > 0,
 		usb_storage: length(glob('/sys/class/block/sd*')) > 0,
 		usb_network: usbNetwork,
+		usb_tether: rndisAttached(),
 		usb_modem: mobileControl
 	};
+}
+
+function usbStorageStatusData() {
+	let result = {
+		available: access('/usr/libexec/oum-usb-manager') ? true : false,
+		host_present: false,
+		storage_attached: false,
+		runtime_ready: false,
+		disk: '',
+		partition: '',
+		size_bytes: 0,
+		vendor: '',
+		model: '',
+		fs_type: '',
+		uuid: '',
+		label: '',
+		mountpoint: '',
+		mounted: false,
+		smb_installed: false,
+		smb_enabled: false,
+		smb_running: false,
+		smb_share: '',
+		aria2_installed: false,
+		aria2_enabled: false,
+		aria2_running: false,
+		ariang_ready: false,
+		aria2_dir: '',
+		aria2_secret_b64: '',
+		dlna_installed: false,
+		dlna_enabled: false,
+		dlna_running: false,
+		dlna_media_dir: '',
+		sorter_installed: false,
+		sorter_enabled: false,
+		tmdb_key_set: false,
+		sorter_last_run: 0,
+		sorter_result: '',
+		sorter_message: '',
+		swap_present: false,
+		swap_enabled: false,
+		swap_size_bytes: 0,
+		swap_used_bytes: 0
+	};
+	if (!result.available)
+		return result;
+	let process = popen('/usr/libexec/oum-usb-manager status 2>/dev/null');
+	if (!process)
+		return result;
+	for (let line = process.read('line'); length(line); line = process.read('line')) {
+		let pair = match(line, /^([a-z0-9_]+)=(.*)$/);
+		if (!pair)
+			continue;
+		if (pair[1] in [ 'host_present', 'storage_attached', 'runtime_ready', 'mounted', 'smb_installed', 'smb_enabled', 'smb_running', 'aria2_installed', 'aria2_enabled', 'aria2_running', 'ariang_ready', 'dlna_installed', 'dlna_enabled', 'dlna_running', 'sorter_installed', 'sorter_enabled', 'tmdb_key_set', 'swap_present', 'swap_enabled' ])
+			result[pair[1]] = trim(pair[2]) == '1';
+		else if (pair[1] in [ 'size_bytes', 'sorter_last_run', 'swap_size_bytes', 'swap_used_bytes' ])
+			result[pair[1]] = +(trim(pair[2]) || 0);
+		else if (pair[1] in result)
+			result[pair[1]] = trim(pair[2]);
+	}
+	process.close();
+	return result;
 }
 
 function passwallInstalled() {
@@ -222,6 +909,41 @@ function packageVersion(name) {
 	let value = trim(process.read('line'));
 	process.close();
 	return replace(value, `${name}-`, '');
+}
+
+function upstreamData() {
+	// Upstream releases cache (/tmp/oum-upstream.cache).
+	// Сверка пинов движков с latest-релизами GitHub (кэш /tmp/oum-upstream.cache).
+	// Запуск дешёвый: при свежем кэше скрипт выходит сразу, иначе — фон.
+	system('/usr/libexec/oum-upstream-check >/dev/null 2>&1');
+	let raw = readfile('/tmp/oum-upstream.cache');
+	let result = {};
+	if (!raw)
+		return result;
+	for (let line in split(raw, '\n')) {
+		let pair = match(line, /^([a-z_]+)=(.*)$/);
+		if (pair)
+			result[pair[1]] = pair[2];
+	}
+	return result;
+}
+
+function gearupStatusData() {
+	let installed = access('/tmp/gu/guplugin') || access('/usr/sbin/gu/guplugin_monitor.sh');
+	let binding = trim(readfile('/tmp/gu/activate_status') ?? '');
+	let uuid = trim(readfile('/tmp/gu/.uuplugin_uuid') ?? '');
+	let running = system('pidof guplugin >/dev/null 2>&1') == 0;
+	let monitor = system('pgrep -f guplugin_monitor >/dev/null 2>&1') == 0;
+	let boost = access('/sys/class/net/gu119') ? true : false;
+	return {
+		installed: installed ? true : false,
+		bound: length(binding) ? true : false,
+		binding: binding,
+		uuid: uuid,
+		running: running,
+		monitor: monitor,
+		boost: boost
+	};
 }
 
 function passwallCachePresent() {
@@ -239,12 +961,14 @@ function passwallCachePresent() {
 function engineStatusData() {
 	let passwall = passwallInstalled();
 	let openclash = access('/etc/init.d/openclash') && access('/etc/config/openclash');
+	let podkop = podkopInstalled();
 	let arch = trim(readfile('/etc/apk/arch') ?? '');
 	let release = readfile('/etc/openwrt_release') ?? '';
 	let supported = access('/usr/bin/apk') && arch == 'aarch64_cortex-a53' && match(release, /DISTRIB_RELEASE='25\.12\./);
 	return {
-		current: passwall ? 'passwall' : (openclash ? 'openclash' : 'none'),
+		current: podkop ? 'podkop' : (passwall ? 'passwall' : (openclash ? 'openclash' : 'none')),
 		supported: supported ? true : false,
+		upstream: upstreamData(),
 		passwall: {
 			installed: passwall ? true : false,
 			version: packageVersion('luci-app-passwall'),
@@ -257,6 +981,15 @@ function engineStatusData() {
 			version: packageVersion('luci-app-openclash'),
 			target_version: 'controlled-0.47.156',
 			saved: access('/etc/oum/engines/openclash/openclash-config.tar.gz') ? true : false
+		},
+		podkop: {
+			installed: podkop ? true : false,
+			version: packageVersion('podkop'),
+			target_version: '0.7.22 + Zapret 72.20260307',
+			saved: access('/etc/oum/engines/podkop/podkop-config.tar.gz') ? true : false,
+			interface: podkop ? (cursor().get('podkop', 'main', 'interface') ?? '') : '',
+			transport: podkop && cursor().get('podkop', 'main', 'connection_type') == 'proxy' ? 'reality' : 'awg',
+			youtube_mode: cursor().get('oum', 'main', 'youtube_mode') ?? 'zapret'
 		}
 	};
 }
@@ -282,8 +1015,12 @@ function settingsStatusData() {
 	let wan = networkStatus();
 	wan.username = uci.get('network', 'wan', 'username') ?? '';
 	wan.password_set = length(uci.get('network', 'wan', 'password') ?? '') > 0;
+	let lanValue = uci.get('network', 'lan', 'ipaddr') ?? '';
+	let lanAddress = replace(type(lanValue) == 'array' ? (lanValue[0] ?? '') : lanValue, /\/.*/, '');
+	let projectRollback = glob('/etc/oum/project-rollback/oum-*.tar.gz');
 	return {
 		wifi: {
+			enabled: length(wifiStatus(uci)) > 0,
 			mode: length(ap24.ssid ?? '') && ap24.ssid == ap5.ssid ? 'smart' : 'separate',
 			ssid_24: ap24.ssid ?? '',
 			ssid_5: ap5.ssid ?? '',
@@ -291,18 +1028,290 @@ function settingsStatusData() {
 			country: 'US'
 		},
 		wan,
+		lan: {
+			address: lanAddress || '192.168.5.1',
+			prefix: 24,
+			rollback: access('/etc/oum/rollback/network-lan') ? true : false,
+			rollback_address: trim(readfile('/etc/oum/rollback/lan-address') ?? '')
+		},
+		mesh: {
+			enabled: uci.get('wireless', 'oum_mesh', 'disabled') != '1' && uci.get('wireless', 'oum_mesh', 'mode') == 'mesh',
+			id: uci.get('wireless', 'oum_mesh', 'mesh_id') ?? '',
+			band: uci.get('wireless', uci.get('wireless', 'oum_mesh', 'device') ?? '', 'band') ?? '5g'
+		},
+		wisp: wispStatusData(uci),
+		project: {
+			version: trim(readfile('/etc/oum/version') ?? 'development'),
+			rollback: length(projectRollback) > 0
+		},
+		dns: {
+			openclash: uci.get('oum', 'main', 'dns_openclash') ?? '1.1.1.1',
+			bootstrap_openclash: uci.get('oum', 'main', 'bootstrap_dns_openclash') ?? '1.0.0.1',
+			passwall: uci.get('oum', 'main', 'dns_passwall') ?? '1.1.1.1',
+			bootstrap_passwall: uci.get('oum', 'main', 'bootstrap_dns_passwall') ?? '1.0.0.1',
+			podkop: uci.get('oum', 'main', 'dns_podkop') ?? '77.88.8.8',
+			bootstrap_podkop: uci.get('oum', 'main', 'bootstrap_dns_podkop') ?? '77.88.8.1'
+		},
 		engines: engineStatusData(),
+		reboot_required: access('/etc/oum/reboot-required') ? true : false,
 		unmanaged_tunnels: unmanagedTunnels(uci),
 		capabilities: capabilityStatus(),
+		usb_internet: usbInternetStatusData(uci),
+		usb_storage: usbStorageStatusData(),
 		rollback_wifi: access('/etc/oum/rollback/wireless') ? true : false,
 		rollback_wan: access('/etc/oum/rollback/network') ? true : false
 	};
 }
 
 function vpnReady() {
+	if (podkopInstalled())
+		return system("pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1") == 0;
 	if (passwallInstalled())
 		return system("pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1") == 0;
 	return system("pidof clash >/dev/null 2>&1 && nft list chain inet fw4 openclash 2>/dev/null | grep -q 'redirect to :7892'") == 0;
+}
+
+function podkopStatusData() {
+	if (!podkopInstalled())
+		return { installed: false, enabled: false, ready: false, zapret: false, interface: '' };
+	const uci = cursor();
+	let iface = uci.get('podkop', 'main', 'interface') ?? '';
+	let connectionType = uci.get('podkop', 'main', 'connection_type') ?? '';
+	let proxyString = uci.get('podkop', 'main', 'proxy_string') ?? '';
+	let endpointMatch = match(proxyString, /@([^:\/?#]+):([0-9]+)/);
+	let bus = connect();
+	let tunnel = length(iface) ? (bus?.call(`network.interface.${iface}`, 'status') ?? {}) : {};
+	let options = zapretOptions();
+	let zapretMarker = null;
+	for (let line in split(options, '\n')) {
+		let candidate = match(line, /^#OUM_YOUTUBE (Yv[0-9][0-9])$/);
+		if (candidate) zapretMarker = candidate;
+	}
+	return {
+		installed: true,
+		enabled: system('/etc/init.d/podkop enabled >/dev/null 2>&1') == 0,
+		ready: system('pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1') == 0,
+		zapret: system("pgrep -f '/opt/zapret/nfq/nfqws' >/dev/null 2>&1") == 0,
+		interface: iface,
+		transport: connectionType == 'proxy' ? 'reality' : 'awg',
+		proxy_endpoint: endpointMatch ? `${endpointMatch[1]}:${endpointMatch[2]}` : '',
+		tunnel_up: tunnel.up == true,
+		version: packageVersion('podkop'),
+		zapret_version: packageVersion('zapret'),
+		zapret_strategy: zapretMarker ? zapretMarker[1] : '',
+		youtube_mode: uci.get('oum', 'main', 'youtube_mode') ?? 'zapret'
+	};
+}
+
+function podkopList(uci, section, option) {
+	let value = uci.get('podkop', section, option);
+	let source = type(value) == 'array' ? value : (type(value) == 'string' && length(value) ? [ value ] : []);
+	let result = [];
+	let seen = {};
+	for (let item in source) {
+		if (!length(item) || seen[item]) continue;
+		seen[item] = true;
+		push(result, item);
+	}
+	return result;
+}
+
+function podkopRoutingData() {
+	const catalog = [
+		[ 'russia_inside', 'Россия: заблокировано внутри' ], [ 'russia_outside', 'Россия: доступно только из РФ' ],
+		[ 'geoblock', 'Geo Block' ], [ 'block', 'Block' ], [ 'porn', '18+' ],
+		[ 'news', 'Новости' ], [ 'anime', 'Anime' ], [ 'youtube', 'YouTube' ], [ 'discord', 'Discord' ],
+		[ 'meta', 'Meta' ], [ 'twitter', 'Twitter (X)' ], [ 'hdrezka', 'HDRezka' ], [ 'tiktok', 'TikTok' ],
+		[ 'telegram', 'Telegram' ], [ 'cloudflare', 'Cloudflare' ], [ 'google_ai', 'Google AI' ],
+		[ 'google_play', 'Google Play' ], [ 'hodca', 'H.O.D.C.A' ], [ 'roblox', 'Roblox' ],
+		[ 'hetzner', 'Hetzner ASN' ], [ 'ovh', 'OVH ASN' ], [ 'digitalocean', 'DigitalOcean ASN' ],
+		[ 'cloudfront', 'CloudFront ASN' ]
+	];
+	let items = [];
+	for (let item in catalog)
+		push(items, { id: item[0], label: item[1] });
+	if (!podkopInstalled())
+		return { installed: false, catalog: items, proxy: {}, direct: {} };
+	const uci = cursor();
+	let direct = access('/etc/config/podkop') && uci.get('podkop', 'oum_exclusion') ? 'oum_exclusion' : 'youtube_direct';
+	return {
+		installed: true,
+		catalog: items,
+		proxy: {
+			lists: podkopList(uci, 'main', 'community_lists'),
+			domains: podkopList(uci, 'main', 'user_domains'),
+			subnets: podkopList(uci, 'main', 'user_subnets')
+		},
+		direct: {
+			lists: podkopList(uci, direct, 'community_lists'),
+			domains: podkopList(uci, direct, 'user_domains'),
+			subnets: podkopList(uci, direct, 'user_subnets')
+		}
+	};
+}
+
+function commandLine(command) {
+	let process = popen(command);
+	if (!process)
+		return '';
+	let value = trim(process.read('all') ?? '');
+	process.close();
+	return value;
+}
+
+function podkopJson(command) {
+	let allowed = {
+		check_dns_available: true,
+		check_sing_box: true,
+		check_nft_rules: true,
+		get_system_info: true,
+		outbound_latency: true
+	};
+	if (!(command in allowed))
+		return {};
+	let shell = command == 'outbound_latency' ?
+		'/usr/bin/podkop clash_api get_proxy_latency main-out 8000 2>/dev/null' :
+		`/usr/bin/podkop ${command} 2>/dev/null`;
+	let process = popen(shell);
+	if (!process)
+		return {};
+	let value = {};
+	try {
+		value = json(process) ?? {};
+	}
+	catch (err) {
+		value = {};
+	}
+	process.close();
+	return value;
+}
+
+function flag(value) {
+	return value == true || +value == 1;
+}
+
+function diagnosticSection(id, title, items) {
+	let state = 'success';
+	for (let item in items) {
+		if (item.state == 'error') {
+			state = 'error';
+			break;
+		}
+		if (item.state == 'warning')
+			state = 'warning';
+	}
+	return {
+		id,
+		title,
+		state,
+		description: state == 'success' ? 'Проверки пройдены' : (state == 'warning' ? 'Обнаружены предупреждения' : 'Обнаружены проблемы'),
+		items
+	};
+}
+
+function podkopDiagnosticsData() {
+	if (!podkopInstalled())
+		return { installed: false, sections: [] };
+	const uci = cursor();
+	let iface = uci.get('podkop', 'main', 'interface') ?? '';
+	let connectionType = uci.get('podkop', 'main', 'connection_type') ?? '';
+	let youtubeMode = uci.get('oum', 'main', 'youtube_mode') ?? 'zapret';
+	let validIface = match(iface, /^[A-Za-z0-9_]{1,15}$/) ? true : false;
+	let tunnelUp = validIface && system(`ubus call network.interface.${iface} status 2>/dev/null | jsonfilter -e '@.up' | grep -qx true`) == 0;
+	let handshake = validIface ? commandLine(`awg show ${iface} latest-handshakes 2>/dev/null | awk 'NR==1 && $2>0 { d=systime()-$2; print d }'`) : '';
+	let handshakeAge = match(handshake, /^[0-9]+$/) ? +handshake : -1;
+	let dns = podkopJson('check_dns_available');
+	let singbox = podkopJson('check_sing_box');
+	let nft = podkopJson('check_nft_rules');
+	let outbound = podkopJson('outbound_latency');
+	let systemInfo = podkopJson('get_system_info');
+	let tunnelRtt = validIface ? commandLine(`ping -I ${iface} -c 3 -W 2 1.1.1.1 2>/dev/null | awk -F' = ' '/round-trip/ { split($2,a,"/"); print int(a[2]) }'`) : '';
+	let tunnelRttMs = match(tunnelRtt, /^[0-9]+$/) ? +tunnelRtt : 0;
+	let zapretRunning = system("pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1") == 0;
+	if (zapretRunning)
+		system('/usr/libexec/oum-zapret-strategy check >/dev/null 2>&1');
+	let zapret = zapretStrategyData();
+	let dontTouchDhcp = uci.get('podkop', 'settings', 'dont_touch_dhcp') == '1';
+	let quicDisabled = uci.get('firewall', 'oum_quic_80', 'target') == 'REJECT' && uci.get('firewall', 'oum_quic_443', 'target') == 'REJECT';
+	let managerInstalled = access('/usr/libexec/oum-zapret-manager') &&
+		system("/usr/libexec/oum-zapret-manager status 2>/dev/null | grep -qx 'installed=1'") == 0;
+	let outboundItems = connectionType == 'proxy' ? [
+		{ state: length(uci.get('podkop', 'main', 'proxy_string') ?? '') ? 'success' : 'error', label: 'Reality-конфигурация', value: 'секрет сохранён' },
+		{ state: +(outbound.delay ?? 0) > 0 ? 'success' : 'error', label: 'HTTP-проверка Reality', value: +(outbound.delay ?? 0) > 0 ? `${outbound.delay} мс` : 'не отвечает' }
+	] : [
+		{ state: tunnelUp ? 'success' : 'error', label: 'AWG-интерфейс', value: tunnelUp ? `${iface} поднят` : 'не поднят' },
+		{ state: handshakeAge >= 0 && handshakeAge < 300 ? 'success' : 'error', label: 'Рукопожатие AWG', value: handshakeAge >= 0 ? `${handshakeAge} сек. назад` : 'нет данных' },
+		{ state: tunnelRttMs > 0 ? 'success' : 'error', label: 'RTT через AWG', value: tunnelRttMs > 0 ? `${tunnelRttMs} мс` : 'не отвечает' }
+	];
+	let zapretItems = youtubeMode == 'vpn' ? [
+		{ state: !zapretRunning ? 'success' : 'warning', label: 'Zapret остановлен', value: zapretRunning ? 'ещё работает' : 'да' },
+		{ state: system('nft list table inet zapret >/dev/null 2>&1') != 0 ? 'success' : 'warning', label: 'Правила nftables Zapret удалены', value: '' },
+		{ state: 'success', label: 'Маршрут YouTube', value: 'через защищённое подключение' }
+	] : [
+		{ state: zapretRunning ? 'success' : 'error', label: 'Процесс nfqws', value: zapretRunning ? 'запущен' : 'не запущен' },
+		{ state: system('nft list table inet zapret >/dev/null 2>&1') == 0 ? 'success' : 'error', label: 'Таблица nftables Zapret', value: '' },
+		{ state: zapret.current ? 'success' : 'warning', label: 'Стратегия YouTube', value: zapret.current || 'не выбрана OUM' },
+		{ state: zapret.last_total > 0 && zapret.last_ok >= 3 ? 'success' : 'error', label: 'Прямой доступ YouTube', value: zapret.last_total > 0 ? `${zapret.last_ok}/${zapret.last_total} · ${zapret.last_elapsed_ms} мс` : 'не проверен' },
+		{ state: 'info', label: 'QUIC', value: quicDisabled ? 'UDP/80 и UDP/443 заблокированы firewall' : 'разрешён' }
+	];
+	let sections = [
+		diagnosticSection('dns', 'DNS', [
+			{ state: flag(dns.bootstrap_dns_status) ? 'success' : 'error', label: 'Bootstrap DNS', value: dns.bootstrap_dns_server ?? 'не задан' },
+			{ state: flag(dns.dns_status) ? 'success' : 'error', label: 'Основной DNS', value: `${dns.dns_server ?? 'не задан'} [${dns.dns_type ?? '—'}]` },
+			{ state: flag(dns.dns_on_router) ? 'success' : 'error', label: 'DNS на роутере', value: flag(dns.dns_on_router) ? 'отвечает' : 'не отвечает' },
+			{ state: dontTouchDhcp ? 'info' : (flag(dns.dhcp_config_status) ? 'success' : 'warning'), label: 'DHCP содержит DNS Podkop', value: dontTouchDhcp ? 'управляется пользователем' : (flag(dns.dhcp_config_status) ? 'да' : 'отличается от шаблона') }
+		]),
+		diagnosticSection('singbox', 'Sing-box', [
+			{ state: flag(singbox.sing_box_installed) ? 'success' : 'error', label: 'Sing-box установлен', value: systemInfo.sing_box_version ?? '' },
+			{ state: flag(singbox.sing_box_version_ok) ? 'success' : 'error', label: 'Версия совместима', value: 'не ниже 1.12.4' },
+			{ state: flag(singbox.sing_box_service_exist) ? 'success' : 'error', label: 'Служба существует', value: '' },
+			{ state: flag(singbox.sing_box_autostart_disabled) ? 'success' : 'warning', label: 'Автозапуск sing-box отключён', value: 'управляется Podkop' },
+			{ state: flag(singbox.sing_box_process_running) ? 'success' : 'error', label: 'Процесс запущен', value: '' },
+			{ state: flag(singbox.sing_box_ports_listening) ? 'success' : 'error', label: 'Порты прослушиваются', value: '' }
+		]),
+		diagnosticSection('nft', 'Nftables', [
+			{ state: flag(nft.table_exist) ? 'success' : 'error', label: 'Таблица PodkopTable существует', value: '' },
+			{ state: flag(nft.rules_mangle_exist) ? 'success' : 'error', label: 'Правила mangle существуют', value: '' },
+			{ state: flag(nft.rules_mangle_counters) ? 'success' : 'warning', label: 'Счётчики mangle', value: flag(nft.rules_mangle_counters) ? 'есть трафик' : 'пока без трафика' },
+			{ state: flag(nft.rules_mangle_output_exist) ? 'success' : 'error', label: 'Правила mangle output существуют', value: '' },
+			{ state: flag(nft.rules_mangle_output_counters) ? 'success' : 'warning', label: 'Счётчики mangle output', value: flag(nft.rules_mangle_output_counters) ? 'есть трафик' : 'пока без трафика' },
+			{ state: flag(nft.rules_proxy_exist) ? 'success' : 'error', label: 'Правила proxy существуют', value: '' },
+			{ state: flag(nft.rules_proxy_counters) ? 'success' : 'warning', label: 'Счётчики proxy', value: flag(nft.rules_proxy_counters) ? 'есть трафик' : 'пока без трафика' },
+			{ state: flag(nft.rules_other_mark_exist) ? 'warning' : 'success', label: 'Дополнительные правила маркировки', value: flag(nft.rules_other_mark_exist) ? 'обнаружены' : 'не обнаружены' }
+		]),
+		diagnosticSection('outbound', connectionType == 'proxy' ? 'Reality и outbound' : 'Туннель и outbound', outboundItems),
+		diagnosticSection('fakeip', 'FakeIP', [
+			{ state: system("nslookup fakeip.podkop.fyi 127.0.0.1 2>/dev/null | grep -Eq '198\\.18\\.'") == 0 ? 'success' : 'error', label: 'DNS роутера проходит через FakeIP', value: '' },
+			{ state: 'info', label: 'Проверка браузера и маршрута', value: 'выполняется из браузера' }
+		]),
+		diagnosticSection('zapret', 'Zapret / YouTube', zapretItems)
+	];
+	let state = 'success';
+	for (let section in sections) {
+		if (section.state == 'error') { state = 'error'; break; }
+		if (section.state == 'warning') state = 'warning';
+	}
+	return {
+		installed: true,
+		healthy: state == 'success',
+		state,
+		checked_at: time(),
+		sections,
+		quic_disabled: quicDisabled,
+		zapret_manager: {
+			installed: managerInstalled ? true : false,
+			revision: '189abafd50aed17f8c7414695d0d47d129a6b0dd'
+		},
+		fakeip_check_url: 'https://fakeip.podkop.fyi/check',
+		ip_check_url: 'https://ip.podkop.fyi/check',
+		system: {
+			podkop: systemInfo.podkop_version ?? packageVersion('podkop'),
+			luci: systemInfo.luci_app_version ?? packageVersion('luci-app-podkop'),
+			singbox: systemInfo.sing_box_version ?? packageVersion('sing-box'),
+			openwrt: systemInfo.openwrt_version ?? '',
+			device: systemInfo.device_model ?? ''
+		}
+	};
 }
 
 function passwallStatusData() {
@@ -347,6 +1356,11 @@ function passwallStatusData() {
 	let dnsRedirect = global?.dns_redirect == '1';
 	let dnsFirewall = system("nft list chain inet passwall PSW_DNS 2>/dev/null | grep -q 'redirect to'") == 0;
 	let ipv6Tproxy = forwarding?.ipv6_tproxy == '1';
+	let ipv6Filtered = global?.filter_proxy_ipv6 == '1';
+	let directDns = global?.direct_dns;
+	if (!directDns && global?.use_default_dns == 'direct')
+		directDns = 'Системный DNS';
+	let remoteDnsMode = global?.v2ray_dns_mode ?? global?.dns_mode;
 
 	return {
 		installed: true,
@@ -364,9 +1378,11 @@ function passwallStatusData() {
 			dns_redirect: dnsRedirect,
 			dns_firewall: dnsFirewall,
 			dns_mode: global?.dns_mode ?? 'Не задан',
-			direct_dns: global?.direct_dns ?? 'Не задан',
-			remote_dns_mode: global?.v2ray_dns_mode ?? 'Не задан',
+			direct_dns: directDns ?? 'Не задан',
+			remote_dns: global?.remote_dns ?? 'Не задан',
+			remote_dns_mode: remoteDnsMode ?? 'Не задан',
 			ipv6_tproxy: ipv6Tproxy,
+			ipv6_filtered: ipv6Filtered,
 			geosite: geoSite,
 			geoip: geoIp
 		},
@@ -466,6 +1482,8 @@ function readJsonFile(path) {
 }
 
 function nodeStatusData() {
+	if (podkopInstalled())
+		return { available: false, engine: 'podkop', group: '', current: '', nodes: [] };
 	if (passwallInstalled())
 		return passwallNodeStatusData();
 	const uci = cursor();
@@ -480,14 +1498,22 @@ function nodeStatusData() {
 	if (!group || type(group.all) != 'array')
 		return { available: false, group: groupName, current: '', nodes: [] };
 
+	let cached = { measured_at: 0, delays: {} };
+	for (let line in split(readfile(OPENCLASH_NODE_CACHE) ?? '', '\n')) {
+		let fields = split(line, '\t');
+		if (length(fields) != 2)
+			continue;
+		if (fields[0] == 'timestamp' && match(fields[1], /^[0-9]+$/))
+			cached.measured_at = +fields[1];
+		else if (length(fields[0]) && match(fields[1], /^[0-9]+$/))
+			cached.delays[fields[0]] = +fields[1];
+	}
 	let nodes = [];
 	for (let name in group.all) {
 		let proxy = proxies[name] ?? {};
-		let history = proxy.history ?? [];
-		let delay = length(history) ? +(history[-1]?.delay ?? 0) : 0;
-		push(nodes, { name, type: proxy.type ?? '', delay });
+		push(nodes, { name, type: proxy.type ?? '', delay: +(cached.delays[name] ?? 0), tested: name in cached.delays });
 	}
-	return { available: true, group: groupName, current: group.now ?? '', nodes };
+	return { available: true, engine: 'openclash', group: groupName, current: group.now ?? '', measured_at: cached.measured_at, nodes };
 }
 
 function subscriptionStatusData(force) {
@@ -521,6 +1547,24 @@ function validOptionalPassword(value) {
 	return type(value) == 'string' && (!length(value) || (length(value) >= 8 && length(value) <= 63));
 }
 
+function validPrivateLanAddress(value) {
+	if (type(value) != 'string' || !match(value, /^[0-9]{1,3}(\.[0-9]{1,3}){3}$/))
+		return false;
+	let octets = map(split(value, '.'), (part) => +part);
+	for (let octet in octets)
+		if (octet < 0 || octet > 255)
+			return false;
+	let privateRange = octets[0] == 10 ||
+		(octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31) ||
+		(octets[0] == 192 && octets[1] == 168);
+	return privateRange && octets[3] >= 1 && octets[3] <= 254;
+}
+
+function ipv4Prefix24(value) {
+	let parts = split(value ?? '', '.');
+	return length(parts) == 4 ? join('.', slice(parts, 0, 3)) : '';
+}
+
 function validate(args) {
 	if (!(args.wan_type in [ 'dhcp', 'pppoe' ]))
 		return failure('invalid_wan', 'Выберите DHCP или PPPoE.');
@@ -537,8 +1581,9 @@ function validate(args) {
 	if (type(args.wifi_password) != 'string' || length(args.wifi_password) < 8 || length(args.wifi_password) > 63)
 		return failure('invalid_wifi_password', 'Пароль Wi-Fi должен содержать от 8 до 63 символов.');
 
-	if (type(args.admin_password) != 'string' || length(args.admin_password) < 6)
-		return failure('invalid_admin_password', 'Новый пароль панели должен содержать минимум 6 символов.');
+	if (type(args.admin_password) != 'string' || length(args.admin_password) > 128 ||
+		(length(args.admin_password) > 0 && length(args.admin_password) < 6) || match(args.admin_password, /[\r\n]/))
+		return failure('invalid_root_password', 'Пароль root должен быть пустым либо содержать минимум 6 символов.');
 
 	if (!(args.vpn_type in [ 'none', 'subscription', 'awg', 'proxy' ]))
 		return failure('invalid_vpn', 'Неизвестный тип VPN.');
@@ -565,37 +1610,29 @@ function restoreConfigs() {
 }
 
 function setRootPassword(password) {
+	if (!length(password))
+		return system('/bin/busybox passwd -d root >/dev/null 2>&1') == 0;
 	let quoted = shellquote(password);
 	return system(`(echo ${quoted}; sleep 1; echo ${quoted}) | /bin/busybox passwd root >/dev/null 2>&1`) == 0;
 }
 
-function setAdminPassword(uci, password) {
-	let proc = popen(`/usr/sbin/uhttpd -m ${shellquote(password)} 2>/dev/null`);
-	if (!proc)
-		return false;
-
-	let hash = trim(proc.read('all'));
-	let rc = proc.close();
-	if (rc != 0 || !match(hash, /^\$1\$/))
-		return false;
-
-	let found = false;
+function configureRootAccess(uci) {
+	let rootSection = null;
+	let legacyAdmin = [];
 	uci.foreach('rpcd', 'login', (section) => {
-		if (section.username == 'admin') {
-			uci.set('rpcd', section['.name'], 'password', hash);
-			found = true;
-		}
+		if (section.username == 'root') rootSection = section['.name'];
+		if (section.username == 'admin') push(legacyAdmin, section['.name']);
 	});
-
-	if (!found) {
-		let section = uci.add('rpcd', 'login');
-		uci.set('rpcd', section, 'username', 'admin');
-		uci.set('rpcd', section, 'password', hash);
-		uci.set('rpcd', section, 'read', [ 'luci-app-oum' ]);
-		uci.set('rpcd', section, 'write', [ 'luci-app-oum' ]);
-	}
-
-	return true;
+	for (let section in legacyAdmin) uci.delete('rpcd', section);
+	if (!rootSection) rootSection = uci.add('rpcd', 'login');
+	uci.set('rpcd', rootSection, 'username', 'root');
+	uci.set('rpcd', rootSection, 'password', '$p$root');
+	uci.set('rpcd', rootSection, 'read', [ '*' ]);
+	uci.set('rpcd', rootSection, 'write', [ '*' ]);
+	uci.foreach('dropbear', 'dropbear', (section) => {
+		uci.set('dropbear', section['.name'], 'PasswordAuth', 'on');
+		uci.set('dropbear', section['.name'], 'RootPasswordAuth', 'on');
+	});
 }
 
 function configureWan(uci, args) {
@@ -658,9 +1695,81 @@ const methods = {
 		}
 	},
 
+	usbStorageStatus: {
+		call: function() {
+			return usbStorageStatusData();
+		}
+	},
+
 	systemJobStatus: {
 		call: function() {
 			return systemJobStatus();
+		}
+	},
+
+	supportStatus: {
+		call: function() {
+			return supportStatusData();
+		}
+	},
+
+	startSupportSession: {
+		args: { mode: '', duration: 0, consent: false },
+		call: function(request) {
+			let args = request.args;
+			if (supportStatusData().state == 'active')
+				return failure('support_already_active', 'Сеанс удалённой поддержки уже активен.');
+			if (!(args.mode in [ 'diagnostic', 'repair' ]))
+				return failure('invalid_mode', 'Выберите режим удалённой поддержки.');
+			if (!(args.duration in [ 15, 30, 60 ]))
+				return failure('invalid_duration', 'Выберите срок 15, 30 или 60 минут.');
+			if (args.consent != true)
+				return failure('consent_required', 'Подтвердите временный удалённый доступ.');
+			if (!supportStatusData().client_ready)
+				return failure('openssh_missing', 'Для Pinggy нужен пакет openssh-client. Обновите OUM или установите пакет.');
+			if (!access('/etc/oum/support/support_key.pub'))
+				return failure('support_key_missing', 'Публичный ключ поддержки отсутствует в комплекте OUM.');
+			if (system(`mkdir -p ${SUPPORT_DIR} && chmod 700 ${SUPPORT_DIR}`) != 0)
+				return failure('support_prepare_failed', 'Не удалось подготовить временный сеанс.');
+			let now = time();
+			let requestData = `mode=${args.mode}\nstarted_at=${now}\nexpires_at=${now + args.duration * 60}\n`;
+			if (!writePrivate(`${SUPPORT_DIR}/request`, requestData)) {
+				system(`rm -f ${SUPPORT_DIR}/request`);
+				return failure('support_prepare_failed', 'Не удалось сохранить временные параметры сеанса.');
+			}
+			if (system('/usr/libexec/oum-support start >/tmp/oum-support-start.log 2>&1') != 0)
+				return failure('support_start_failed', supportStatusData().message ?? 'Не удалось открыть удалённый доступ.');
+			return { ok: true, ...supportStatusData() };
+		}
+	},
+
+	stopSupportSession: {
+		call: function() {
+			if (!access('/usr/libexec/oum-support'))
+				return failure('runtime_missing', 'Компонент удалённой поддержки не установлен.');
+			if (system('/usr/libexec/oum-support stop >/tmp/oum-support-stop.log 2>&1') != 0)
+				return failure('support_stop_failed', 'Не удалось завершить сеанс.');
+			return { ok: true, ...supportStatusData() };
+		}
+	},
+
+	restoreSupportBackup: {
+		call: function() {
+			let status = supportStatusData();
+			if (status.state == 'active')
+				return failure('support_active', 'Сначала завершите сеанс удалённой поддержки.');
+			if (!status.backup_available)
+				return failure('backup_missing', 'Страховочная копия недоступна.');
+			if (system('/usr/libexec/oum-support restore >/tmp/oum-support-restore-start.log 2>&1') != 0)
+				return failure('restore_failed', 'Не удалось запустить восстановление.');
+			return { ok: true, message: 'Настройки восстанавливаются; роутер будет перезагружен.' };
+		}
+	},
+
+	clearSystemJobStatus: {
+		args: { action: '', code: '' },
+		call: function(request) {
+			return clearSystemJobStatus(request.args.action, request.args.code);
 		}
 	},
 
@@ -686,12 +1795,21 @@ const methods = {
 		}
 	},
 
+	setWifiEnabled: {
+		args: { enabled: false },
+		call: function(request) {
+			if (type(request.args.enabled) != 'bool')
+				return failure('invalid_state', 'Некорректное состояние Wi-Fi.');
+			return startSystemJob('wifi_toggle', { enabled: request.args.enabled });
+		}
+	},
+
 	applyWanSettings: {
-		args: { wan_type: '', pppoe_user: '', pppoe_password: '' },
+		args: { wan_type: '', pppoe_user: '', pppoe_password: '', mobile_apn: '', mobile_pin: '', mobile_username: '', mobile_password: '', mobile_auth: 'none' },
 		call: function(request) {
 			let args = request.args;
-			if (!(args.wan_type in [ 'dhcp', 'pppoe' ]))
-				return failure('invalid_wan', 'Выберите DHCP или PPPoE.');
+			if (!(args.wan_type in [ 'dhcp', 'pppoe', 'usb' ]))
+				return failure('invalid_wan', 'Выберите DHCP, PPPoE или USB.');
 			if (type(args.pppoe_user) != 'string' || length(args.pppoe_user) > 128 || match(args.pppoe_user, /[\r\n]/) ||
 				type(args.pppoe_password) != 'string' || length(args.pppoe_password) > 256 || match(args.pppoe_password, /[\r\n]/))
 				return failure('invalid_pppoe', 'Некорректные данные PPPoE.');
@@ -700,11 +1818,283 @@ const methods = {
 			let current = settingsStatusData();
 			if (args.wan_type == 'pppoe' && !length(args.pppoe_password) && !current.wan.password_set)
 				return failure('pppoe_password_missing', 'Введите пароль PPPoE.');
+			if (args.wan_type == 'usb' && !current.usb_internet.attached)
+				return failure('usb_tether_missing', 'Подключите телефон или USB-модем и повторите.');
+			if (args.wan_type == 'usb' && current.wisp.enabled)
+				return failure('wisp_active', 'Сначала отключите интернет по Wi-Fi, затем выберите USB.');
+			let mobileFamily = current.usb_internet.family ?? 'none';
+			let mobileModem = !(mobileFamily in [ 'rndis', 'ethernet' ]);
+			if (args.wan_type == 'usb' && mobileModem &&
+				(type(args.mobile_apn) != 'string' || !length(args.mobile_apn) || length(args.mobile_apn) > 100 || match(args.mobile_apn, /[\r\n]/)))
+				return failure('invalid_apn', 'Введите APN оператора без перевода строки.');
+			if (args.wan_type == 'usb' &&
+				(type(args.mobile_pin) != 'string' || (length(args.mobile_pin) && !match(args.mobile_pin, /^[0-9]{4,8}$/))))
+				return failure('invalid_pin', 'PIN должен содержать от 4 до 8 цифр либо быть пустым.');
+			if (args.wan_type == 'usb' &&
+				(type(args.mobile_username) != 'string' || length(args.mobile_username) > 128 || match(args.mobile_username, /[\r\n]/) ||
+				type(args.mobile_password) != 'string' || length(args.mobile_password) > 256 || match(args.mobile_password, /[\r\n]/) ||
+				!(args.mobile_auth in [ 'none', 'pap', 'chap', 'both' ])))
+				return failure('invalid_mobile_auth', 'Некорректные параметры авторизации мобильной сети.');
 			return startSystemJob('wan', {
 				wan_type: args.wan_type,
 				pppoe_user: args.pppoe_user,
-				pppoe_password: args.pppoe_password
+				pppoe_password: args.pppoe_password,
+				mobile_apn: args.mobile_apn,
+				mobile_pin: args.mobile_pin,
+				mobile_username: args.mobile_username,
+				mobile_password: args.mobile_password,
+				mobile_auth: args.mobile_auth
 			});
+		}
+	},
+
+	applyLanSettings: {
+		args: { address: '' },
+		call: function(request) {
+			let address = request.args.address ?? '';
+			if (!validPrivateLanAddress(address))
+				return failure('invalid_lan', 'Введите частный IPv4-адрес хоста, например 192.168.5.1. Маска фиксирована: /24.');
+			let current = settingsStatusData();
+			if (address == current.lan.address)
+				return failure('lan_unchanged', 'Этот LAN-адрес уже используется.');
+			if (length(current.wan.ipv4 ?? '') && ipv4Prefix24(address) == ipv4Prefix24(current.wan.ipv4))
+				return failure('lan_wan_conflict', 'LAN не должен находиться в той же /24-подсети, что и WAN.');
+			return startSystemJob('lan', { address });
+		}
+	},
+
+	wispStatus: {
+		call: function() {
+			return wispStatusData(cursor());
+		}
+	},
+
+	scanWifi: {
+		args: { band: '2g' },
+		call: function(request) {
+			let band = request.args.band ?? '2g';
+			if (!(band in [ '2g', '5g' ]))
+				return failure('invalid_band', 'Выберите диапазон сканирования.');
+			if (!capabilityStatus().wisp_supported)
+				return failure('wisp_unsupported', 'Радиодрайвер не поддерживает режим Wi-Fi клиента.');
+			let networks = scanWifiNetworks(cursor(), band);
+			return { ok: true, band, networks };
+		}
+	},
+
+	setWisp: {
+		args: { enabled: false, ssid: '', password: '', band: '2g' },
+		call: function(request) {
+			let enabled = request.args.enabled;
+			let ssid = request.args.ssid ?? '';
+			let password = request.args.password ?? '';
+			let band = request.args.band ?? '2g';
+			if (type(enabled) != 'bool')
+				return failure('invalid_state', 'Некорректный режим репитера.');
+			if (enabled && (type(ssid) != 'string' || length(ssid) < 1 || length(ssid) > 32 || match(ssid, /[\r\n]/)))
+				return failure('invalid_ssid', 'Имя исходной Wi-Fi сети должно содержать от 1 до 32 байт.');
+			if (enabled && (type(password) != 'string' || (length(password) && (length(password) < 8 || length(password) > 63)) || match(password, /[\r\n]/)))
+				return failure('invalid_password', 'Пароль должен содержать 8–63 символа; для открытой сети оставьте поле пустым.');
+			if (!(band in [ '2g', '5g' ]))
+				return failure('invalid_band', 'Выберите диапазон репитера.');
+			if (enabled && !capabilityStatus().wisp_supported)
+				return failure('wisp_unsupported', 'Радиодрайвер не поддерживает режим Wi-Fi клиента.');
+			return startSystemJob('wisp', { enabled, ssid, password, band });
+		}
+	},
+
+	applyMeshSettings: {
+		args: { enabled: 0, mesh_id: '', password: '', band: '' },
+		call: function(request) {
+			let enabled = request.args.enabled == 1;
+			if (enabled) {
+				let capabilities = capabilityStatus();
+				if (!capabilities.mesh_driver)
+					return failure('mesh_unsupported', 'Радиодрайвер не поддерживает 802.11s Mesh.');
+				if (!capabilities.mesh_runtime)
+					return failure('mesh_runtime_missing', 'Нужен совместимый wpad-mesh той же ревизии, что и hostapd-common.');
+				if (type(request.args.mesh_id) != 'string' || length(request.args.mesh_id) < 1 || length(request.args.mesh_id) > 32 || match(request.args.mesh_id, /[\r\n]/))
+					return failure('invalid_mesh_id', 'Имя Mesh должно содержать от 1 до 32 символов.');
+				if (type(request.args.password) != 'string' || length(request.args.password) < 8 || length(request.args.password) > 63 || match(request.args.password, /[\r\n]/))
+					return failure('invalid_mesh_password', 'Пароль Mesh должен содержать от 8 до 63 символов.');
+				if (!(request.args.band in [ '2g', '5g' ]))
+					return failure('invalid_mesh_band', 'Выберите диапазон Mesh.');
+			}
+			return startSystemJob('mesh', {
+				enabled: enabled ? 1 : 0,
+				mesh_id: request.args.mesh_id,
+				password: request.args.password,
+				band: request.args.band
+			});
+		}
+	},
+
+	installMeshRuntime: {
+		call: function() {
+			let capabilities = capabilityStatus();
+			if (!capabilities.mesh_driver)
+				return failure('mesh_unsupported', 'Радиодрайвер не поддерживает 802.11s Mesh.');
+			if (capabilities.mesh_runtime)
+				return failure('mesh_runtime_present', 'Поддержка Mesh уже установлена.');
+			if (!capabilities.mesh_runtime_bundle)
+				return failure('mesh_runtime_unavailable', 'Для этой прошивки нет проверенного Mesh-комплекта.');
+			return startSystemJob('mesh_runtime', {});
+		}
+	},
+
+	prepareUsbStorage: {
+		call: function() {
+			let current = usbStorageStatusData();
+			if (!current.host_present)
+				return failure('usb_unavailable', 'USB-порт не обнаружен.');
+			if (current.runtime_ready && length(current.disk))
+				return failure('usb_ready', 'Поддержка накопителей уже установлена.');
+			return startSystemJob('usb_prepare', {});
+		}
+	},
+
+	formatUsbStorage: {
+		args: { device: '', confirm: '' },
+		call: function(request) {
+			let device = request.args.device ?? '';
+			if (!match(device, /^\/dev\/sd[a-z]$/) || request.args.confirm != 'ERASE')
+				return failure('usb_format_confirmation', 'Форматирование не подтверждено.');
+			let current = usbStorageStatusData();
+			if (current.disk != device)
+				return failure('usb_changed', 'USB-накопитель изменился. Обновите страницу и проверьте устройство.');
+			return startSystemJob('usb_format', { device, confirm: 'ERASE' });
+		}
+	},
+
+	mountUsbStorage: {
+		args: { device: '' },
+		call: function(request) {
+			let device = request.args.device ?? '';
+			if (!match(device, /^\/dev\/sd[a-z]$/))
+				return failure('usb_invalid_device', 'USB-накопитель не выбран.');
+			let current = usbStorageStatusData();
+			if (current.disk != device)
+				return failure('usb_changed', 'USB-накопитель изменился. Обновите страницу и проверьте устройство.');
+			return startSystemJob('usb_mount', { device });
+		}
+	},
+
+	unmountUsbStorage: {
+		call: function() {
+			let current = usbStorageStatusData();
+			if (!current.mounted)
+				return failure('usb_not_mounted', 'Накопитель уже отключён.');
+			return startSystemJob('usb_unmount', {});
+		}
+	},
+
+	setUsbSmb: {
+		args: { enabled: false },
+		call: function(request) {
+			let enabled = request.args.enabled == true;
+			let current = usbStorageStatusData();
+			if (enabled && !current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (enabled && current.smb_running)
+				return failure('usb_smb_running', 'SMB уже включён.');
+			if (!enabled && !current.smb_enabled && !current.smb_running)
+				return failure('usb_smb_stopped', 'SMB уже выключен.');
+			return startSystemJob(enabled ? 'usb_smb_enable' : 'usb_smb_disable', {});
+		}
+	},
+
+	setUsbAria2: {
+		args: { enabled: false },
+		call: function(request) {
+			let enabled = request.args.enabled == true;
+			let current = usbStorageStatusData();
+			if (enabled && !current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (enabled && current.aria2_running)
+				return failure('usb_aria2_running', 'aria2 уже включён.');
+			if (!enabled && !current.aria2_enabled && !current.aria2_running)
+				return failure('usb_aria2_stopped', 'aria2 уже выключен.');
+			return startSystemJob(enabled ? 'usb_aria2_enable' : 'usb_aria2_disable', {});
+		}
+	},
+
+	setUsbDlna: {
+		args: { enabled: false },
+		call: function(request) {
+			let enabled = request.args.enabled == true;
+			let current = usbStorageStatusData();
+			if (enabled && !current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (enabled && current.dlna_running)
+				return failure('usb_dlna_running', 'Медиасервер уже включён.');
+			if (!enabled && !current.dlna_enabled && !current.dlna_running)
+				return failure('usb_dlna_stopped', 'Медиасервер уже выключен.');
+			return startSystemJob(enabled ? 'usb_dlna_enable' : 'usb_dlna_disable', {});
+		}
+	},
+
+	configureUsbSorter: {
+		args: { enabled: false, tmdb_key: '' },
+		call: function(request) {
+			let enabled = request.args.enabled == true;
+			let key = trim(request.args.tmdb_key ?? '');
+			let current = usbStorageStatusData();
+			if (enabled && !current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (length(key) && !match(key, /^[A-Fa-f0-9]{32}$/))
+				return failure('tmdb_key_invalid', 'TMDB API Key должен состоять из 32 шестнадцатеричных символов.');
+			if (enabled && !length(key) && !current.tmdb_key_set)
+				return failure('tmdb_key_missing', 'Укажите TMDB API Key.');
+			if (length(key)) {
+				if (system('mkdir -p /etc/oum') != 0 || !writePrivate('/etc/oum/tmdb_api_key', `${key}\n`))
+					return failure('tmdb_key_save', 'Не удалось безопасно сохранить TMDB API Key.');
+			}
+			if (!enabled && !current.sorter_enabled)
+				return failure('usb_sorter_stopped', 'Сортировщик уже выключен.');
+			return startSystemJob(enabled ? 'usb_sorter_enable' : 'usb_sorter_disable', {});
+		}
+	},
+
+	runUsbSorter: {
+		call: function() {
+			let current = usbStorageStatusData();
+			if (!current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (!current.sorter_enabled)
+				return failure('usb_sorter_stopped', 'Сначала включите сортировщик.');
+			return startSystemJob('usb_sorter_run', {});
+		}
+	},
+
+	setUsbSwap: {
+		args: { enabled: false },
+		call: function(request) {
+			let enabled = request.args.enabled == true;
+			let current = usbStorageStatusData();
+			if (enabled && !current.mounted)
+				return failure('usb_not_mounted', 'Сначала подключите USB-накопитель.');
+			if (enabled && current.swap_enabled)
+				return failure('usb_swap_running', 'Swap уже включён.');
+			if (!enabled && !current.swap_enabled)
+				return failure('usb_swap_stopped', 'Swap уже выключен.');
+			return startSystemJob(enabled ? 'usb_swap_enable' : 'usb_swap_disable', {});
+		}
+	},
+
+	updateProject: {
+		call: function() {
+			if (!access('/usr/libexec/oum-project-manager'))
+				return failure('runtime_missing', 'Менеджер обновлений OUM не установлен.');
+			return startSystemJob('project_update', {});
+		}
+	},
+
+	rollbackProject: {
+		call: function() {
+			let backups = glob('/etc/oum/project-rollback/oum-*.tar.gz');
+			if (!length(backups))
+				return failure('rollback_missing', 'Предыдущая версия OUM ещё не сохранена.');
+			return startSystemJob('project_rollback', {});
 		}
 	},
 
@@ -712,9 +2102,38 @@ const methods = {
 		args: { kind: '' },
 		call: function(request) {
 			let kind = request.args.kind ?? '';
-			if (!(kind in [ 'wifi', 'wan' ]))
+			if (!(kind in [ 'wifi', 'wan', 'lan', 'wisp' ]))
 				return failure('invalid_kind', 'Неизвестный тип настроек.');
 			return startSystemJob(`rollback_${kind}`, {});
+		}
+	},
+
+	setEngineDnsPreferences: {
+		args: { engine: '', server: '', bootstrap: '' },
+		call: function(request) {
+			let allowed = [ '77.88.8.8', '77.88.8.1', '1.1.1.1', '1.0.0.1', '8.8.8.8', '8.8.4.4', '9.9.9.9', '149.112.112.112' ];
+			let engine = request.args.engine ?? '';
+			let status = engineStatusData();
+			if (!(engine in [ 'openclash', 'passwall', 'podkop' ]) || engine != status.current)
+				return failure('engine_changed', 'Активный VPN-движок изменился. Обновите страницу.');
+			if (!((request.args.server ?? '') in allowed) || !((request.args.bootstrap ?? '') in allowed))
+				return failure('invalid_dns', 'Выберите основной и Bootstrap DNS из проверенного списка.');
+			if (!access('/usr/libexec/oum-dns-manager'))
+				return failure('runtime_missing', 'Компонент настройки DNS не установлен.');
+			return startSystemJob('dns', {
+				engine,
+				server: request.args.server,
+				bootstrap: request.args.bootstrap
+			});
+		}
+	},
+
+	rebootRouter: {
+		call: function() {
+			if (configurationBusy())
+				return failure('configuration_busy', 'Дождитесь завершения текущей операции.');
+			system('rm -f /etc/oum/reboot-required; (sleep 2; reboot) >/tmp/oum-reboot.log 2>&1 &');
+			return { ok: true, message: 'Роутер перезагружается…' };
 		}
 	},
 
@@ -722,8 +2141,8 @@ const methods = {
 		args: { engine: '' },
 		call: function(request) {
 			let engine = request.args.engine ?? '';
-			if (!(engine in [ 'openclash', 'passwall' ]))
-				return failure('invalid_engine', 'Выберите OpenClash или PassWall.');
+			if (!(engine in [ 'openclash', 'passwall', 'podkop' ]))
+				return failure('invalid_engine', 'Выберите OpenClash, PassWall или Podkop + Zapret.');
 			let status = engineStatusData();
 			if (!status.supported)
 				return failure('unsupported_platform', 'Для этого устройства пока нет проверенного комплекта переключения.');
@@ -732,6 +2151,198 @@ const methods = {
 			if (!access('/usr/libexec/oum-engine-manager'))
 				return failure('runtime_missing', 'Менеджер VPN-движков не установлен.');
 			return startSystemJob('engine', { engine });
+		}
+	},
+
+	updateVpnEngine: {
+		args: { engine: '' },
+		call: function(request) {
+			let engine = request.args.engine ?? '';
+			if (!(engine in [ 'openclash', 'podkop' ]))
+				return failure('unsupported_engine', 'Обновление доступно только для OpenClash и Podkop + Zapret.');
+			let status = engineStatusData();
+			if (!status.supported)
+				return failure('unsupported_platform', 'Для этого устройства пока нет проверенного комплекта обновления.');
+			if (status.current != engine)
+				return failure('engine_changed', 'Активный VPN-движок изменился. Обновите страницу.');
+			if (!access('/usr/libexec/oum-engine-manager'))
+				return failure('runtime_missing', 'Менеджер VPN-движков не установлен.');
+			return startSystemJob('engine_update', { engine });
+		}
+	},
+
+	updatePasswallGeoData: {
+		call: function() {
+			if (!passwallInstalled())
+				return failure('passwall_missing', 'PassWall не установлен.');
+			if (!access('/usr/libexec/oum-passwall-geodata'))
+				return failure('runtime_missing', 'Компонент обновления Geo-баз не установлен.');
+			return startSystemJob('passwall_geodata', {});
+		}
+	},
+
+	checkPasswallRoute: {
+		args: { domain: '' },
+		call: function(request) {
+			let domain = lc(trim(request.args.domain ?? ''));
+			if (!passwallInstalled())
+				return failure('passwall_missing', 'PassWall не установлен.');
+			if (!length(domain) || length(domain) > 253)
+				return failure('invalid_domain', 'Введите домен, например example.com.');
+			let raw = commandLine(`/usr/libexec/oum-passwall-route-check ${shellquote(domain)}`);
+			if (!length(raw))
+				return failure('route_check_failed', 'Не удалось определить маршрут домена.');
+			let result = {};
+			for (let line in split(raw, '\n')) {
+				let pair = match(line, /^(domain|route|rule|categories)=(.*)$/);
+				if (pair) result[pair[1]] = pair[2];
+			}
+			return {
+				ok: true,
+				domain: result.domain ?? domain,
+				route: result.route ?? 'vpn',
+				rule: result.rule ?? 'По умолчанию',
+				categories: result.categories ?? ''
+			};
+		}
+	},
+
+	configurePodkop: {
+		args: { interface: '' },
+		call: function(request) {
+			let iface = request.args.interface ?? '';
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Сначала установите движок Podkop + Zapret.');
+			if (!match(iface, /^[A-Za-z0-9_]{1,15}$/))
+				return failure('invalid_interface', 'Выберите отдельный AWG/WireGuard-интерфейс.');
+			const uci = cursor();
+			let proto = uci.get('network', iface, 'proto') ?? '';
+			if (!(proto in [ 'amneziawg', 'wireguard' ]))
+				return failure('invalid_interface', 'Выбранный интерфейс не является AWG/WireGuard-туннелем.');
+			return startSystemJob('podkop_configure', { interface: iface });
+		}
+	},
+
+	importPodkopAwg: {
+		args: { payload: '' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Сначала установите движок Podkop + Zapret.');
+			let payload = request.args.payload ?? '';
+			if (type(payload) != 'string' || length(payload) < 32 || length(payload) > 65536)
+				return failure('invalid_payload', 'Вставьте AWG-конфигурацию целиком.');
+			if (!match(payload, /\[Interface\]/i) || !match(payload, /\[Peer\]/i))
+				return failure('invalid_payload', 'AWG-конфигурация должна содержать секции Interface и Peer.');
+			if (!access('/usr/libexec/oum-awg-manager'))
+				return failure('runtime_missing', 'Компонент импорта AWG не установлен.');
+			return startSystemJob('podkop_awg', { payload });
+		}
+	},
+
+	importPodkopReality: {
+		args: { payload: '' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Сначала установите движок Podkop + Zapret.');
+			let payload = trim(request.args.payload ?? '');
+			if (type(payload) != 'string' || length(payload) < 32 || length(payload) > 8192 || !match(payload, /^vless:\/\/\S+$/i))
+				return failure('invalid_payload', 'Вставьте одну полную VLESS Reality-ссылку.');
+			if (!match(payload, /[?&]security=reality(&|$)/i) || !match(payload, /[?&]pbk=[^&]+/i) ||
+				!match(payload, /[?&]fp=[^&]+/i) || !match(payload, /[?&]sni=[^&]+/i))
+				return failure('invalid_reality', 'Reality-ссылка не содержит security, pbk, fp или sni.');
+			return startSystemJob('podkop_proxy', { payload });
+		}
+	},
+
+	zapretStrategyStatus: {
+		call: function() {
+			return zapretStrategyData();
+		}
+	},
+
+	startZapretStrategy: {
+		args: { action: '', strategy: '' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Сначала установите Podkop + Zapret.');
+			let action = request.args.action ?? '';
+			let strategy = request.args.strategy ?? '';
+			if (!(action in [ 'auto', 'apply', 'check', 'restore' ]))
+				return failure('invalid_action', 'Неизвестная операция Zapret.');
+			if (action == 'apply' && !match(strategy, /^Yv(0[1-9]|1[0-9]|2[0-7])$/))
+				return failure('invalid_strategy', 'Выберите стратегию Yv01–Yv27.');
+			if (!access('/usr/libexec/oum-zapret-strategy'))
+				return failure('runtime_missing', 'Адаптер стратегий Zapret не установлен.');
+			return startSystemJob(`zapret_${action}`, action == 'apply' ? { strategy } : {});
+		}
+	},
+
+	podkopRoutingStatus: {
+		call: function() {
+			return podkopRoutingData();
+		}
+	},
+
+	applyPodkopRouting: {
+		args: { proxy_lists: '', proxy_domains: '', proxy_subnets: '', direct_lists: '', direct_domains: '', direct_subnets: '', youtube_mode: 'zapret' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Podkop не установлен.');
+			let payload = {};
+			for (let name in [ 'proxy_lists', 'proxy_domains', 'proxy_subnets', 'direct_lists', 'direct_domains', 'direct_subnets' ]) {
+				let value = request.args[name] ?? '';
+				if (type(value) != 'string' || length(value) > 32768)
+					return failure('invalid_routing', 'Список слишком велик или имеет неверный формат.');
+				payload[name] = value;
+			}
+			let youtubeMode = request.args.youtube_mode ?? 'zapret';
+			if (!(youtubeMode in [ 'zapret', 'vpn' ]))
+				return failure('invalid_mode', 'Выберите маршрут YouTube.');
+			payload.youtube_mode = youtubeMode;
+			return startSystemJob('podkop_routing', payload);
+		}
+	},
+
+	setPodkopYoutubeMode: {
+		args: { mode: '', strategy: '' },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Podkop не установлен.');
+			let mode = request.args.mode ?? '';
+			if (!(mode in [ 'zapret', 'vpn' ]))
+				return failure('invalid_mode', 'Выберите Zapret или защищённое подключение.');
+			let strategy = request.args.strategy ?? '';
+			if (length(strategy) && !match(strategy, /^Yv(0[1-9]|1[0-9]|2[0-7])$/))
+				return failure('invalid_strategy', 'Неизвестная стратегия Zapret.');
+			return startSystemJob('podkop_youtube', { mode, strategy });
+		}
+	},
+
+	podkopDiagnostics: {
+		call: function() {
+			return podkopDiagnosticsData();
+		}
+	},
+
+	setZapretQuic: {
+		args: { enabled: false },
+		call: function(request) {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Podkop не установлен.');
+			let enabled = request.args.enabled;
+			if (type(enabled) != 'bool')
+				return failure('invalid_value', 'Некорректный режим QUIC.');
+			return startSystemJob('zapret_quic', { enabled: enabled ? '1' : '0' });
+		}
+	},
+
+	prepareZapretManager: {
+		call: function() {
+			if (!podkopInstalled())
+				return failure('podkop_missing', 'Podkop не установлен.');
+			if (!access('/usr/libexec/oum-zapret-manager'))
+				return failure('runtime_missing', 'Адаптер Zapret Manager не установлен.');
+			return startSystemJob('zapret_manager_install', {});
 		}
 	},
 
@@ -779,6 +2390,24 @@ const methods = {
 		}
 	},
 
+	gearupStatus: {
+		call: function() {
+			return gearupStatusData();
+		}
+	},
+
+	installGearup: {
+		call: function() {
+			return startSystemJob('gearup_install', {});
+		}
+	},
+
+	uninstallGearup: {
+		call: function() {
+			return startSystemJob('gearup_uninstall', {});
+		}
+	},
+
 	vpnJobStatus: {
 		call: function() {
 			return vpnJobStatus();
@@ -788,22 +2417,52 @@ const methods = {
 	dashboardStatus: {
 		call: function() {
 			const uci = cursor();
+			const engines = engineStatusData();
+			const clients = connectedClients(uci);
+			const traffic = trafficStatusData();
+			for (let client in clients)
+				client.traffic = traffic[client.ip] ?? { down: 0, up: 0, points: [] };
 			const passwall = passwallStatusData();
-			const engine = passwall.installed ? 'passwall' : 'openclash';
+			const podkop = podkopStatusData();
+			const engine = engines.current;
 			return {
 				wan: networkStatus(),
 				wifi: wifiStatus(uci),
-				clients: connectedClients(uci),
-				thermal: thermalStatus(),
+				clients,
+				offline_clients: offlineClients(uci, clients),
+				health: healthStatus(),
 				active_source: uci.get('oum', 'main', 'active_source') ?? 'none',
 				vpn_engine: engine,
-				vpn_enabled: engine == 'passwall' ? passwall.enabled : uci.get('openclash', 'config', 'enable') == '1',
+				vpn_enabled: engine == 'podkop' ? podkop.enabled : (engine == 'passwall' ? passwall.enabled : uci.get('openclash', 'config', 'enable') == '1'),
 				vpn_ready: vpnReady(),
+				reboot_required: access('/etc/oum/reboot-required') ? true : false,
 				policy_applying: access('/tmp/oum-device-policy.lock') ? true : false,
+				policy_state: trim(readfile('/tmp/oum-device-policy.state') ?? ''),
 				passwall,
+				podkop,
+				openclash: engines.openclash,
 				unmanaged_tunnels: unmanagedTunnels(uci),
 				subscription: engine == 'openclash' ? subscriptionStatusData(false) : { available: false, refreshing: false }
 			};
+		}
+	},
+
+	wifiQrCredentials: {
+		call: function() {
+			const uci = cursor();
+			let network = null;
+			uci.foreach('wireless', 'wifi-iface', (iface) => {
+				if (network || iface.mode != 'ap' || iface.disabled == '1' || !length(iface.ssid ?? ''))
+					return;
+				network = {
+					ssid: iface.ssid,
+					key: iface.key ?? '',
+					encryption: iface.encryption ?? 'none'
+				};
+			});
+			if (!network)
+				return failure('wifi_unavailable', 'Активная точка Wi-Fi не найдена.');
+			return { ok: true, ...network };
 		}
 	},
 
@@ -820,6 +2479,40 @@ const methods = {
 		}
 	},
 
+	refreshSubscription: {
+		call: function() {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			const uci = cursor();
+			if ((uci.get('oum', 'main', 'active_source') ?? 'none') != 'subscription')
+				return failure('not_subscription', 'Сейчас активна не подписка.');
+			let url = uci.get('openclash', 'oum_subscription_info', 'url') ?? '';
+			if (!match(url, /^https?:\/\//) || match(url, /[\r\n]/))
+				return failure('subscription_url_missing', 'Ссылка подписки не найдена. Добавьте её заново в настройках.');
+			if (!access('/usr/libexec/oum-source-job'))
+				return failure('runtime_missing', 'Компонент обновления подписки не установлен.');
+			let current = vpnJobStatus();
+			if (current.state == 'running')
+				return failure('job_running', 'Другое обновление уже выполняется.');
+			if (system(`mkdir ${VPN_JOB_LOCK}`) != 0)
+				return failure('job_running', 'Другая операция с подключением уже выполняется.');
+			if (system(`rm -rf ${VPN_JOB_DIR} && mkdir -p ${VPN_JOB_DIR} && chmod 700 ${VPN_JOB_DIR}`) != 0) {
+				system(`rmdir ${VPN_JOB_LOCK}`);
+				return failure('job_directory', 'Не удалось подготовить обновление подписки.');
+			}
+			if (!writePrivate(`${VPN_JOB_DIR}/input`, `${url}\n`) ||
+			    !writePrivate(`${VPN_JOB_DIR}/status`, 'state=running\ncode=queued\nmessage=Загружаем обновлённую подписку\n')) {
+				system(`rm -rf ${VPN_JOB_DIR}; rmdir ${VPN_JOB_LOCK}`);
+				return failure('input_write', 'Не удалось подготовить данные подписки.');
+			}
+			if (system(`(/usr/libexec/oum-source-job subscription ${VPN_JOB_DIR}/input) >/dev/null 2>&1 &`) != 0) {
+				system(`rm -rf ${VPN_JOB_DIR}; rmdir ${VPN_JOB_LOCK}`);
+				return failure('job_start', 'Не удалось запустить обновление подписки.');
+			}
+			return { ok: true, state: 'running', message: 'Обновляем подписку и список нод…' };
+		}
+	},
+
 	setVpnEnabled: {
 		args: { enabled: false },
 		call: function(request) {
@@ -829,6 +2522,32 @@ const methods = {
 			if (type(enabled) != 'bool')
 				return failure('invalid_state', 'Некорректное состояние VPN.');
 			const uci = cursor();
+			if (podkopInstalled()) {
+				let iface = uci.get('podkop', 'main', 'interface') ?? '';
+				let connectionType = uci.get('podkop', 'main', 'connection_type') ?? '';
+				let youtubeMode = uci.get('oum', 'main', 'youtube_mode') ?? 'zapret';
+				if (enabled && connectionType == 'vpn' && !length(iface))
+					return failure('podkop_interface_missing', 'Сначала выберите отдельный AWG/WireGuard-интерфейс для Podkop.');
+				if (enabled && connectionType == 'proxy' && !length(uci.get('podkop', 'main', 'proxy_string') ?? ''))
+					return failure('podkop_proxy_missing', 'Сначала добавьте Reality-ссылку для Podkop.');
+				if (enabled) {
+					system('/etc/init.d/podkop enable >/dev/null 2>&1');
+					if (youtubeMode == 'zapret') {
+						system('/etc/init.d/zapret enable >/dev/null 2>&1');
+						system('(/etc/init.d/podkop restart; sleep 20; /etc/init.d/zapret restart; sleep 15; pgrep -f "^/opt/zapret/nfq/nfqws " >/dev/null 2>&1 || /etc/init.d/zapret restart) >/tmp/oum-vpn-control.log 2>&1 &');
+					}
+					else {
+						system('/etc/init.d/zapret disable >/dev/null 2>&1');
+						system('(/etc/init.d/zapret stop; /etc/init.d/podkop restart) >/tmp/oum-vpn-control.log 2>&1 &');
+					}
+				}
+				else {
+					system('/etc/init.d/podkop disable >/dev/null 2>&1');
+					system('/etc/init.d/zapret disable >/dev/null 2>&1');
+					system('(/etc/init.d/podkop stop; /etc/init.d/zapret stop; for pid in $(pgrep -f "^/opt/zapret/nfq/nfqws " 2>/dev/null); do kill "$pid" 2>/dev/null; done; nft delete table inet zapret >/dev/null 2>&1 || true; /etc/init.d/dnsmasq restart) >/tmp/oum-vpn-control.log 2>&1 &');
+				}
+				return { ok: true, enabled, engine: 'podkop', message: enabled ? (youtubeMode == 'zapret' ? 'Podkop и Zapret запускаются…' : 'Podkop запускается…') : 'Podkop отключается…' };
+			}
 			if (passwallInstalled()) {
 				let globalSection = null;
 				uci.foreach('passwall', 'global', (section) => {
@@ -858,14 +2577,16 @@ const methods = {
 	setDevicePolicy: {
 		args: { mac: '', policy: 'default' },
 		call: function(request) {
-			if (access(SYSTEM_JOB_LOCK))
+			if (configurationBusy())
 				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
 			let mac = uc(request.args.mac ?? '');
 			let policy = request.args.policy ?? 'default';
 			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
 				return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
-			if (!(policy in [ 'default', 'direct', 'vpn' ]))
+			if (!(policy in [ 'default', 'direct', 'gaming', 'vpn' ]))
 				return failure('invalid_policy', 'Неизвестный режим маршрутизации.');
+			if (policy == 'gaming' && !passwallInstalled())
+				return failure('gaming_requires_passwall', 'Режим «Игры напрямую» пока поддерживается только PassWall.');
 
 			const uci = cursor();
 			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
@@ -877,15 +2598,19 @@ const methods = {
 					section = device['.name'];
 			});
 			if (policy == 'default') {
-				if (section)
-					uci.delete('oum', section);
+				if (section) {
+					uci.delete('oum', section, 'policy');
+					uci.delete('oum', section, 'ip');
+					uci.delete('oum', section, 'name');
+					if (!length(uci.get('oum', section, 'alias') ?? '') && !deviceSectionHasState(uci, section))
+						uci.delete('oum', section);
+				}
 			}
 			else {
 				if (!section)
 					section = uci.add('oum', 'device');
 				uci.set('oum', section, 'mac', mac);
 				uci.set('oum', section, 'ip', client.ip);
-				uci.set('oum', section, 'name', client.name);
 				uci.set('oum', section, 'policy', policy);
 			}
 			if (!uci.commit('oum'))
@@ -893,6 +2618,222 @@ const methods = {
 			if (system('(/usr/libexec/oum-device-policy apply) >/tmp/oum-device-policy-start.log 2>&1 &') != 0)
 				return failure('apply_failed', 'Не удалось применить режим устройства.');
 			return { ok: true, mac, policy, message: 'Настройка сохранена и применяется…' };
+		}
+	},
+
+	setDeviceAlias: {
+		args: { mac: '', alias: '' },
+		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			let mac = uc(request.args.mac ?? '');
+			let alias = trim(request.args.alias ?? '');
+			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
+				return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
+			if (!validDeviceAlias(alias))
+				return failure('invalid_alias', 'Имя: максимум 32 символа; разрешены буквы, цифры, пробел, дефис, точка и подчёркивание.');
+
+			const uci = cursor();
+			let section = null;
+			uci.foreach('oum', 'device', (device) => {
+				if (uc(device.mac ?? '') == mac)
+					section = device['.name'];
+			});
+			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
+			if (!client && !section)
+				return failure('client_offline', 'Устройство ещё не сохранено и сейчас не подключено к роутеру.');
+
+			if (length(alias)) {
+				if (!section)
+					section = uci.add('oum', 'device');
+				uci.set('oum', section, 'mac', mac);
+				uci.set('oum', section, 'alias', alias);
+			}
+			else if (section) {
+				uci.delete('oum', section, 'alias');
+				if (!deviceSectionHasState(uci, section))
+					uci.delete('oum', section);
+			}
+			if (!uci.commit('oum'))
+				return failure('commit_failed', 'Не удалось сохранить имя устройства.');
+			return { ok: true, mac, alias, message: length(alias) ? 'Имя устройства сохранено.' : 'Пользовательское имя удалено.' };
+		}
+	},
+
+	setDevicePaused: {
+		args: { mac: '', paused: false },
+		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			let mac = uc(request.args.mac ?? '');
+			let paused = request.args.paused;
+			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
+				return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
+			if (type(paused) != 'bool')
+				return failure('invalid_state', 'Некорректное состояние паузы.');
+
+			const uci = cursor();
+			let section = null;
+			uci.foreach('oum', 'device', (device) => {
+				if (uc(device.mac ?? '') == mac)
+					section = device['.name'];
+			});
+			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
+			if (!client && !section)
+				return failure('client_unknown', 'Сначала подключите устройство к роутеру.');
+			if (paused) {
+				if (!section)
+					section = uci.add('oum', 'device');
+				uci.set('oum', section, 'mac', mac);
+				if (client?.ip)
+					uci.set('oum', section, 'ip', client.ip);
+				uci.set('oum', section, 'manual_paused', '1');
+				uci.set('oum', section, 'paused', '1');
+			}
+			else if (section) {
+				uci.delete('oum', section, 'manual_paused');
+				if (uci.get('oum', section, 'schedule_paused') == '1')
+					uci.set('oum', section, 'paused', '1');
+				else
+					uci.delete('oum', section, 'paused');
+				if (!length(uci.get('oum', section, 'alias') ?? '') && !deviceSectionHasState(uci, section))
+					uci.delete('oum', section);
+			}
+			if (!uci.commit('oum'))
+				return failure('commit_failed', 'Не удалось сохранить паузу устройства.');
+			if (system('(/usr/libexec/oum-device-policy apply) >/tmp/oum-device-policy-start.log 2>&1 &') != 0)
+				return failure('apply_failed', 'Не удалось применить паузу устройства.');
+			return { ok: true, mac, paused, message: paused ? 'Доступ в интернет приостановлен.' : 'Доступ в интернет восстановлен.' };
+		}
+	},
+
+	setDeviceParental: {
+		args: { mac: '', enabled: false },
+		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			let mac = uc(request.args.mac ?? '');
+			let enabled = request.args.enabled;
+			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
+				return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
+			if (type(enabled) != 'bool')
+				return failure('invalid_state', 'Некорректное состояние родительского контроля.');
+			const uci = cursor();
+			let section = null;
+			uci.foreach('oum', 'device', (device) => {
+				if (uc(device.mac ?? '') == mac) section = device['.name'];
+			});
+			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
+			if (enabled && !client)
+				return failure('client_offline', 'Чтобы добавить устройство, оно должно быть подключено к роутеру.');
+			if (!section && enabled) section = uci.add('oum', 'device');
+			if (!section)
+				return { ok: true, mac, enabled: false, message: 'Устройство уже удалено из родительского контроля.' };
+			uci.set('oum', section, 'mac', mac);
+			if (enabled) {
+				uci.set('oum', section, 'parental_managed', '1');
+				if (client?.ip) uci.set('oum', section, 'ip', client.ip);
+			}
+			else {
+				for (let option in [ 'parental_managed', 'manual_paused', 'schedule_paused', 'sched_enabled', 'sched_days', 'sched_start', 'sched_stop', 'paused', 'adblock' ])
+					uci.delete('oum', section, option);
+				if (!length(uci.get('oum', section, 'alias') ?? '') && !deviceSectionHasState(uci, section))
+					uci.delete('oum', section);
+			}
+			if (!uci.commit('oum'))
+				return failure('commit_failed', 'Не удалось сохранить состав родительского контроля.');
+			if (!enabled) {
+				system('/usr/libexec/oum-device-policy apply >/tmp/oum-parental-remove-policy.log 2>&1');
+				system('/usr/libexec/oum-adguard >/tmp/oum-parental-remove-dns.log 2>&1');
+			}
+			return { ok: true, mac, enabled, message: enabled ? 'Устройство добавлено в родительский контроль.' : 'Устройство удалено из родительского контроля.' };
+		}
+	},
+
+	parentalStatus: {
+		call: function() {
+			return parentalStatusData(cursor());
+		}
+	},
+
+	setParentalSchedule: {
+		args: { mac: '', enabled: false, days: '', start: '', stop: '' },
+		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			let mac = uc(request.args.mac ?? '');
+			let enabled = request.args.enabled;
+			let days = request.args.days ?? '';
+			let start = request.args.start ?? '';
+			let stop = request.args.stop ?? '';
+			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/))
+				return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
+			if (type(enabled) != 'bool')
+				return failure('invalid_state', 'Некорректное состояние расписания.');
+			if (enabled && (!validScheduleDays(days) || !validScheduleTime(start) || !validScheduleTime(stop) || start == stop))
+				return failure('invalid_schedule', 'Выберите дни и укажите разное время начала и окончания.');
+			let uci = cursor(), section = null;
+			uci.foreach('oum', 'device', (device) => {
+				if (uc(device.mac ?? '') == mac) section = device['.name'];
+			});
+			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
+			if (!client && !section)
+				return failure('client_unknown', 'Сначала подключите устройство к роутеру.');
+			if (!section) section = uci.add('oum', 'device');
+			uci.set('oum', section, 'mac', mac);
+			if (client?.ip) uci.set('oum', section, 'ip', client.ip);
+			if (enabled) {
+				uci.set('oum', section, 'sched_enabled', '1');
+				uci.set('oum', section, 'sched_days', days);
+				uci.set('oum', section, 'sched_start', start);
+				uci.set('oum', section, 'sched_stop', stop);
+			}
+			else {
+				uci.delete('oum', section, 'sched_enabled');
+				uci.delete('oum', section, 'schedule_paused');
+				if (uci.get('oum', section, 'manual_paused') == '1') uci.set('oum', section, 'paused', '1');
+				else uci.delete('oum', section, 'paused');
+			}
+			if (!uci.commit('oum')) return failure('commit_failed', 'Не удалось сохранить расписание.');
+			let applyCommand = enabled ? '/usr/libexec/oum-parental-cron' : '/usr/libexec/oum-device-policy apply';
+			if (system(`${applyCommand} >/tmp/oum-parental.log 2>&1`) != 0)
+				return failure('apply_failed', 'Расписание сохранено, но применить его сейчас не удалось.');
+			return { ok: true, mac, enabled, message: enabled ? 'Расписание сохранено.' : 'Расписание отключено.' };
+		}
+	},
+
+	setAdGuard: {
+		args: { mode: 'off' },
+		call: function(request) {
+			let mode = request.args.mode ?? 'off';
+			if (!(mode in [ 'off', 'standard', 'family' ]))
+				return failure('invalid_mode', 'Выберите режим DNS-фильтра.');
+			return startSystemJob('adguard', { mode });
+		}
+	},
+
+	setDeviceAdGuard: {
+		args: { mac: '', mode: 'inherit' },
+		call: function(request) {
+			if (access(SYSTEM_JOB_LOCK))
+				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
+			let mac = uc(request.args.mac ?? '');
+			let mode = request.args.mode ?? 'inherit';
+			if (!match(mac, /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/)) return failure('invalid_mac', 'Некорректный MAC-адрес устройства.');
+			if (!(mode in [ 'inherit', 'off', 'standard', 'family' ])) return failure('invalid_mode', 'Выберите режим DNS-фильтра.');
+			let uci = cursor(), section = null;
+			uci.foreach('oum', 'device', (device) => { if (uc(device.mac ?? '') == mac) section = device['.name']; });
+			let client = filter(connectedClients(uci), (item) => item.mac == mac)[0];
+			if (!client && !section) return failure('client_unknown', 'Сначала подключите устройство к роутеру.');
+			if (!section) section = uci.add('oum', 'device');
+			uci.set('oum', section, 'mac', mac);
+			if (client?.ip) uci.set('oum', section, 'ip', client.ip);
+			if (mode == 'inherit') uci.delete('oum', section, 'adblock');
+			else uci.set('oum', section, 'adblock', mode);
+			if (!length(uci.get('oum', section, 'alias') ?? '') && !deviceSectionHasState(uci, section)) uci.delete('oum', section);
+			if (!uci.commit('oum')) return failure('commit_failed', 'Не удалось сохранить DNS-фильтр устройства.');
+			if (system('/usr/libexec/oum-adguard >/tmp/oum-adguard.log 2>&1') != 0) return failure('apply_failed', 'Настройка сохранена, но DNS-фильтр не применился.');
+			return { ok: true, mac, mode, message: 'DNS-фильтр устройства сохранён. Переподключите его к Wi-Fi для немедленного применения.' };
 		}
 	},
 
@@ -920,8 +2861,12 @@ const methods = {
 					delays[node.name] = node.delay;
 				return { ok: true, engine: 'passwall', delays };
 			}
-			if (system('/usr/libexec/oum-mihomo-api delay >/dev/null 2>&1') != 0)
-				return failure('delay_failed', 'Не удалось измерить задержку нод.');
+				if (!access('/usr/libexec/oum-openclash-nodes'))
+					return failure('runtime_missing', 'Компонент TCP-проверки OpenClash не установлен.');
+				if (configurationBusy())
+					return failure('configuration_busy', 'Дождитесь завершения текущей операции.');
+				if (system('/usr/libexec/oum-openclash-nodes measure >/tmp/oum-openclash-nodes.log 2>&1') != 0)
+					return failure('delay_failed', 'Не удалось измерить TCP-задержку нод OpenClash.');
 			let updated = nodeStatusData();
 			if (!updated.available)
 				return failure('delay_read_failed', 'Не удалось прочитать результаты измерения.');
@@ -978,9 +2923,11 @@ const methods = {
 				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
 			let kind = request.args.vpn_type;
 			let payload = request.args.payload;
-			if (passwallInstalled())
-				return failure('engine_not_supported', 'Импорт источников PassWall будет добавлен отдельным этапом. Сейчас доступно только управление существующей конфигурацией.');
-			if (!access('/usr/libexec/oum-source-job'))
+			let passwall = passwallInstalled();
+			let runner = passwall ? '/usr/libexec/oum-passwall-source-job' : '/usr/libexec/oum-source-job';
+			if (passwall && kind == 'awg')
+				return failure('engine_not_supported', 'AWG является отдельным сетевым туннелем. Для него выберите Podkop + Zapret.');
+			if (!access(runner))
 				return failure('runtime_missing', 'Компонент импорта OUM не установлен.');
 			if (!(kind in [ 'subscription', 'awg', 'proxy' ]))
 				return failure('invalid_vpn', 'Неизвестный тип подключения.');
@@ -1005,7 +2952,7 @@ const methods = {
 				system(`rmdir ${VPN_JOB_LOCK}`);
 				return failure('status_write', 'Не удалось создать состояние задания.');
 			}
-			if (system(`(/usr/libexec/oum-source-job ${kind} ${VPN_JOB_DIR}/input) >/dev/null 2>&1 &`) != 0) {
+			if (system(`(${runner} ${kind} ${VPN_JOB_DIR}/input) >/dev/null 2>&1 &`) != 0) {
 				system(`rmdir ${VPN_JOB_LOCK}`);
 				return failure('job_start', 'Не удалось запустить импорт.');
 			}
@@ -1023,6 +2970,7 @@ const methods = {
 			ssid_5: '',
 			wifi_password: '',
 			admin_password: '',
+			admin_no_password: false,
 			vpn_type: 'none'
 		},
 		call: function(request) {
@@ -1050,15 +2998,12 @@ const methods = {
 				uci.set('oum', 'main', 'setup_step', request.args.vpn_type == 'none' ? 'complete' : 'vpn');
 				uci.set('oum', 'main', 'setup_complete', '1');
 
-				phase = 'admin_password';
-				if (!setAdminPassword(uci, request.args.admin_password)) {
-					restoreConfigs();
-					return failure('password_failed', 'Не удалось изменить пароль панели.');
-				}
+				phase = 'root_access';
 				if (!setRootPassword(request.args.admin_password)) {
 					restoreConfigs();
-					return failure('root_password_failed', 'Не удалось защитить системную учётную запись.');
+					return failure('root_password_failed', 'Не удалось изменить пароль root.');
 				}
+				configureRootAccess(uci);
 
 				phase = 'commit';
 				for (let name in CONFIGS) {
@@ -1068,7 +3013,7 @@ const methods = {
 					}
 				}
 
-				system("(sleep 2; /etc/init.d/network reload; /sbin/wifi reload; /etc/init.d/rpcd restart) >/tmp/oum-apply.log 2>&1 &");
+				system("(sleep 2; /usr/libexec/oum-dropbear-blank-password && /etc/init.d/network reload; /sbin/wifi reload; /etc/init.d/rpcd restart; /etc/init.d/dropbear restart) >/tmp/oum-apply.log 2>&1 &");
 				return { ok: true, reconnect: true };
 			}
 			catch (err) {

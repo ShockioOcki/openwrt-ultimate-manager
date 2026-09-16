@@ -1,0 +1,45 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+CONF=/etc/oum/media-organizer.conf
+LOCK=/tmp/oum-media-organizer.lock
+
+[ -f "$CONF" ] || { echo 'Media organizer is not configured' >&2; exit 1; }
+. "$CONF"
+: "${SOURCE_DIR:?}"
+: "${STATE_DIR:?}"
+
+mkdir "$LOCK" 2>/dev/null || { echo 'Media organizer is already running' >&2; exit 4; }
+trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT INT TERM
+
+mkdir -p "$STATE_DIR"
+STATUS="$STATE_DIR/status"
+LOG="$STATE_DIR/media-organizer.log"
+
+write_status() {
+	printf 'last_run=%s\nresult=%s\nmessage=%s\n' "$(date +%s)" "$1" "$2" > "$STATUS.tmp"
+	mv "$STATUS.tmp" "$STATUS"
+}
+
+if find "$SOURCE_DIR" -type f -name '*.aria2' 2>/dev/null | grep -q .; then
+	write_status waiting 'Есть незавершённые загрузки aria2.'
+	echo 'aria2 downloads are still active' >&2
+	exit 3
+fi
+
+if /usr/bin/python3 /usr/libexec/oum-media-organizer >> "$LOG" 2>&1; then
+	message="$(tail -n 1 "$LOG" 2>/dev/null || true)"
+	write_status success "${message:-Сортировка завершена.}"
+	if [ "$(wc -l < "$LOG")" -gt 400 ]; then
+		tail -n 200 "$LOG" > "$LOG.tmp"
+		mv "$LOG.tmp" "$LOG"
+	fi
+	exit 0
+fi
+
+message="$(tail -n 1 "$LOG" 2>/dev/null || true)"
+write_status failed "${message:-Сортировка завершилась с ошибкой.}"
+echo "${message:-media organizer failed}" >&2
+exit 1

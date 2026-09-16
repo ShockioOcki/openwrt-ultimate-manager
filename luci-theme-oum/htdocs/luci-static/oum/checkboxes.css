@@ -1,0 +1,29 @@
+/* Compact native flag rows; preserve dependencies and input events. */
+@layer oum-form-buttons {
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox,
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox * { -webkit-tap-highlight-color:transparent !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox > label:empty { pointer-events:none !important; }
+
+
+ @media(max-width:900px) {
+  body.theme-oum :is(#maincontent,#modal_overlay) .cbi-value.hidden[data-widget="CBI.FlagValue"] { flex-direction:row !important; flex-wrap:wrap !important; align-items:center !important; gap:4px 12px !important; }
+  body.theme-oum :is(#maincontent,#modal_overlay) .cbi-value.hidden[data-widget="CBI.FlagValue"] > .cbi-value-title { flex:1 1 0 !important; }
+  body.theme-oum :is(#maincontent,#modal_overlay) .cbi-value.hidden[data-widget="CBI.FlagValue"] > .cbi-value-field > .cbi-checkbox { flex:0 0 36px !important; margin-left:auto !important; }
+  body.theme-oum :is(#maincontent,#modal_overlay) .cbi-value[data-widget="CBI.FlagValue"]:not([hidden]):not(.hidden):not([style*="display: none"]):not([style*="display:none"]) { display:grid !important; grid-template-columns:minmax(0,1fr) 36px !important; align-items:center !important; gap:4px 12px !important; }
+  body.theme-oum :is(#maincontent,#modal_overlay) .cbi-value[data-widget="CBI.FlagValue"] > .cbi-value-title { grid-column:1 !important; grid-row:1 !important; width:auto !important; min-width:0 !important; margin:0 !important; padding:0 !important; text-align:left !important; }
+  body.theme-oum :is(#maincontent,#modal_overlay) .cbi-value[data-widget="CBI.FlagValue"] > .cbi-value-field { display:contents !important; }
+  body.theme-oum :is(#maincontent,#modal_overlay) .cbi-value[data-widget="CBI.FlagValue"] > .cbi-value-field > .cbi-checkbox { grid-column:2 !important; grid-row:1 !important; justify-self:end !important; }
+  body.theme-oum :is(#maincontent,#modal_overlay) .cbi-value[data-widget="CBI.FlagValue"] > .cbi-value-field > .cbi-value-description { grid-column:1 / -1; }
+ }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox { display:inline-flex !important; position:relative !important; align-items:center !important; justify-content:center !important; min-width:36px !important; min-height:36px !important; margin:0 !important; padding:0 !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox > input[type="checkbox"] { appearance:none !important; -webkit-appearance:none !important; display:block !important; position:relative !important; inset:auto !important; opacity:1 !important; box-sizing:border-box !important; width:22px !important; height:22px !important; min-width:22px !important; min-height:22px !important; margin:0 !important; padding:0 !important; border:1px solid var(--oum-line-strong) !important; border-radius:6px !important; background:var(--oum-paper-soft) !important; box-shadow:none !important; cursor:pointer; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox > input[type="checkbox"]:checked { background-color:var(--oum-paper-soft) !important; border-color:var(--oum-line-strong) !important; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 12 4 4 10-10' fill='none' stroke='%2338bdf8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important; background-size:20px 20px !important; background-position:center !important; background-repeat:no-repeat !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox > input[type="checkbox"]::before { display:none !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox > input[type="checkbox"]::after { content:'' !important; display:none !important; position:absolute !important; left:6px !important; top:3px !important; width:6px !important; height:10px !important; background:transparent !important; border:solid var(--oum-paper) !important; border-width:0 2px 2px 0 !important; transform:rotate(45deg) !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox > input[type="checkbox"]:checked::after { display:none !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox > input[type="checkbox"]:focus-visible { outline:2px solid var(--oum-action) !important; outline-offset:3px !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox > input[type="checkbox"]:disabled { opacity:.45 !important; cursor:not-allowed; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox > label:empty { position:absolute !important; inset:0 !important; width:36px !important; height:36px !important; margin:0 !important; padding:0 !important; background:transparent !important; border:0 !important; cursor:pointer; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox > label:empty::before,
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-checkbox > label:empty::after { display:none !important; }
+}

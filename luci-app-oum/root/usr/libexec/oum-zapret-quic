@@ -1,0 +1,85 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-status}"
+BACKUP=/etc/oum/rollback/firewall-before-quic
+MUTATED=0
+SUCCESS=0
+
+blocked() {
+	[ "$(uci -q get firewall.oum_quic_80.target || true)" = REJECT ] &&
+		[ "$(uci -q get firewall.oum_quic_443.target || true)" = REJECT ]
+}
+
+save_backup() {
+	mkdir -p "$(dirname "$BACKUP")"
+	cp /etc/config/firewall "$BACKUP"
+	chmod 600 "$BACKUP"
+}
+
+restore_backup() {
+	[ -f "$BACKUP" ] || return 1
+	cp "$BACKUP" /etc/config/firewall
+	chmod 600 /etc/config/firewall
+	/etc/init.d/firewall restart >/dev/null 2>&1
+}
+
+cleanup() {
+	set +e
+	if [ "$MUTATED" = 1 ] && [ "$SUCCESS" != 1 ]; then
+		restore_backup >/dev/null 2>&1 || true
+	fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+set_rule() {
+	section="$1"
+	port="$2"
+	uci -q set "firewall.$section=rule"
+	uci -q set "firewall.$section.name=OUM Block QUIC UDP $port"
+	uci -q set "firewall.$section.src=lan"
+	uci -q set "firewall.$section.dest=wan"
+	uci -q set "firewall.$section.proto=udp"
+	uci -q set "firewall.$section.dest_port=$port"
+	uci -q set "firewall.$section.target=REJECT"
+	uci -q set "firewall.$section.family=any"
+}
+
+apply_firewall() {
+	uci -q commit firewall
+	/etc/init.d/firewall restart >/dev/null 2>&1
+}
+
+enable() {
+	[ -f /etc/config/firewall ] && [ -x /etc/init.d/firewall ] || return 1
+	save_backup
+	MUTATED=1
+	set_rule oum_quic_80 80
+	set_rule oum_quic_443 443
+	apply_firewall || return 1
+	blocked || return 1
+	SUCCESS=1
+	MUTATED=0
+}
+
+disable() {
+	[ -f /etc/config/firewall ] && [ -x /etc/init.d/firewall ] || return 1
+	save_backup
+	MUTATED=1
+	uci -q delete firewall.oum_quic_80 || true
+	uci -q delete firewall.oum_quic_443 || true
+	apply_firewall || return 1
+	! blocked || return 1
+	SUCCESS=1
+	MUTATED=0
+}
+
+case "$ACTION" in
+	status) blocked && echo blocked || echo allowed ;;
+	enable) enable ;;
+	disable) disable ;;
+	*) echo "usage: $0 {status|enable|disable}" >&2; exit 2 ;;
+esac

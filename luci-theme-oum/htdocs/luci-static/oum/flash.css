@@ -1,0 +1,24 @@
+/* Presentation only; preserve native flash confirmations and tab visibility. */
+@layer oum-form-buttons {
+ @media(max-width:900px) {
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view .cbi-section,
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view .cbi-section-node,
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view .cbi-map-tabbed { padding:0 !important; margin:0 !important; border:0 !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view [data-widget="CBI.ContainerValue"] { padding:18px 0 !important; margin:0 !important; border:0 !important; border-bottom:1px solid var(--oum-line) !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view h3 { margin:0 0 8px !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view .cbi-section-descr { margin:0 0 12px !important; font-size:12px !important; line-height:1.6 !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view .cbi-value:not([data-widget="CBI.ContainerValue"]) { padding:10px 0 !important; margin:0 !important; border:0 !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view [data-widget="CBI.ButtonValue"] { display:grid !important; grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important; gap:6px 12px !important; align-items:center !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view .cbi-value-title { width:auto !important; min-width:0 !important; padding:0 !important; margin:0 !important; text-align:left !important; font-size:12px !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view [data-widget="CBI.ButtonValue"] > .cbi-value-field { display:contents !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view [data-widget="CBI.ButtonValue"] output { justify-self:end; max-width:100%; min-width:0; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view [data-widget="CBI.ButtonValue"] button { margin:0 !important; width:auto !important; max-width:100% !important; min-width:0 !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view .cbi-value-description { grid-column:1 / -1; margin:2px 0 0 !important; padding:0 !important; font-size:12px !important; line-height:1.6 !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view .cbi-value-description::before { display:none !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view [data-widget="CBI.ListValue"] { display:grid !important; grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important; gap:12px !important; align-items:center; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view [data-widget="CBI.ListValue"] .cbi-value-field { min-width:0 !important; margin:0 !important; padding:0 !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view select { width:100% !important; min-width:0 !important; height:36px !important; margin:0 !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view textarea { box-sizing:border-box !important; width:100% !important; min-width:0 !important; max-width:100% !important; height:45vh !important; min-height:220px !important; font:12px/1.6 ui-monospace,monospace !important; }
+  body.theme-oum[data-page="admin-system-flash"] #maincontent #view [data-tab="config"] > h3 { margin-top:18px !important; }
+ }
+}

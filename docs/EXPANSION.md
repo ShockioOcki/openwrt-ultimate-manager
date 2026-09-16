@@ -30,11 +30,14 @@ separately tested feature. Dual-band devices can share the 5 GHz radio between
 AP and backhaul at a performance cost, while a future tri-band target may
 dedicate a radio to backhaul.
 
-Installing Mesh may require replacing `wpad-basic-*` with `wpad-mesh-*`. OUM
-must verify available storage and packages before replacement, keep the old
-package list, and never reload wireless until the new runtime is installed and
-the generated configuration passes validation. A reconnect watchdog restores
-the previous wireless configuration unless the user confirms the new link.
+On the validated AX6S/OpenWrt 25.12.3 target OUM replaces
+`wpad-basic-mbedtls` with a locally bundled `wpad-mesh-mbedtls` built from the
+same release revision. Both APK files have pinned SHA-256 checksums. OUM keeps
+the original package locally, backs up `/etc/config/wireless`, installs the new
+runtime before reloading Wi-Fi, verifies that an AP returns, and automatically
+restores `wpad-basic-mbedtls` plus the wireless configuration on failure. Other
+architectures and hostapd revisions remain blocked until they have their own
+verified package pair.
 
 ## USB mobile connection
 
@@ -46,12 +49,15 @@ OUM detects the device before offering a protocol. Supported families are:
 - QMI.
 
 The form contains APN, optional PIN and credentials as write-only fields. The
-user chooses whether mobile WAN is the primary connection or a backup. Backup
-mode is the default and uses health checks plus controlled failover; it must not
-silently send traffic through a metered modem while wired WAN is healthy.
+initial implementation switches mobile WAN explicitly and preserves the wired
+configuration for rollback. Automatic backup mode remains a separate step: it
+needs health checks and controlled failover so OUM never silently sends traffic
+through a metered modem while wired WAN is healthy.
 
-Drivers are selected from the detected USB identifiers and interfaces. OUM
-does not install all modem packages blindly. DNS supplied by a modem does not
+Drivers are selected in stages from the detected USB interfaces. OUM handles
+RNDIS and CDC Ethernet as DHCP, recognizes MBIM and NCM class descriptors, and
+probes vendor-specific interfaces for QMI before falling back to serial PPP.
+It does not install every modem stack blindly. DNS supplied by a modem does not
 replace the router-wide OUM DNS policy without an explicit design change.
 
 ## USB storage
@@ -72,4 +78,3 @@ confirmation.
    time.
 6. Test Mesh with two compatible routers only after ordinary AP recovery has
    been verified.
-

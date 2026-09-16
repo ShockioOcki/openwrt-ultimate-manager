@@ -93,6 +93,10 @@ switch_node() {
 	cp /etc/config/passwall "$BACKUP" || exit 6
 	chmod 600 "$BACKUP"
 	uci set "passwall.${shunt}.default_node=${target}" || exit 6
+for device_acl in $(uci -q show passwall | sed -n 's/^passwall\.\([^.=]*\)=acl_rule$/\1/p'); do
+	[ "$(uci -q get "passwall.$device_acl.remarks")" = 'OUM device VPN' ] || continue
+	uci -q set "passwall.$device_acl.tcp_node=${target}"
+done
 	uci commit passwall || exit 6
 	enabled="$(uci -q get 'passwall.@global[0].enabled')"
 	if [ "$enabled" = 1 ]; then

@@ -1,0 +1,159 @@
+{#
+ Copyright 2008-2022 OpenWrt LuCI contributors
+ Copyright 2026 OUM contributors
+ Licensed under the Apache License 2.0.
+#}
+
+{%
+	const boardinfo = ubus.call('system', 'board') || {};
+	const oum_setup = ubus.call('uci', 'get', { config: 'oum', section: 'main' })?.values || {};
+	const oum_setup_complete = oum_setup.setup_complete == '1';
+	const oum_setup_path = ctx.request_path?.[0] == 'oum' && ctx.request_path?.[1] == 'setup';
+	http.prepare_content('text/html; charset=UTF-8');
+-%}
+
+<!DOCTYPE html>
+<html lang="{{ dispatcher.lang }}" data-theme="light" data-darkmode="false">
+	<head>
+		<meta charset="utf-8">
+		<title>{{ striptags(`${dispatched?.title ? `${_(dispatched.title)} | ` : ''}${boardinfo.hostname ?? 'OUM'}`) }}</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+		<meta name="theme-color" content="#eef0ea">
+		<meta name="color-scheme" content="light dark">
+		<meta name="darkreader-lock">
+		<script>
+			(function() {
+				var mode = localStorage.getItem('oum-theme-mode') || localStorage.getItem('oum-theme') || 'light';
+				if (mode === 'auto' && window.matchMedia)
+					mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+				document.documentElement.setAttribute('data-theme', mode === 'dark' ? 'dark' : 'light');
+				document.documentElement.setAttribute('data-darkmode', mode === 'dark' ? 'true' : 'false');
+				document.querySelector('meta[name="theme-color"]').setAttribute('content', mode === 'dark' ? '#0f1622' : '#eef0ea');
+			})();
+		</script>
+		{% if (ctx.authuser && !oum_setup_complete && !oum_setup_path): %}
+		<style>html { visibility: hidden !important; }</style>
+		<script>window.location.replace({{ sprintf('%J', dispatcher.build_url('oum/setup')) }});</script>
+		{% endif %}
+		<link rel="stylesheet" href="{{ media }}/bootstrap-base.css?v={{ pkgs_update_time }}">
+		<link rel="stylesheet" media="only screen and (max-width: 854px)" href="{{ media }}/bootstrap-mobile.css?v={{ pkgs_update_time }}-oum-mobile2">
+		<link rel="stylesheet" href="{{ media }}/cascade.css?v=20260916-sidebarfit1">
+		<link rel="stylesheet" href="{{ media }}/stock-layout.css?v=20260916-restored1">
+		<link rel="stylesheet" href="{{ media }}/wireless-list.css?v=20260914-reconcile1">
+					<link rel="stylesheet" href="{{ media }}/buttons.css?v=20260915-firewall-actions1">
+					<link rel="stylesheet" href="{{ media }}/compact-inputs.css?v=20260915-inputs2">
+		{% if (ctx.request_path[0] == 'oum'): %}<link rel="stylesheet" href="{{ resource }}/oum/oum.css?v=20260916-routeicons1">{% endif %}
+		<style>
+			body.theme-oum[data-page^="oum-"] .oum-page-head #oum-theme-toggle,
+			body.theme-oum[data-page^="oum-"] .oum-page-head a[href*="/logout"] { display: none !important; }
+			body.theme-oum[data-page="oum-dashboard"] .oum-device-alias-form {
+				display: grid !important;
+				grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr) !important;
+				align-items: center !important;
+				gap: 6px !important;
+				width: 100% !important;
+				min-width: 0 !important;
+			}
+			body.theme-oum[data-page="oum-dashboard"] .oum-device-alias-form > input {
+				grid-column: 1 / -1 !important;
+				width: 100% !important;
+				min-width: 0 !important;
+				max-width: none !important;
+				height: 36px !important;
+				box-sizing: border-box !important;
+			}
+			body.theme-oum[data-page="oum-dashboard"] .oum-device-alias-form > .oum-device-rename {
+				width: 100% !important;
+				min-width: 0 !important;
+				height: 38px !important;
+				min-height: 38px !important;
+				padding-inline: 5px !important;
+				line-height: 1.2 !important;
+				white-space: nowrap !important;
+			}
+		</style>
+		<link rel="icon" href="{{ media }}/logo.svg" sizes="any">
+		{% if (node?.css): %}<link rel="stylesheet" href="{{ resource }}/{{ node.css }}?v={{ pkgs_update_time }}">{% endif %}
+		{% if (css): %}<style title="text/css">{{ css }}</style>{% endif %}
+		<script src="{{ dispatcher.build_url('admin/translations', dispatcher.lang) }}"></script>
+		<script src="{{ resource }}/cbi.js"></script>
+	<link rel="stylesheet" href="{{ media }}/clients.css?v=20260914-layout1">
+	<link rel="stylesheet" href="{{ media }}/radios.css?v=20260914-radio4">
+<script defer src="{{ media }}/radios.js?v=20260915-desktop1"></script>
+<script defer src="{{ media }}/form-actions.js?v=20260915-actions3"></script>
+<link rel="stylesheet" href="{{ media }}/overview.css?v=20260915-flat3">
+<link rel="stylesheet" href="{{ media }}/routes.css?v=20260915-table5">
+<script defer src="{{ media }}/routes.js?v=20260915-table5"></script>
+<link rel="stylesheet" href="{{ media }}/nftables.css?v=20260915-nft2">
+					<link rel="stylesheet" href="{{ media }}/logs.css?v=20260915-log4">
+					<script defer src="{{ media }}/checkboxes.js?v=20260915-check5"></script>
+<link rel="stylesheet" href="{{ media }}/checkboxes.css?v=20260915-check5">
+<link rel="stylesheet" href="{{ media }}/field-help.css?v=20260915-help5">
+<script defer src="{{ media }}/field-help.js?v=20260915-help5"></script>
+<link rel="stylesheet" href="{{ media }}/tabs.css?v=20260915-tabs1">
+<script defer src="{{ media }}/leases.js?v=20260915-leases1"></script>
+<link rel="stylesheet" href="{{ media }}/dhcp.css?v=20260915-dhcp2">
+<link rel="stylesheet" href="{{ media }}/desktop-network.css?v=20260915-desktop2">
+<link rel="stylesheet" href="{{ media }}/network-mobile.css?v=20260915-network6">
+<link rel="stylesheet" href="{{ media }}/flash.css?v=20260915-flash1">
+<link rel="stylesheet" href="{{ media }}/mounts.css?v=20260915-mounts1">
+<link rel="stylesheet" href="{{ media }}/startup.css?v=20260915-startup1">
+<script defer src="{{ media }}/startup.js?v=20260915-startup1"></script>
+<link rel="stylesheet" href="{{ media }}/packages.css?v=20260915-packages2">
+<link rel="stylesheet" href="{{ media }}/processes.css?v=20260915-proc-mobile2">
+					<script defer src="{{ media }}/processes.js?v=20260915-proc-mobile3"></script>
+<script defer src="{{ media }}/logs.js?v=20260915-log4"></script>
+</head>
+
+	<body class="theme-oum {{ blank_page ? 'oum-auth-page' : '' }} lang_{{ dispatcher.lang }} {{ entityencode(striptags(node?.title ?? ''), true) }}" data-page="{{ entityencode(join('-', ctx.request_path), true) }}">
+		{% if (!blank_page): %}
+		<div id="oum-system-shell">
+			<aside id="oum-system-sidebar" aria-label="{{ _('Navigation') }}">
+				<a class="oum-system-brand" href="/">
+					<span class="oum-system-mark" aria-hidden="true">O</span>
+					<span><strong>OUM</strong><small>Домашний щит</small></span>
+				</a>
+				<div class="oum-system-menu-label">МЕНЮ</div>
+				<ul class="nav" id="topmenu" style="display:none"></ul>
+				<ul class="oum-system-modes" id="modemenu" style="display:none"></ul>
+				<div class="oum-system-sidebar-foot">
+					{% if (ctx.authuser == 'root'): %}
+					{% if (ctx.request_path[0] == 'admin'): %}
+					<a class="btn oum-luci-admin" href="{{ dispatcher.build_url('oum') }}">Вернуться в OUM</a>
+					{% else %}
+					<a class="btn oum-luci-admin" href="{{ dispatcher.build_url('admin') }}">Стандартный LuCI</a>
+					{% endif %}
+					{% endif %}
+					<div class="oum-system-sidebar-actions">
+						<button id="oum-theme-toggle" class="btn oum-theme-toggle" type="button">Тёмная</button>
+						<a class="btn oum-logout" href="{{ dispatcher.build_url('oum/logout') }}">Выйти</a>
+					</div>
+					<span>{{ striptags(boardinfo.hostname ?? 'OpenWrt') }}</span>
+					<small>{{ version.distname }} {{ version.distversion }}</small>
+				</div>
+			</aside>
+
+			<div id="oum-system-stage">
+				<header id="oum-system-header">
+					<button id="oum-menu-toggle" class="oum-icon-button" type="button" aria-label="{{ _('Navigation') }}" aria-expanded="false"><span></span><span></span><span></span></button>
+					<div class="oum-system-title">
+						<strong>{{ striptags(_(dispatched?.title ?? 'OpenWrt')) }}</strong>
+						<small>{{ striptags(boardinfo.hostname ?? 'OpenWrt') }} · {{ version.distversion }}</small>
+					</div>
+					<div id="indicators" class="oum-system-indicators"></div>
+				</header>
+
+				<div id="oum-menu-overlay" hidden></div>
+				<main id="maincontent" class="container">
+
+					{% if (boardinfo.rootfs_type == 'initramfs'): %}
+					<div class="alert-message warning">
+						<h4>{{ _('System running in recovery (initramfs) mode.') }}</h4>
+						<p>{{ _('No changes to settings will be stored and are lost after rebooting. This mode should only be used to install a firmware upgrade') }}</p>
+						{% if (dispatcher.lookup('admin/system/flash')): %}<div class="right"><a class="btn" href="{{ dispatcher.build_url('admin/system/flash') }}">{{ _('Go to firmware upgrade...') }}</a></div>{% endif %}
+					</div>
+					{% endif %}
+
+					<noscript><div class="alert-message warning">{{ _('JavaScript required!') }}</div></noscript>
+					<div id="tabmenu" style="display:none"></div>
+		{% endif %}

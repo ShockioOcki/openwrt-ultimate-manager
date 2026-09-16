@@ -6,14 +6,15 @@ umask 077
 ACTION="${1:-}"
 TARGET="${2:-}"
 WORK=/tmp/oum-engine-switch
-STATE=/etc/oum/engines
 PACKAGE_CACHE=/etc/oum/packages
 STATUS="${OUM_ENGINE_STATUS:-}"
+STATUS_ACTION="${OUM_ENGINE_ACTION:-engine}"
 LOG=/tmp/oum-engine-switch.log
 ERROR_FILE=/tmp/oum-engine-error
+UPDATE_RESULT=/tmp/oum-engine-update-result
 
 PASSWALL_VERSION=26.5.11-r1
-PASSWALL_RELEASE=https://github.com/ShockioOcki/openwrt-ultimate-manager-assets/releases/download/passwall-26.5.11-owrt25.12-aarch64
+PASSWALL_RELEASE=https://github.com/ShockioOcki/openwrt-ultimate-manager/releases/download/passwall-26.5.11-owrt25.12-aarch64
 PASSWALL_ASSETS='chinadns-ng-2025.08.09-r1.apk|2ce83854e76692456a520be41d5fed017aa6a6294f9479f799592f2fb83c3f19
 dns2socks-2.1-r2.apk|49714c6ad39f0b0be862e460620ad33652e835dcf99e0de2e26e415fbf898b6b
 geoview-0.2.6-r1.apk|6beac4ccdcac40cfc377bdc564f0d74be338a63afb4273d522a16f4b1534b60d
@@ -22,8 +23,11 @@ ipt2socks-1.1.4-r3.apk|c18b1b20c6803eb405684fe0c2310f27478e3272dec45ef106a8ab9b1
 luci-app-passwall-26.5.11-r1.apk|9b2c7808b4709a0bcdf945537a2c347ff0b04cc83f54047e3b709e3483a7b18f
 microsocks-1.0.5-r2.apk|e1681f48ab5a5cafdf942a35d2b1f5cfaa95c7b5dbf65cec27ab5ab46001149f
 tcping-0.3-r1.apk|04429d4e95e7f64805fe087ead5ca1240516a5cc8ebd99203f274d0bda9e7779
-xray-core-26.5.9-r1.apk|db938702aeb73468853f0517fa63b8a67a2b88e9ba2aa7322f1cc1e936a1570c'
+xray-core-26.5.9-r1.apk|db938702aeb73468853f0517fa63b8a67a2b88e9ba2aa7322f1cc1e936a1570c
+geosite.dat|c9a47d1a83134e3dcb57d5a3457408c3ed426ab0430718c85a44d3223aaad075
+geoip.dat|8ebcb11333f7deed4bf2740f2ce3249aa8997ef03d437150c7ae373c011cd72a'
 PASSWALL_REMOVE='luci-app-passwall xray-core chinadns-ng dns2socks geoview haproxy ipt2socks microsocks tcping'
+PASSWALL_SYSTEM='kmod-nft-tproxy kmod-nft-socket'
 
 OPENCLASH_VERSION=0.47.156
 OPENCLASH_APK=luci-app-openclash-0.47.156.apk
@@ -34,19 +38,30 @@ MIHOMO_ARCHIVE=mihomo-linux-arm64-v1.19.30.gz
 MIHOMO_URL=https://github.com/MetaCubeX/mihomo/releases/download/v1.19.30/mihomo-linux-arm64-v1.19.30.gz
 MIHOMO_SHA=58896873736d28628f66de3677c8654fa0f180662523148e136cff4f6e890069
 
+PODKOP_VERSION=0.7.22-r1
+PODKOP_RU_APK=luci-i18n-podkop-ru-0.7.22.apk
+PODKOP_RU_VERSION=0.260818.58098
+PODKOP_RELEASE=https://github.com/itdoginfo/podkop/releases/download/0.7.22
+PODKOP_ASSETS='podkop-0.7.22-r1.apk|5abf1422f73819d0834fd3ca81ccd55aaa7631e8665dc03e8c0d629811302e27
+luci-app-podkop-0.7.22-r1.apk|72addad80b71a9f44ea64af011c24b405c98b7a2b94751166a5668deeab7ad53
+luci-i18n-podkop-ru-0.7.22.apk|8977ce5f659b0cafefbcc7ae9f549c6eddf6a95fbfeac934e418b033bcda414a'
+ZAPRET_VERSION=72.20260307-r1
+ZAPRET_ARCHIVE=zapret_v72.20260307_aarch64_cortex-a53.zip
+ZAPRET_URL=https://github.com/remittor/zapret-openwrt/releases/download/v72.20260307/$ZAPRET_ARCHIVE
+ZAPRET_SHA=fda00483a87071555e4bf3ae40ee815ee6c7f6a386f2860b646ce7e9347572dd
+PODKOP_REMOVE='luci-i18n-podkop-ru luci-app-podkop podkop sing-box luci-app-zapret zapret'
+
 CURRENT=none
-MUTATED=0
-SUCCESS=0
-TARGET_INSTALLED=0
-CURRENT_REMOVED=0
-OUM_RUNTIME='curl ruby ruby-yaml'
+CURRENT_WAS_ENABLED=0
+OUM_RUNTIME='curl ruby ruby-yaml unzip'
+OUM_CORE_RUNTIME='luci-base rpcd rpcd-mod-ucode uhttpd uhttpd-mod-ubus ubus ubusd procd netifd firewall4'
 
 update_status() {
 	[ -n "$STATUS" ] || return 0
 	code="$1"
 	message="$2"
 	tmp="$STATUS.engine.tmp"
-	printf 'state=running\naction=engine\ncode=%s\nmessage=%s\n' "$code" "$message" > "$tmp"
+	printf 'state=running\naction=%s\ncode=%s\nmessage=%s\n' "$STATUS_ACTION" "$code" "$message" > "$tmp"
 	mv "$tmp" "$STATUS"
 }
 
@@ -65,33 +80,38 @@ installed() {
 	apk info -e "$1" >/dev/null 2>&1
 }
 
+world_constrained() {
+	grep -Eq "^${1}([<>=~]|$)" /etc/apk/world 2>/dev/null
+}
+
 ensure_oum_runtime() {
 	# Development installs are copied directly to the router and therefore do
 	# not have an apk package keeping these dependencies in /etc/apk/world.
 	# Pin them explicitly before removing an engine, otherwise apk may remove
 	# Ruby/YAML as now-unused transitive OpenClash dependencies and break OUM.
 	apk add $OUM_RUNTIME >> "$LOG" 2>&1 || return 1
+	# Keep the router control plane as explicit world constraints. Removing a
+	# third-party LuCI package must never make apk consider LuCI/ubus/network
+	# packages orphaned and purge them as transitive dependencies.
+	# Keep the installed DNS variant; libubus is resolved by ubus for this firmware.
+	dns_package=dnsmasq
+	installed dnsmasq-full && dns_package=dnsmasq-full
+	apk add $OUM_CORE_RUNTIME "$dns_package" >> "$LOG" 2>&1 || return 1
 	command -v curl >/dev/null 2>&1 || return 1
 	command -v ruby >/dev/null 2>&1 || return 1
-	ruby -ryaml -e 'YAML.safe_load("oum: true") or exit 1' >> "$LOG" 2>&1
+	installed ruby-yaml
 }
 
 current_engine() {
-	if [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ] && installed luci-app-passwall; then
+	if [ -x /etc/init.d/podkop ] && [ -f /etc/config/podkop ] && installed podkop; then
+		printf '%s\n' podkop
+	elif [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ] && installed luci-app-passwall; then
 		printf '%s\n' passwall
 	elif [ -x /etc/init.d/openclash ] && [ -f /etc/config/openclash ] && installed luci-app-openclash; then
 		printf '%s\n' openclash
 	else
 		printf '%s\n' none
 	fi
-}
-
-service_enabled() {
-	case "$1" in
-		passwall) [ "$(uci -q get passwall.@global[0].enabled || true)" = 1 ] ;;
-		openclash) [ "$(uci -q get openclash.config.enable || true)" = 1 ] ;;
-		*) return 1 ;;
-	esac
 }
 
 fetch() {
@@ -101,7 +121,19 @@ fetch() {
 	if command -v curl >/dev/null 2>&1; then
 		curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$file" "$url"
 	else
-		wget -T 20 -t 3 -O "$file" "$url"
+		attempt=1
+		downloaded=0
+		while [ "$attempt" -le 3 ]; do
+			rm -f "$file"
+			if wget --timeout=20 -O "$file" "$url"; then
+				downloaded=1
+				break
+			fi
+			log "download attempt $attempt failed: $url"
+			attempt=$((attempt + 1))
+			[ "$attempt" -gt 3 ] || sleep 2
+		done
+		[ "$downloaded" = 1 ] || return 1
 	fi
 	[ -s "$file" ] || return 1
 	actual="$(sha256sum "$file" | awk '{print $1}')"
@@ -110,16 +142,20 @@ fetch() {
 
 stage_asset() {
 	engine="$1"
-	file="$2"
-	url="$3"
-	expected="$4"
+	asset_file="$2"
+	asset_url="$3"
+	asset_expected="$4"
 	destination="$5"
-	cached="$PACKAGE_CACHE/$engine/$file"
-	if [ -s "$cached" ] && [ "$(sha256sum "$cached" | awk '{print $1}')" = "$expected" ]; then
-		cp "$cached" "$destination"
-		return 0
+	# Engine replacement is intentionally a clean install. The only persistent
+	# exception is the private PassWall package directory managed by the owner.
+	if [ "$engine" = passwall ]; then
+		cached="$PACKAGE_CACHE/passwall/$asset_file"
+		if [ -s "$cached" ] && [ "$(sha256sum "$cached" | awk '{print $1}')" = "$asset_expected" ]; then
+			cp "$cached" "$destination"
+			return 0
+		fi
 	fi
-	fetch "$url" "$destination" "$expected"
+	fetch "$asset_url" "$destination" "$asset_expected"
 }
 
 download_passwall() {
@@ -144,78 +180,46 @@ download_openclash() {
 	stage_asset openclash "$MIHOMO_ARCHIVE" "$MIHOMO_URL" "$MIHOMO_SHA" "$WORK/openclash/$MIHOMO_ARCHIVE"
 }
 
+download_podkop() {
+	mkdir -p "$WORK/podkop"
+	old_ifs="$IFS"
+	IFS='
+'
+	for entry in $PODKOP_ASSETS; do
+		file="${entry%%|*}"
+		sha="${entry#*|}"
+		stage_asset podkop "$file" "$PODKOP_RELEASE/$file" "$sha" "$WORK/podkop/$file" || {
+			IFS="$old_ifs"
+			return 1
+		}
+	done
+	IFS="$old_ifs"
+	# OUM_SKIP_ZAPRET=1 allows podkop without zapret for diagnostics (see handoff 2026-08-27)
+	if [ "${OUM_SKIP_ZAPRET:-0}" = "1" ]; then
+		log "OUM_SKIP_ZAPRET=1 — skip zapret download for podkop"
+		return 0
+	fi
+	stage_asset podkop "$ZAPRET_ARCHIVE" "$ZAPRET_URL" "$ZAPRET_SHA" "$WORK/podkop/$ZAPRET_ARCHIVE" || return 1
+	unzip -jo "$WORK/podkop/$ZAPRET_ARCHIVE" 'apk/*.apk' -d "$WORK/podkop" >> "$LOG" 2>&1 || return 1
+	[ "$(sha256sum "$WORK/podkop/zapret-$ZAPRET_VERSION.apk" | awk '{print $1}')" = 2d1d3aa78b43d5319be3bb831cf81050c33920162f8e39368238a58ccbc16922 ] || return 1
+	[ "$(sha256sum "$WORK/podkop/luci-app-zapret-$ZAPRET_VERSION.apk" | awk '{print $1}')" = 6bdcc35f923b73f006f576e71a17b2b7076376a589bc7c2bd667d9a500a7a104 ] || return 1
+}
+
 download_engine() {
 	case "$1" in
 		passwall) download_passwall ;;
 		openclash) download_openclash ;;
-		*) return 1 ;;
-	esac
-}
-
-simulate_engine() {
-	case "$1" in
-		passwall) apk add --simulate --allow-untrusted "$WORK"/passwall/*.apk >> "$LOG" 2>&1 ;;
-		openclash) apk add --simulate --allow-untrusted "$WORK/openclash/$OPENCLASH_APK" >> "$LOG" 2>&1 ;;
+		podkop) download_podkop ;;
 		*) return 1 ;;
 	esac
 }
 
 check_platform() {
 	command -v apk >/dev/null 2>&1 || die 'Переключение движков поддерживается только на OpenWrt с apk.'
-	[ "$(cat /etc/apk/arch 2>/dev/null || true)" = aarch64_cortex-a53 ] || die 'Для архитектуры роутера пока нет проверенного комплекта PassWall.'
+	[ "$(cat /etc/apk/arch 2>/dev/null || true)" = aarch64_cortex-a53 ] || die 'Для архитектуры роутера пока нет проверенного комплекта VPN-движков.'
 	grep -q "DISTRIB_RELEASE='25\.12\." /etc/openwrt_release || die 'Комплект проверен только с OpenWrt 25.12.'
 	available="$(df -Pk /tmp | awk 'NR == 2 { print $4 }')"
-	[ "${available:-0}" -ge 50000 ] || die 'Недостаточно временной памяти для безопасной загрузки нового и резервного комплектов.'
-}
-
-save_metadata() {
-	dir="$1"
-	printf 'active_source=%s\npending_source=%s\n' \
-		"$(uci -q get oum.main.active_source || echo none)" \
-		"$(uci -q get oum.main.pending_source || echo none)" > "$dir/oum-state"
-}
-
-save_engine() {
-	engine="$1"
-	[ "$engine" != none ] || return 0
-	tmp="$STATE/.${engine}.new"
-	rm -rf "$tmp"
-	mkdir -p "$tmp"
-	if service_enabled "$engine"; then printf '1\n' > "$tmp/enabled"; else printf '0\n' > "$tmp/enabled"; fi
-	save_metadata "$tmp"
-	case "$engine" in
-		passwall)
-			cp /etc/config/passwall "$tmp/passwall"
-			;;
-		openclash)
-			mkdir -p "$tmp/files/etc/config" "$tmp/files/etc/openclash"
-			[ ! -f /etc/config/openclash ] || cp /etc/config/openclash "$tmp/files/etc/config/openclash"
-			# Rule-provider downloads are reproducible caches and can be large.
-			# Preserve only user/OUM configuration needed to restore the engine.
-			for dir in config custom; do
-				[ ! -d "/etc/openclash/$dir" ] || cp -a "/etc/openclash/$dir" "$tmp/files/etc/openclash/$dir"
-			done
-			tar -czf "$tmp/openclash-config.tar.gz" -C "$tmp/files" .
-			rm -rf "$tmp/files"
-			;;
-	esac
-	rm -rf "$STATE/$engine"
-	mv "$tmp" "$STATE/$engine"
-	chmod -R go-rwx "$STATE/$engine"
-}
-
-restore_metadata() {
-	dir="$STATE/$1"
-	if [ -f "$dir/oum-state" ]; then
-		active="$(sed -n 's/^active_source=//p' "$dir/oum-state" | head -n 1)"
-		pending="$(sed -n 's/^pending_source=//p' "$dir/oum-state" | head -n 1)"
-	else
-		active=none
-		pending=none
-	fi
-	uci -q set "oum.main.active_source=${active:-none}"
-	uci -q set "oum.main.pending_source=${pending:-none}"
-	uci -q commit oum
+	[ "${available:-0}" -ge 30000 ] || die 'Недостаточно временной памяти для загрузки нового движка.'
 }
 
 remove_engine() {
@@ -224,7 +228,9 @@ remove_engine() {
 			/etc/init.d/passwall stop >/dev/null 2>&1 || true
 			/etc/init.d/passwall disable >/dev/null 2>&1 || true
 			packages=''
-			for package in $PASSWALL_REMOVE; do installed "$package" && packages="$packages $package"; done
+			for package in $PASSWALL_REMOVE; do
+				if installed "$package" || world_constrained "$package"; then packages="$packages $package"; fi
+			done
 			[ -z "$packages" ] || apk del $packages >> "$LOG" 2>&1
 			rm -f /etc/config/passwall
 			rm -rf /tmp/etc/passwall /tmp/etc/passwall_tmp
@@ -234,12 +240,41 @@ remove_engine() {
 		openclash)
 			/etc/init.d/openclash stop >/dev/null 2>&1 || true
 			/etc/init.d/openclash disable >/dev/null 2>&1 || true
-			installed luci-app-openclash && apk del luci-app-openclash >> "$LOG" 2>&1
+			if installed luci-app-openclash || world_constrained luci-app-openclash; then
+				apk del luci-app-openclash >> "$LOG" 2>&1 || return 1
+			fi
 			rm -rf /etc/openclash
 			rm -f /etc/config/openclash
 			rm -rf /tmp/openclash /tmp/openclash_ui
 			rm -f /tmp/openclash.bak
 			if installed luci-app-openclash; then return 1; fi
+			;;
+		podkop)
+			/etc/init.d/podkop stop >/dev/null 2>&1 || true
+			/etc/init.d/podkop disable >/dev/null 2>&1 || true
+			/etc/init.d/zapret stop >/dev/null 2>&1 || true
+			/etc/init.d/zapret disable >/dev/null 2>&1 || true
+			# A damaged or manually started Zapret instance may outlive its init script.
+			# Stop it before removing binaries and nftables state.
+			if pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1; then
+				pkill -TERM -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1 || true
+			fi
+			packages=''
+			for package in $PODKOP_REMOVE; do
+				if installed "$package" || world_constrained "$package"; then packages="$packages $package"; fi
+			done
+			# apk-tools 3 has no --no-prune option. ensure_oum_runtime() pins the
+			# OUM control-plane dependencies in world before this removal.
+			[ -z "$packages" ] || apk del $packages >> "$LOG" 2>&1 || return 1
+			rm -f /etc/config/podkop /etc/config/zapret
+			rm -rf /etc/sing-box /opt/zapret /tmp/sing-box /tmp/podkop
+			nft delete table inet PodkopTable >/dev/null 2>&1 || true
+			nft delete table inet zapret >/dev/null 2>&1 || true
+			# AmneziaWG is a shared OUM component rather than a VPN engine. Keep its
+			# packages and managed configuration available for a future Podkop install,
+			# but make sure the interface cannot retain routes while another engine runs.
+			/usr/libexec/oum-awg-manager disable >> "$LOG" 2>&1 || true
+			if installed podkop || installed zapret; then return 1; fi
 			;;
 	esac
 	return 0
@@ -256,10 +291,39 @@ patch_passwall_compat() {
 }
 
 install_passwall() {
+	apk add $PASSWALL_SYSTEM >> "$LOG" 2>&1 || return 1
 	apk add --allow-untrusted "$WORK"/passwall/*.apk >> "$LOG" 2>&1 || return 1
-	[ -x /etc/init.d/passwall ] && command -v xray >/dev/null 2>&1 || return 1
-	[ "$(apk list --installed luci-app-passwall 2>/dev/null | sed -n 's/^luci-app-passwall-\([^ ]*\).*/\1/p')" = "$PASSWALL_VERSION" ] || return 1
-	[ ! -f "$STATE/passwall/passwall" ] || cp "$STATE/passwall/passwall" /etc/config/passwall
+	[ -x /etc/init.d/passwall ] && command -v xray >/dev/null 2>&1 || {
+		log 'PassWall package installed without its init script or Xray binary.'
+		return 1
+	}
+	installed_version="$(apk list --installed luci-app-passwall 2>/dev/null | sed -n 's/^luci-app-passwall-\([^ ]*\).*/\1/p')"
+	[ "$installed_version" = "$PASSWALL_VERSION" ] || {
+		log "Unexpected PassWall version after installation: ${installed_version:-missing}."
+		return 1
+	}
+	# The standalone APK ships its initial UCI configuration through an
+	# OpenWrt uci-defaults script. apk does not execute that script when these
+	# private packages are installed directly, so bootstrap it explicitly on a
+	# clean router. Existing PassWall configuration is never overwritten.
+	if [ ! -s /etc/config/passwall ]; then
+		[ -x /etc/uci-defaults/luci-passwall ] || {
+			log 'PassWall default configuration bootstrap is missing.'
+			return 1
+		}
+		/etc/uci-defaults/luci-passwall >> "$LOG" 2>&1 || {
+			log 'PassWall default configuration bootstrap failed.'
+			return 1
+		}
+	fi
+	[ -s /etc/config/passwall ] || {
+		log 'PassWall configuration was not created.'
+		return 1
+	}
+	mkdir -p /usr/share/v2ray
+	cp "$WORK/passwall/geosite.dat" /usr/share/v2ray/geosite.dat || return 1
+	cp "$WORK/passwall/geoip.dat" /usr/share/v2ray/geoip.dat || return 1
+	chmod 644 /usr/share/v2ray/geosite.dat /usr/share/v2ray/geoip.dat
 	chmod 600 /etc/config/passwall
 	patch_passwall_compat
 }
@@ -271,142 +335,343 @@ install_openclash() {
 	gzip -dc "$WORK/openclash/$MIHOMO_ARCHIVE" > /etc/openclash/core/clash_meta || return 1
 	chmod 755 /etc/openclash/core/clash_meta
 	/etc/openclash/core/clash_meta -v >> "$LOG" 2>&1 || return 1
-	if [ -f "$STATE/openclash/openclash-config.tar.gz" ]; then
-		tar -xzf "$STATE/openclash/openclash-config.tar.gz" -C /
-	fi
 	[ -f /etc/config/openclash ] || return 1
+}
+
+install_podkop() {
+	apk add --allow-untrusted \
+		"$WORK/podkop/podkop-$PODKOP_VERSION.apk" \
+		"$WORK/podkop/luci-app-podkop-$PODKOP_VERSION.apk" \
+		"$WORK/podkop/$PODKOP_RU_APK" >> "$LOG" 2>&1 || return 1
+	if [ "${OUM_SKIP_ZAPRET:-0}" != "1" ]; then
+		# remittor's post-install starts nfqws immediately with run_on_boot=1.
+		# On RB03 that Podkop+Zapret boot combination is the repeatable crash
+		# trigger. Install verified payloads without package scripts, then let
+		# OUM apply the explicit disabled policy below.
+		apk add --no-scripts --allow-untrusted \
+			"$WORK/podkop/zapret-$ZAPRET_VERSION.apk" \
+			"$WORK/podkop/luci-app-zapret-$ZAPRET_VERSION.apk" >> "$LOG" 2>&1 || return 1
+	fi
+	if [ "${OUM_SKIP_ZAPRET:-0}" = "1" ]; then
+		[ -x /etc/init.d/podkop ] && command -v sing-box >/dev/null 2>&1 || return 1
+		[ "$(apk list --installed podkop 2>/dev/null | sed -n 's/^podkop-\([^ ]*\).*/\1/p')" = "$PODKOP_VERSION" ] || return 1
+	else
+		[ -x /etc/init.d/podkop ] && [ -x /etc/init.d/zapret ] && command -v sing-box >/dev/null 2>&1 || return 1
+		[ "$(apk list --installed podkop 2>/dev/null | sed -n 's/^podkop-\([^ ]*\).*/\1/p')" = "$PODKOP_VERSION" ] || return 1
+		[ "$(apk list --installed zapret 2>/dev/null | sed -n 's/^zapret-\([^ ]*\).*/\1/p')" = "$ZAPRET_VERSION" ] || return 1
+	fi
+	if [ "${OUM_SKIP_ZAPRET:-0}" = "1" ]; then
+		[ -f /etc/config/podkop ] || return 1
+		chmod 600 /etc/config/podkop
+	else
+		[ -f /etc/config/podkop ] && [ -f /opt/zapret/config ] || return 1
+		# --no-scripts prevents the package from starting nfqws during engine
+		# replacement, but it also skips Zapret's harmless UCI bootstrap. Run only
+		# that vendor-supplied bootstrap explicitly while services remain stopped.
+		if [ ! -s /etc/config/zapret ]; then
+			bootstrap=/etc/uci-defaults/zapret-uci-def-cfg.sh
+			[ -x "$bootstrap" ] || {
+				log 'Zapret UCI bootstrap is missing.'
+				return 1
+			}
+			"$bootstrap" >> "$LOG" 2>&1 || {
+				log 'Zapret UCI bootstrap failed.'
+				return 1
+			}
+			rm -f "$bootstrap"
+		fi
+		[ -s /etc/config/zapret ] || {
+			log 'Zapret UCI configuration was not created.'
+			return 1
+		}
+		chmod 600 /etc/config/podkop /etc/config/zapret /opt/zapret/config
+	fi
+	/etc/init.d/podkop stop >/dev/null 2>&1 || true
+	/etc/init.d/podkop disable >/dev/null 2>&1 || true
+	/etc/init.d/zapret stop >/dev/null 2>&1 || true
+	/etc/init.d/zapret disable >/dev/null 2>&1 || true
+	if [ "${OUM_SKIP_ZAPRET:-0}" != 1 ]; then
+		# A fresh engine is installed stopped. Zapret can only be enabled later
+		# after the user chooses its YouTube mode.
+		uci -q set zapret.config.run_on_boot=0
+		uci -q commit zapret
+	fi
 }
 
 install_engine() {
 	case "$1" in
-		passwall) install_passwall ;;
-		openclash) install_openclash ;;
+		passwall) install_passwall || return 1 ;;
+		openclash) install_openclash || return 1 ;;
+		podkop) install_podkop || return 1 ;;
 		*) return 1 ;;
 	esac
+	dns="$(uci -q get "oum.main.dns_$1" || true)"
+	case "$1" in podkop) default_bootstrap=77.88.8.1 ;; *) default_bootstrap=1.0.0.1 ;; esac
+	bootstrap="$(uci -q get "oum.main.bootstrap_dns_$1" || echo "$default_bootstrap")"
+	[ -z "$dns" ] || /usr/libexec/oum-dns-manager configure "$1" "$dns" "$bootstrap" >> "$LOG" 2>&1 || return 1
 }
 
-wait_ready() {
-	engine="$1"
-	waited=0
-	while [ "$waited" -lt 60 ]; do
-		case "$engine" in
-			passwall) pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1 && return 0 ;;
-			openclash) pidof clash >/dev/null 2>&1 && nft list chain inet fw4 openclash >/dev/null 2>&1 && return 0 ;;
-		esac
-		sleep 1
-		waited=$((waited + 1))
-	done
+installed_version() {
+	apk list --installed "$1" 2>/dev/null | sed -n "s/^$1-\\([^ ]*\\).*/\\1/p" | head -n 1
+}
+
+engine_update_needed() {
+	case "$1" in
+		openclash)
+			[ "$(installed_version luci-app-openclash)" = "$OPENCLASH_VERSION" ] || return 0
+			[ -x /etc/openclash/core/clash_meta ] || return 0
+			/etc/openclash/core/clash_meta -v 2>/dev/null | grep -Fq "$MIHOMO_VERSION" || return 0
+			;;
+		podkop)
+			[ "$(installed_version podkop)" = "$PODKOP_VERSION" ] || return 0
+			[ "$(installed_version luci-app-podkop)" = "$PODKOP_VERSION" ] || return 0
+			[ "$(installed_version luci-i18n-podkop-ru)" = "$PODKOP_RU_VERSION" ] || return 0
+			if [ "${OUM_SKIP_ZAPRET:-0}" != 1 ]; then
+				[ "$(installed_version zapret)" = "$ZAPRET_VERSION" ] || return 0
+				[ "$(installed_version luci-app-zapret)" = "$ZAPRET_VERSION" ] || return 0
+			fi
+			;;
+		*) return 1 ;;
+	esac
 	return 1
 }
 
-activate_engine() {
-	engine="$1"
-	enabled=0
-	[ ! -f "$STATE/$engine/enabled" ] || enabled="$(cat "$STATE/$engine/enabled")"
-	if [ "$enabled" = 1 ]; then
-		/etc/init.d/$engine enable >/dev/null 2>&1 || true
-		/etc/init.d/$engine restart >> "$LOG" 2>&1 || return 1
-		wait_ready "$engine" || return 1
-	else
-		case "$engine" in
-			passwall) uci -q set passwall.@global[0].enabled=0; uci -q commit passwall ;;
-			openclash) uci -q set openclash.config.enable=0; uci -q commit openclash ;;
-		esac
-		/etc/init.d/$engine stop >/dev/null 2>&1 || true
-		/etc/init.d/$engine disable >/dev/null 2>&1 || true
-	fi
+update_openclash_in_place() {
+	was_running=0
+	engine_running openclash && was_running=1 || true
+	cp /etc/config/openclash "$WORK/openclash.config" || return 1
+	gzip -dc "$WORK/openclash/$MIHOMO_ARCHIVE" > "$WORK/openclash/clash_meta.new" || return 1
+	chmod 755 "$WORK/openclash/clash_meta.new"
+	"$WORK/openclash/clash_meta.new" -v 2>/dev/null | grep -Fq "$MIHOMO_VERSION" || return 1
+	stop_engine openclash
+	apk add --allow-untrusted "$WORK/openclash/$OPENCLASH_APK" >> "$LOG" 2>&1 || return 1
+	cp "$WORK/openclash/clash_meta.new" /etc/openclash/core/clash_meta || return 1
+	chmod 755 /etc/openclash/core/clash_meta
+	[ -s /etc/config/openclash ] || cp "$WORK/openclash.config" /etc/config/openclash
+	[ "$was_running" = 0 ] || /etc/init.d/openclash restart >> "$LOG" 2>&1 || return 1
 }
 
-rollback() {
-	[ "$MUTATED" = 1 ] || return 0
-	log "rolling back to $CURRENT"
-	/etc/init.d/$TARGET stop >/dev/null 2>&1 || true
-	if [ "$CURRENT" != none ] && [ "$CURRENT_REMOVED" = 1 ]; then
-		if install_engine "$CURRENT"; then
-			restore_metadata "$CURRENT"
-			remove_engine "$TARGET" || log 'could not fully remove failed target engine'
-			activate_engine "$CURRENT" || log 'could not restart previous engine'
-		else
-			log 'could not reinstall previous engine'
-		fi
-	else
-		[ "$TARGET_INSTALLED" != 1 ] || remove_engine "$TARGET" || log 'could not fully remove failed target engine'
+update_podkop_in_place() {
+	podkop_running=0
+	zapret_running=0
+	engine_running podkop && podkop_running=1 || true
+	pgrep -f '^/opt/zapret/nfq/nfqws ' >/dev/null 2>&1 && zapret_running=1 || true
+	tar -czf "$WORK/podkop-config.tgz" /etc/config/podkop /etc/config/zapret /opt/zapret/config 2>/dev/null || true
+	/etc/init.d/zapret stop >> "$LOG" 2>&1 || true
+	/etc/init.d/podkop stop >> "$LOG" 2>&1 || true
+	apk add --allow-untrusted \
+		"$WORK/podkop/podkop-$PODKOP_VERSION.apk" \
+		"$WORK/podkop/luci-app-podkop-$PODKOP_VERSION.apk" \
+		"$WORK/podkop/$PODKOP_RU_APK" >> "$LOG" 2>&1 || return 1
+	if [ "${OUM_SKIP_ZAPRET:-0}" != 1 ]; then
+		apk add --no-scripts --allow-untrusted \
+			"$WORK/podkop/zapret-$ZAPRET_VERSION.apk" \
+			"$WORK/podkop/luci-app-zapret-$ZAPRET_VERSION.apk" >> "$LOG" 2>&1 || return 1
 	fi
+	[ -s /etc/config/podkop ] || { [ ! -s "$WORK/podkop-config.tgz" ] || tar -xzf "$WORK/podkop-config.tgz" -C /; }
+	[ "$(installed_version podkop)" = "$PODKOP_VERSION" ] || return 1
+	[ "$(installed_version luci-app-podkop)" = "$PODKOP_VERSION" ] || return 1
+	if [ "${OUM_SKIP_ZAPRET:-0}" != 1 ]; then
+		[ "$(installed_version zapret)" = "$ZAPRET_VERSION" ] || return 1
+		[ "$(installed_version luci-app-zapret)" = "$ZAPRET_VERSION" ] || return 1
+	fi
+	[ "$podkop_running" = 0 ] || /etc/init.d/podkop restart >> "$LOG" 2>&1 || return 1
+	[ "$zapret_running" = 0 ] || /etc/init.d/zapret restart >> "$LOG" 2>&1 || return 1
+}
+
+update_engine() {
+	case "$TARGET" in openclash|podkop) ;; *) die 'Обновление доступно только для OpenClash и Podkop + Zapret.' ;; esac
+	check_platform
+	CURRENT="$(current_engine)"
+	[ "$CURRENT" = "$TARGET" ] || die 'Активный VPN-движок изменился. Обновите страницу.'
+	: > "$LOG"
+	rm -f "$ERROR_FILE" "$UPDATE_RESULT"
+	if ! engine_update_needed "$TARGET"; then
+		printf '%s\n' current > "$UPDATE_RESULT"
+		return 0
+	fi
+	rm -rf "$WORK"
+	mkdir -p "$WORK"
+	update_status runtime 'Подготавливаем безопасное обновление движка…'
+	ensure_oum_runtime || die 'Не удалось подготовить системные компоненты OUM.'
+	update_status vpn_access 'Проверяем доступ к проверенным файлам обновления…'
+	download_access || die 'Нет доступа к GitHub или репозиторию OpenWrt.'
+	update_status downloading 'Загружаем обновление и проверяем SHA-256…'
+	download_engine "$TARGET" || die 'Не удалось загрузить или проверить обновление движка.'
+	update_status installing 'Обновляем движок без удаления его настроек…'
+	case "$TARGET" in
+		openclash) update_openclash_in_place || die 'OpenClash не обновился; конфигурация сохранена.' ;;
+		podkop) update_podkop_in_place || die 'Podkop не обновился; конфигурация сохранена.' ;;
+	esac
+	printf '%s\n' updated > "$UPDATE_RESULT"
+	rm -f /tmp/luci-indexcache
+	rm -f /tmp/luci-modulecache/* 2>/dev/null || true
 }
 
 cleanup() {
-	set +e
-	if [ "$SUCCESS" != 1 ]; then rollback; fi
 	rm -rf "$WORK"
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-prepare_assets() {
-	engine="$1"
-	update_status package_index 'Обновляем индекс системных зависимостей…'
-	apk update >> "$LOG" 2>&1 || die 'Не удалось обновить индекс пакетов OpenWrt.'
-	update_status downloading 'Загружаем и проверяем полный комплект нового движка…'
-	download_engine "$engine" || die 'Не удалось получить проверенный комплект движка. Для приватной сборки загрузите пакеты в /etc/oum/packages или проверьте доступ в интернет.'
-	update_status dependencies 'Проверяем совместимость системных зависимостей…'
-	simulate_engine "$engine" || die 'Системные зависимости нового движка недоступны или несовместимы.'
+probe_url() {
+	url="$1"
+	if command -v curl >/dev/null 2>&1; then
+		curl -fsSL --connect-timeout 5 --max-time 12 --range 0-0 -o /dev/null "$url"
+	else
+		wget --timeout=12 -O /dev/null "$url" >/dev/null 2>&1
+	fi
+}
+
+download_access() {
+	probe_url 'https://github.com/' || return 1
+	probe_url 'https://raw.githubusercontent.com/openwrt/openwrt/master/README.md' || return 1
+	probe_url 'https://downloads.openwrt.org/releases/25.12.3/targets/mediatek/mt7622/sha256sums' || return 1
+}
+
+engine_running() {
+	case "$1" in
+		passwall) pidof xray >/dev/null 2>&1 ;;
+		openclash) pidof clash >/dev/null 2>&1 ;;
+		podkop) pidof sing-box >/dev/null 2>&1 ;;
+		*) return 1 ;;
+	esac
+}
+
+stop_engine() {
+	case "$1" in
+		passwall) /etc/init.d/passwall stop >> "$LOG" 2>&1 || true ;;
+		openclash) /etc/init.d/openclash stop >> "$LOG" 2>&1 || true ;;
+		podkop)
+			/etc/init.d/zapret stop >> "$LOG" 2>&1 || true
+			/etc/init.d/podkop stop >> "$LOG" 2>&1 || true
+			ifdown oum_awg >> "$LOG" 2>&1 || true
+			;;
+	esac
+}
+
+restart_previous_engine() {
+	[ "$CURRENT_WAS_ENABLED" = 1 ] || return 0
+	case "$CURRENT" in
+		passwall|openclash) /etc/init.d/$CURRENT restart >> "$LOG" 2>&1 || true ;;
+		podkop)
+			ifup oum_awg >> "$LOG" 2>&1 || true
+			/etc/init.d/podkop restart >> "$LOG" 2>&1 || true
+			;;
+	esac
+}
+
+prepare_direct_network() {
+	/etc/init.d/firewall restart >> "$LOG" 2>&1 || true
+	/etc/init.d/dnsmasq restart >> "$LOG" 2>&1 || true
+	sleep 2
+}
+
+remove_all_engines() {
+	for engine in passwall openclash podkop; do
+		remove_engine "$engine" || return 1
+	done
+}
+
+disable_fresh_engine() {
+	case "$1" in
+		passwall)
+			uci -q set passwall.@global[0].enabled=0
+			uci -q commit passwall
+			;;
+		openclash)
+			uci -q set openclash.config.enable=0
+			uci -q commit openclash
+			;;
+		podkop)
+			/etc/init.d/zapret stop >/dev/null 2>&1 || true
+			/etc/init.d/zapret disable >/dev/null 2>&1 || true
+			;;
+	esac
+	/etc/init.d/$1 stop >/dev/null 2>&1 || true
+	/etc/init.d/$1 disable >/dev/null 2>&1 || true
+}
+
+saved_podkop_awg() {
+	[ "$(uci -q get network.oum_awg.oum_managed || true)" = 1 ] || return 1
+	case "$(uci -q get network.oum_awg.proto || true)" in amneziawg|wireguard) ;; *) return 1 ;; esac
+	[ "$(uci -q get network.oum_awg_peer.oum_managed || true)" = 1 ] || return 1
+	[ -s /etc/oum/engines/podkop/awg.conf ]
+}
+
+activate_saved_podkop_awg() {
+	update_status reconnecting 'Найден сохранённый AWG-туннель OUM; проверяем и подключаем его к Podkop…'
+	/usr/libexec/oum-awg-manager enable >> "$LOG" 2>&1 || return 1
+	if ! /usr/libexec/oum-podkop-config configure oum_awg >> "$LOG" 2>&1; then
+		/usr/libexec/oum-awg-manager disable >> "$LOG" 2>&1 || true
+		return 1
+	fi
 }
 
 preflight_engine() {
-	case "$TARGET" in passwall|openclash) ;; *) die 'Неизвестный VPN-движок.' ;; esac
+	case "$TARGET" in openclash|passwall|podkop) ;; *) die 'Выберите OpenClash, PassWall или Podkop + Zapret.' ;; esac
 	: > "$LOG"
 	rm -f "$ERROR_FILE"
 	check_platform
 	rm -rf "$WORK"
 	mkdir -p "$WORK"
-	prepare_assets "$TARGET"
-	SUCCESS=1
-	printf '%s\n' 'Комплект загружен, контрольные суммы и зависимости проверены.'
+	ensure_oum_runtime || die 'Не удалось установить системные компоненты OUM.'
+	download_access || die 'Нет доступа к GitHub или репозиторию OpenWrt.'
+	download_engine "$TARGET" || die 'Не удалось загрузить или проверить комплект движка.'
+	printf '%s\n' 'Комплект загружен, контрольные суммы проверены.'
 }
 
 switch_engine() {
-	case "$TARGET" in passwall|openclash) ;; *) die 'Неизвестный VPN-движок.' ;; esac
+	case "$TARGET" in openclash|passwall|podkop) ;; *) die 'Выберите OpenClash, PassWall или Podkop + Zapret.' ;; esac
 	check_platform
 	CURRENT="$(current_engine)"
 	[ "$CURRENT" != "$TARGET" ] || die 'Выбранный VPN-движок уже установлен.'
 	: > "$LOG"
 	rm -f "$ERROR_FILE"
 	rm -rf "$WORK"
-	mkdir -p "$WORK" "$STATE"
-	prepare_assets "$TARGET"
-	update_status runtime 'Закрепляем системные компоненты OUM…'
-	ensure_oum_runtime || die 'Не удалось закрепить системные компоненты OUM; переключение отменено.'
+	mkdir -p "$WORK"
+	update_status runtime 'Подготавливаем системные компоненты OUM…'
+	ensure_oum_runtime || die 'Не удалось подготовить системные компоненты OUM.'
+	update_status vpn_access 'Проверяем доступ к загрузкам через текущий VPN…'
+	download_access || die 'Через текущий VPN нет доступа к GitHub или репозиторию OpenWrt.'
 	if [ "$CURRENT" != none ]; then
-		update_status rollback_assets 'Готовим проверенный комплект для автоматического возврата…'
-		download_engine "$CURRENT" || die 'Не удалось подготовить комплект автоматического возврата.'
-		simulate_engine "$CURRENT" || die 'Комплект автоматического возврата несовместим с системой.'
-		update_status backup 'Сохраняем конфигурацию текущего движка…'
-		save_engine "$CURRENT" || die 'Не удалось сохранить конфигурацию текущего движка.'
+		engine_running "$CURRENT" && CURRENT_WAS_ENABLED=1 || CURRENT_WAS_ENABLED=0
+		update_status stopping 'Временно останавливаем текущий VPN и проверяем прямой интернет…'
+		stop_engine "$CURRENT"
+		prepare_direct_network
+		if ! download_access; then
+			restart_previous_engine
+			die 'Без VPN нет доступа к GitHub или репозиторию OpenWrt. Старый движок сохранён и запущен обратно. Подключите роутер к точке доступа телефона с уже работающим VPN и повторите замену.'
+		fi
 	fi
-	MUTATED=1
-	update_status installing 'Устанавливаем новый движок, пока текущий продолжает работать…'
-	install_engine "$TARGET" || die 'Новый движок не установился; запускаем автоматический возврат.'
-	TARGET_INSTALLED=1
-	/etc/init.d/$TARGET stop >/dev/null 2>&1 || true
-	/etc/init.d/$TARGET disable >/dev/null 2>&1 || true
-	update_status replacing 'Останавливаем и удаляем исполняемые пакеты прежнего движка…'
-	CURRENT_REMOVED=1
-	remove_engine "$CURRENT" || die 'Не удалось безопасно удалить прежний движок; запускаем автоматический возврат.'
-	update_status verifying 'Проверяем установленный движок и восстанавливаем его конфигурацию…'
-	restore_metadata "$TARGET"
-	activate_engine "$TARGET" || die 'Новый движок не прошёл проверку; запускаем автоматический возврат.'
+	update_status removing 'Полностью удаляем прежние VPN-движки и их настройки…'
+	remove_all_engines || die 'Не удалось полностью удалить старый VPN-движок. Новый движок не устанавливался.'
+	update_status package_index 'Обновляем список пакетов через прямое подключение…'
+	apk --timeout 15 update >> "$LOG" 2>&1 || die 'Не удалось обновить список пакетов OpenWrt. VPN-движок сейчас не установлен.'
+	update_status downloading 'Скачиваем и проверяем новый движок…'
+	download_engine "$TARGET" || die 'Не удалось скачать новый движок с GitHub. VPN-движок сейчас не установлен; подключитесь к точке доступа телефона с VPN и повторите установку.'
+	update_status installing 'Выполняем чистую установку нового движка…'
+	install_engine "$TARGET" || die 'Новый движок не установился. Старые движки удалены; исправьте доступ к сети и повторите установку.'
+	disable_fresh_engine "$TARGET"
+	if [ "$TARGET" = podkop ] && saved_podkop_awg; then
+		activate_saved_podkop_awg || die 'Podkop установлен, но сохранённый AWG-туннель не удалось активировать. Туннель оставлен выключенным.'
+	else
+		uci -q set oum.main.active_source=none
+		uci -q set oum.main.pending_source=none
+		uci -q commit oum
+	fi
 	rm -f /tmp/luci-indexcache
 	rm -f /tmp/luci-modulecache/* 2>/dev/null || true
 	/etc/init.d/rpcd restart >/dev/null 2>&1 || true
 	/etc/init.d/uhttpd restart >/dev/null 2>&1 || true
-	SUCCESS=1
 	rm -f "$ERROR_FILE"
-	log "switch completed: $CURRENT -> $TARGET"
+	log "clean switch completed: $CURRENT -> $TARGET"
 }
 
 case "$ACTION" in
 	switch) switch_engine ;;
+	update) update_engine ;;
 	preflight) preflight_engine ;;
 	current) current_engine ;;
-	*) printf 'usage: %s {current|preflight ENGINE|switch ENGINE}\n' "$0" >&2; exit 2 ;;
+	*) printf 'usage: %s {current|preflight ENGINE|switch ENGINE|update ENGINE}\n' "$0" >&2; exit 2 ;;
 esac

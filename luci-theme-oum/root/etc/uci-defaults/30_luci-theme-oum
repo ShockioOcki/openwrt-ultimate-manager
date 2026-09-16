@@ -1,0 +1,30 @@
+#!/bin/sh
+# luci-theme-oum — регистрация темы в LuCI
+
+if [ ! -f /etc/config/luci ]; then
+	touch /etc/config/luci
+fi
+
+if ! uci -q get luci.themes >/dev/null; then
+	uci set luci.themes=internal
+	uci commit luci
+fi
+
+# Регистрируем OUM как системную тему (полный оверрайд bootstrap)
+if ! uci -q get luci.themes.OUM >/dev/null; then
+	uci set luci.themes.OUM="/luci-static/oum"
+	uci commit luci
+fi
+
+# Конфиг темы для синхронизации настроек (опционально, как у proton2025)
+if [ ! -f /etc/config/oum_theme ]; then
+	touch /etc/config/oum_theme
+fi
+if ! uci -q get oum_theme.settings >/dev/null; then
+	uci set oum_theme.settings=theme
+	uci set oum_theme.settings.mode='light'
+	uci set oum_theme.settings.accent='oum'
+	uci commit oum_theme
+fi
+
+exit 0

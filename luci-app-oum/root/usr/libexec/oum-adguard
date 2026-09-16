@@ -1,0 +1,53 @@
+#!/bin/sh
+
+set -e
+
+IPKG_INSTROOT="${IPKG_INSTROOT:-}"
+export IPKG_INSTROOT
+. /lib/functions.sh
+
+main_dns_section="$(uci -q show dhcp | sed -n "s/^dhcp\.\([^.=]*\)=dnsmasq$/\1/p" | head -n 1)"
+[ -n "$main_dns_section" ] || exit 1
+lan_ip="$(uci -q get network.lan.ipaddr || true)"
+lan_ip="${lan_ip%%/*}"
+[ -n "$lan_ip" ] || lan_ip='192.168.5.1'
+
+for section in $(uci -q show dhcp | sed -n "s/^dhcp\.\(adguard_[0-9a-fA-F]*\)=host$/\1/p"); do
+	uci -q delete "dhcp.$section" || true
+done
+uci -q delete dhcp.oum_adguard_standard || true
+uci -q delete dhcp.oum_adguard_family || true
+uci -q delete dhcp.oum_adguard_off || true
+for option in '6,94.140.14.14,94.140.15.15' '6,94.140.14.15,94.140.15.16'; do
+	uci -q del_list "dhcp.$main_dns_section.dhcp_option=$option" || true
+done
+
+uci -q set dhcp.oum_adguard_standard='tag'
+uci -q add_list dhcp.oum_adguard_standard.dhcp_option='6,94.140.14.14,94.140.15.15'
+uci -q set dhcp.oum_adguard_family='tag'
+uci -q add_list dhcp.oum_adguard_family.dhcp_option='6,94.140.14.15,94.140.15.16'
+uci -q set dhcp.oum_adguard_off='tag'
+uci -q add_list "dhcp.oum_adguard_off.dhcp_option=6,$lan_ip"
+
+global_mode="$(uci -q get oum.main.adguard_mode || echo off)"
+case "$global_mode" in
+	standard) uci -q add_list "dhcp.$main_dns_section.dhcp_option=6,94.140.14.14,94.140.15.15" ;;
+	family) uci -q add_list "dhcp.$main_dns_section.dhcp_option=6,94.140.14.15,94.140.15.16" ;;
+esac
+
+apply_device() {
+	local section="$1" mac mode id
+	config_get mac "$section" mac ''
+	config_get mode "$section" adblock 'inherit'
+	printf '%s' "$mac" | grep -Eqi '^[0-9a-f]{2}(:[0-9a-f]{2}){5}$' || return 0
+	case "$mode" in inherit) return 0;; off|standard|family) :;; *) return 0;; esac
+	id="$(printf '%s' "$mac" | tr -d ':' | tr 'A-F' 'a-f')"
+	uci -q set "dhcp.adguard_$id=host"
+	uci -q set "dhcp.adguard_$id.mac=$mac"
+	uci -q add_list "dhcp.adguard_$id.tag=oum_adguard_$mode"
+}
+
+config_load oum
+config_foreach apply_device device
+uci -q commit dhcp
+/etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1

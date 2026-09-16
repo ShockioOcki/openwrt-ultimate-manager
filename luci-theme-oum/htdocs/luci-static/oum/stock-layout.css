@@ -1,0 +1,222 @@
+/* Stock LuCI layout refinement. Keep ovhome57 and third-party pages intact. */
+
+/* LuCI emits a <br> after each fact; it must not become an empty grid item. */
+body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] > div > br {
+  display: none !important;
+}
+
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .cbi-section-table {
+    table-layout: fixed;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacebox"] {
+    width: 20% !important;
+    min-width: 0 !important;
+    vertical-align: top !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox {
+    max-width: 100%;
+    flex-wrap: wrap;
+    box-shadow: none !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .ifacebox-body {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] > div {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)) !important;
+    gap: 6px 20px !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td[data-name="_ifacestat"] span.nowrap {
+    display: block !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    border: 0 !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+    font-variant-numeric: tabular-nums;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions {
+    width: 232px !important;
+    min-width: 0 !important;
+    vertical-align: top !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions > div {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
+    gap: 6px !important;
+  }
+  body.theme-oum[data-page="admin-network-network"] #cbi-network-interface .td.cbi-section-actions button {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 36px !important;
+    padding: 7px 6px !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    line-height: 1.25 !important;
+  }
+
+  /* Same overview view has three entry routes. Keep their tables identical. */
+  body.theme-oum:is([data-page="admin-status-overview"], [data-page="admin"], [data-page=""]) #maincontent .cbi-section {
+    padding: 18px 22px !important;
+    box-shadow: none !important;
+  }
+  body.theme-oum:is([data-page="admin-status-overview"], [data-page="admin"], [data-page=""]) #maincontent .cbi-section > div > table:not(.assoclist) tr > td {
+    padding: 9px 12px !important;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+  body.theme-oum:is([data-page="admin-status-overview"], [data-page="admin"], [data-page=""]) #maincontent .cbi-section > div > table:not(.assoclist) tr > td:first-child {
+    width: 26%;
+    color: var(--oum-subtle);
+  }
+}
+
+/* Only the Wi-Fi editor: a fixed header/footer around a scrolling form. */
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay > .modal.cbi-modal:has(> #cbi-wireless) {
+  display: flex;
+  flex-direction: column;
+  width: min(960px, calc(100vw - 48px));
+  max-width: none;
+  max-height: calc(100dvh - 48px);
+  margin: 24px auto;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay > .modal.cbi-modal:has(> #cbi-wireless) > h4 {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--oum-line);
+  overflow-wrap: anywhere;
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay > .modal.cbi-modal > #cbi-wireless {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 22px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--oum-line-strong) var(--oum-paper);
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .cbi-section {
+  margin: 0 !important;
+  padding: 16px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .cbi-value[data-widget="CBI.ContainerValue"] {
+  display: block !important;
+  padding: 0 !important;
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .cbi-value:has(> .cbi-value-title) {
+  display: grid !important;
+  grid-template-columns: minmax(160px, 26%) minmax(0, 1fr);
+  align-items: start !important;
+  gap: 16px !important;
+  padding: 12px 0 !important;
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .cbi-value-title {
+  width: auto !important;
+  margin: 0;
+  padding-top: 8px;
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .cbi-value-title > br {
+  display: none;
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .cbi-value-field {
+  width: auto !important;
+  min-width: 0;
+  margin: 0 !important;
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .ifacebadge.large {
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .ifacebadge.large .nowrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay > .modal.cbi-modal:has(> #cbi-wireless) > .button-row {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 22px;
+  border-top: 1px solid var(--oum-line);
+  background: var(--oum-paper);
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay > .modal.cbi-modal:has(> #cbi-wireless) > .button-row > button {
+  min-height: 40px !important;
+  height: auto !important;
+  margin: 0;
+  padding: 8px 16px !important;
+  white-space: normal;
+}
+
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-network-wireless"] #modal_overlay > .modal.cbi-modal:has(> #cbi-wireless) {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #modal_overlay > .modal.cbi-modal:has(> #cbi-wireless) > h4 {
+    padding: max(16px, env(safe-area-inset-top)) 16px 16px;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #modal_overlay > .modal.cbi-modal > #cbi-wireless {
+    padding: 0 16px;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .cbi-value:has(> .cbi-value-title) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .cbi-value-title {
+    padding-top: 0;
+    font-size: 14px;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .cbi-tabmenu {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    overflow: visible !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .cbi-tabmenu > li > a {
+    min-height: 44px;
+    padding: 10px !important;
+    white-space: normal !important;
+    box-sizing: border-box;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless input:not([type="checkbox"]):not([type="radio"]),
+  body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless select {
+    font-size: 16px !important;
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #modal_overlay > .modal.cbi-modal:has(> #cbi-wireless) > .button-row {
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  }
+  body.theme-oum[data-page="admin-network-wireless"] #modal_overlay > .modal.cbi-modal:has(> #cbi-wireless) > .button-row > button {
+    flex: 1 1 0;
+    min-height: 44px !important;
+  }
+}
+
+/* Keep long dropdown labels and keyboard focus inside the Wi-Fi editor. */
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless .cbi-dropdown {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box;
+}
+body.theme-oum[data-page="admin-network-wireless"] #modal_overlay #cbi-wireless :is(input, select, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--oum-action) !important;
+  outline-offset: 2px;
+}

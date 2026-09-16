@@ -1,0 +1,140 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-}"
+LOCK_DIR=/tmp/oum-openclash-nodes.lock
+CACHE=/tmp/oum-openclash-nodes.cache
+RESULTS=/tmp/oum-openclash-nodes.results
+TARGETS=/tmp/oum-openclash-nodes.targets
+CHAINS=/tmp/oum-openclash-nodes.chains
+PROBE_COMMENT=OUM-probe
+
+[ "$ACTION" = measure ] || exit 2
+mkdir "$LOCK_DIR" 2>/dev/null || exit 3
+
+cleanup() {
+	set +e
+	if [ -s "$CHAINS" ]; then
+		while IFS= read -r spec; do
+			[ -n "$spec" ] || continue
+			nft -a list chain $spec 2>/dev/null |
+				awk -v marker="$PROBE_COMMENT" 'index($0, marker) { for (i=1; i<=NF; i++) if ($i == "handle") print $(i+1) }' |
+				while IFS= read -r handle; do
+					case "$handle" in ''|*[!0-9]*) continue ;; esac
+					nft delete rule $spec handle "$handle" >/dev/null 2>&1 || true
+				done
+		done < "$CHAINS"
+	fi
+	rm -rf "$LOCK_DIR"
+	rm -f "$RESULTS" "$TARGETS" "$CHAINS"
+}
+trap cleanup EXIT INT TERM
+
+profile="$(uci -q get openclash.config.config_path || true)"
+case "$profile" in /etc/openclash/config/*.yaml|/etc/openclash/config/*.yml) ;; *) exit 6 ;; esac
+runtime="/etc/openclash/$(basename "$profile")"
+[ -f "$runtime" ] || exit 6
+case "$runtime" in *[!A-Za-z0-9_./-]*) exit 6 ;; esac
+
+ruby -ryaml -e '
+begin
+  config = YAML.safe_load(File.read(ARGV.fetch(0)), permitted_classes: [], permitted_symbols: [], aliases: true)
+rescue StandardError
+  exit 7
+end
+found = 0
+Array(config["proxies"]).each do |node|
+  next unless node.is_a?(Hash)
+  name = node["name"].to_s
+  server = node["server"].to_s
+  port = node["port"].to_s
+  next if name.empty? || name =~ /[\t\r\n]/ || server.empty? || port !~ /\A\d+\z/
+  family = server.include?(":") ? "6" : (server =~ /\A\d{1,3}(?:\.\d{1,3}){3}\z/ ? "4" : "0")
+  puts [name, server, port, family].join("\t")
+  found += 1
+end
+exit 8 if found.zero?
+' "$runtime" > "$TARGETS"
+[ -s "$TARGETS" ] || exit 8
+
+redir_port="$(nft list ruleset 2>/dev/null | sed -n 's/.*redirect to :\([0-9][0-9]*\).*/\1/p' | grep -v '^53$' | head -n 1)"
+[ -n "$redir_port" ] || redir_port=7892
+nft -a list ruleset 2>/dev/null | awk -v redirect="redirect to :$redir_port" '
+	/^table / { family=$2; table=$3; sub(/\{$/, "", table) }
+	/^[[:space:]]*chain / { chain=$2; sub(/\{$/, "", chain) }
+	index($0, redirect) && family != "" && table != "" && chain != "" { print family, table, chain }
+' | sort -u > "$CHAINS"
+
+# A direct endpoint can be exempted safely. Domain endpoints fall back to the
+# Mihomo HTTP probe because forcing a possibly different DNS answer would make
+# both the route and the number misleading.
+if [ -s "$CHAINS" ]; then
+	awk -F '\t' '$4 == "4" || $4 == "6" { key=$2 FS $3 FS $4; if (!seen[key]++) print $2, $3, $4 }' "$TARGETS" |
+	while read -r server port family; do
+		while IFS= read -r spec; do
+			[ -n "$spec" ] || continue
+			if [ "$family" = 6 ]; then
+				nft insert rule $spec ip6 daddr "$server" tcp dport "$port" return comment "$PROBE_COMMENT" >/dev/null 2>&1 || true
+			else
+				nft insert rule $spec ip daddr "$server" tcp dport "$port" return comment "$PROBE_COMMENT" >/dev/null 2>&1 || true
+			fi
+		done < "$CHAINS"
+	done
+fi
+
+mihomo_port="$(uci -q get openclash.config.cn_port || echo 9090)"
+mihomo_secret="$(uci -q get openclash.config.dashboard_password || true)"
+
+probe_direct() {
+	name="$1"; server="$2"; port="$3"; family="$4"; best=''
+	case "$family" in 6) url="http://[$server]:$port/" ;; *) url="http://$server:$port/" ;; esac
+	for _ in 1 2; do
+		value="$(curl -s -o /dev/null --connect-timeout 2 --max-time 3 -w '%{time_connect}' "$url" 2>/dev/null || true)"
+		case "$value" in ''|0|0.000000|*[!0-9.]*) continue ;; esac
+		if [ -z "$best" ]; then best="$value"; else best="$(awk -v a="$best" -v b="$value" 'BEGIN { print (a < b ? a : b) }')"; fi
+	done
+	[ -n "$best" ] || return 0
+	printf '%s\t%s\n' "$name" "$(awk -v value="$best" 'BEGIN { value *= 1000; if (value < 1) value=1; printf "%.0f", value }')" >> "$RESULTS"
+}
+
+probe_mihomo() {
+	name="$1"; best=''
+	encoded="$(ruby -e 'ARGV.fetch(0).bytes.each { |byte| printf "%%%02X", byte }' "$name")"
+	url="http://127.0.0.1:${mihomo_port}/proxies/${encoded}/delay?timeout=4000&url=http%3A%2F%2Fcp.cloudflare.com%2Fgenerate_204"
+	for attempt in 1 2; do
+		if [ -n "$mihomo_secret" ]; then
+			value="$(curl -s --connect-timeout 2 --max-time 6 -H "Authorization: Bearer $mihomo_secret" "$url" 2>/dev/null || true)"
+		else
+			value="$(curl -s --connect-timeout 2 --max-time 6 "$url" 2>/dev/null || true)"
+		fi
+		delay="$(printf '%s' "$value" | sed -n 's/.*"delay"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')"
+		[ -n "$delay" ] || continue
+		if [ -z "$best" ] || [ "$delay" -lt "$best" ]; then best="$delay"; fi
+	done
+	[ -n "$best" ] || return 0
+	printf '%s\t%s\n' "$name" "$best" >> "$RESULTS"
+}
+
+: > "$RESULTS"
+pids=''; count=0
+while IFS="$(printf '\t')" read -r name server port family; do
+	[ -n "$name" ] || continue
+	if [ -s "$CHAINS" ] && { [ "$family" = 4 ] || [ "$family" = 6 ]; }; then
+		probe_direct "$name" "$server" "$port" "$family" &
+	else
+		probe_mihomo "$name" &
+	fi
+	pids="$pids $!"; count=$((count + 1))
+	if [ "$count" -ge 6 ]; then
+		for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+		pids=''; count=0
+	fi
+done < "$TARGETS"
+for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+
+sort -t "$(printf '\t')" -k1,1 -k2,2n "$RESULTS" | awk -F '\t' '!seen[$1]++' > "${CACHE}.tmp"
+printf 'timestamp\t%s\n' "$(date +%s)" >> "${CACHE}.tmp"
+mv "${CACHE}.tmp" "$CACHE"
+chmod 600 "$CACHE"

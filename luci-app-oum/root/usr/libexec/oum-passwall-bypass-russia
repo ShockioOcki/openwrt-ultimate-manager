@@ -1,0 +1,139 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+[ -s /usr/share/oum/routing/restricted-domains.txt ] || { echo "OUM routing list missing" >&2; exit 1; }
+
+node="${1:-}"
+shunt=oum_shunt
+[ -n "$node" ] || exit 2
+[ "$(uci -q get "passwall.$node")" = nodes ] || exit 2
+
+# Recreate only OUM-owned rules so their evaluation order is deterministic:
+# private networks -> game booster -> Discord -> games -> downloads/China ->
+# Russia -> restricted domains -> all other traffic direct.
+for section in oum_gearup oum_ai oum_telegram oum_discord oum_bittorrent oum_downloads oum_private oum_cn oum_games oum_ru oum_restricted oum_regional oum_fallback; do
+	uci -q delete "passwall.$section" || true
+done
+uci -q delete "passwall.$shunt" || true
+
+uci -q set passwall.oum_private=shunt_rules
+uci -q set "passwall.oum_private.remarks=Private networks"
+uci -q set "passwall.oum_private.network=tcp,udp"
+uci -q set "passwall.oum_private.ip_list=geoip:private"
+
+uci -q set passwall.oum_gearup=shunt_rules
+uci -q set "passwall.oum_gearup.remarks=GearUP direct"
+uci -q set "passwall.oum_gearup.network=tcp,udp"
+uci -q set "passwall.oum_gearup.domain_list=domain:gearupbooster.com
+domain:gearupportal.com
+domain:guinfra.com
+domain:sdp.gg"
+
+uci -q set passwall.oum_discord=shunt_rules
+uci -q set "passwall.oum_discord.remarks=Discord proxy"
+uci -q set "passwall.oum_discord.network=tcp,udp"
+uci -q set "passwall.oum_discord.domain_list=geosite:discord"
+
+# Telegram clients also connect directly to their datacenter IPs.
+uci -q set passwall.oum_telegram=shunt_rules
+uci -q set "passwall.oum_telegram.remarks=Telegram proxy"
+uci -q set "passwall.oum_telegram.network=tcp,udp"
+uci -q set "passwall.oum_telegram.domain_list=geosite:telegram"
+uci -q set "passwall.oum_telegram.ip_list=geoip:telegram"
+
+uci -q set passwall.oum_games=shunt_rules
+uci -q set "passwall.oum_games.remarks=International games direct"
+uci -q set "passwall.oum_games.network=tcp,udp"
+uci -q set "passwall.oum_games.domain_list=geosite:category-games-!cn"
+
+uci -q set passwall.oum_bittorrent=shunt_rules
+uci -q set "passwall.oum_bittorrent.remarks=BitTorrent direct"
+uci -q set "passwall.oum_bittorrent.network=tcp,udp"
+uci -q set "passwall.oum_bittorrent.protocol=bittorrent"
+
+uci -q set passwall.oum_downloads=shunt_rules
+uci -q set "passwall.oum_downloads.remarks=Updates and downloads direct"
+uci -q set "passwall.oum_downloads.network=tcp,udp"
+uci -q set "passwall.oum_downloads.domain_list=geosite:apple-update
+geosite:google-play
+geosite:microsoft
+geosite:samsung
+geosite:xiaomi"
+
+uci -q set passwall.oum_cn=shunt_rules
+uci -q set "passwall.oum_cn.remarks=China direct"
+uci -q set "passwall.oum_cn.network=tcp,udp"
+uci -q set "passwall.oum_cn.domain_list=geosite:cn"
+uci -q set "passwall.oum_cn.ip_list=geoip:cn"
+
+uci -q set passwall.oum_ru=shunt_rules
+uci -q set "passwall.oum_ru.remarks=Russia direct"
+uci -q set "passwall.oum_ru.network=tcp,udp"
+# The pinned geosite build exposes RU as the compatible CATEGORY-RU and
+# TLD-RU groups; its aggregate RU entry is malformed for the pinned Xray.
+uci -q set "passwall.oum_ru.domain_list=geosite:category-ru
+geosite:tld-ru
+domain:ru
+domain:su
+domain:xn--p1ai"
+uci -q set "passwall.oum_ru.ip_list=geoip:ru"
+
+for section in regional restricted; do
+ uci -q set "passwall.oum_$section=shunt_rules"
+ uci -q set "passwall.oum_$section.remarks=OUM $section services"
+ uci -q set "passwall.oum_$section.network=tcp,udp"
+ uci -q set "passwall.oum_$section.domain_list=$(sed 's/^/domain:/' /usr/share/oum/routing/$section-domains.txt)"
+done
+# Keep default_node as the selected VPN node for existing node controls.
+# Explicit final rules send all other domains and IP literals directly.
+uci -q set passwall.oum_fallback=shunt_rules
+uci -q set 'passwall.oum_fallback.remarks=Other traffic direct'
+uci -q set 'passwall.oum_fallback.network=tcp,udp'
+uci -q set 'passwall.oum_fallback.domain_list=regexp:.'
+uci -q set 'passwall.oum_fallback.ip_list=0.0.0.0/0
+::/0'
+
+uci -q set "passwall.$shunt=nodes"
+uci -q set "passwall.$shunt.remarks=OUM Bypass Russia"
+uci -q set "passwall.$shunt.type=Xray"
+uci -q set "passwall.$shunt.protocol=_shunt"
+uci -q set "passwall.$shunt.oum_gearup=_direct"
+uci -q set "passwall.$shunt.oum_regional=_default"
+uci -q set "passwall.$shunt.oum_restricted=_default"
+uci -q set "passwall.$shunt.oum_fallback=_direct"
+uci -q set "passwall.$shunt.oum_discord=_default"
+uci -q set "passwall.$shunt.oum_telegram=_default"
+uci -q set "passwall.$shunt.oum_bittorrent=_direct"
+uci -q set "passwall.$shunt.oum_downloads=_direct"
+uci -q set "passwall.$shunt.oum_private=_direct"
+uci -q set "passwall.$shunt.oum_cn=_direct"
+uci -q set "passwall.$shunt.oum_games=_direct"
+uci -q set "passwall.$shunt.oum_ru=_direct"
+uci -q set "passwall.$shunt.default_node=$node"
+uci -q set "passwall.$shunt.domainStrategy=AsIs"
+
+# The legacy China/GFW lists conflict with a Russia-only direct policy.
+uci -q set passwall.@global[0].use_direct_list='0'
+uci -q set passwall.@global[0].use_proxy_list='0'
+uci -q set passwall.@global[0].use_gfw_list='0'
+uci -q set passwall.@global[0].chn_list='0'
+uci -q set passwall.@global[0].chinadns_ng_default_tag='chn'
+# Intercept only matched shunt destinations; unknown game IPs bypass Xray.
+uci -q set passwall.@global[0].tcp_proxy_mode='disable'
+uci -q set passwall.@global[0].udp_proxy_mode='disable'
+# UDP/443 is used outside browsers too; do not globally drop game traffic.
+uci -q set passwall.@global_forwarding[0].udp_proxy_drop_ports='disable'
+uci -q set passwall.@global[0].direct_dns_mode='udp'
+uci -q get passwall.@global[0].direct_dns >/dev/null 2>&1 || uci -q set passwall.@global[0].direct_dns='77.88.8.1:53'
+uci -q set passwall.@global[0].v2ray_dns_mode='tcp'
+uci -q get passwall.@global[0].remote_dns >/dev/null 2>&1 || uci -q set passwall.@global[0].remote_dns='1.1.1.1:53'
+uci -q set passwall.@global_xray[0].sniffing_override_dest='1'
+uci -q set passwall.@global[0].tcp_node="$shunt"
+uci -q set passwall.@global[0].udp_node='tcp'
+for device_acl in $(uci -q show passwall | sed -n 's/^passwall\.\([^.=]*\)=acl_rule$/\1/p'); do
+	[ "$(uci -q get "passwall.$device_acl.remarks")" = 'OUM device VPN' ] || continue
+	uci -q set "passwall.$device_acl.tcp_node=$node"
+done
+uci -q commit passwall

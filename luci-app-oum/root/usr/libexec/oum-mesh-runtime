@@ -1,0 +1,85 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+ACTION="${1:-status}"
+ARCH='aarch64_cortex-a53'
+VERSION='2025.08.26~ca266cc2-r1'
+PACKAGE_DIR="/usr/share/oum/packages/$ARCH"
+BASIC="$PACKAGE_DIR/wpad-basic-mbedtls-$VERSION.apk"
+MESH="$PACKAGE_DIR/wpad-mesh-mbedtls-$VERSION.apk"
+BASIC_SHA256='4fc852e7eb070b1a9aea4f1fa00a3719cd5c8d7f89fccb3209b99d90f6182b13'
+MESH_SHA256='d3d22ced0e67219e86bd9e00f6dd1f960d3095c2637c9d344b509a45c8cab18b'
+BACKUP_DIR=/etc/oum/rollback/mesh-runtime
+CHANGED=0
+
+installed_version() {
+	apk list --installed "$1" 2>/dev/null | sed -n "s/^$1-\([^ ]*\).*/\1/p" | head -n 1
+}
+
+verify_file() {
+	file="$1"
+	expected="$2"
+	[ -f "$file" ] || return 1
+	actual="$(sha256sum "$file" | awk '{ print $1 }')"
+	[ "$actual" = "$expected" ]
+}
+
+compatible() {
+	[ -r /etc/openwrt_release ] || return 1
+	. /etc/openwrt_release
+	[ "${DISTRIB_ARCH:-}" = "$ARCH" ] || return 1
+	[ "$(installed_version hostapd-common)" = "$VERSION" ] || return 1
+	verify_file "$BASIC" "$BASIC_SHA256" || return 1
+	verify_file "$MESH" "$MESH_SHA256"
+}
+
+restore_basic() {
+	trap - EXIT INT TERM
+	apk info -e wpad-mesh-mbedtls >/dev/null 2>&1 && apk del wpad-mesh-mbedtls >/dev/null 2>&1 || true
+	if ! apk info -e wpad-basic-mbedtls >/dev/null 2>&1; then
+		apk add --allow-untrusted "$BASIC" >/dev/null 2>&1 || return 1
+	fi
+	[ ! -f "$BACKUP_DIR/wireless" ] || cp "$BACKUP_DIR/wireless" /etc/config/wireless
+	wifi reload >/dev/null 2>&1 || true
+}
+
+case "$ACTION" in
+	status)
+		compatible
+		;;
+	installed)
+		apk info -e wpad-mesh-mbedtls >/dev/null 2>&1
+		;;
+	install)
+		compatible || { echo 'Совместимый локальный комплект Mesh не найден.' >&2; exit 1; }
+		apk info -e wpad-mesh-mbedtls >/dev/null 2>&1 && exit 0
+		[ "$(installed_version wpad-basic-mbedtls)" = "$VERSION" ] || {
+			echo 'Установленный wpad-basic не соответствует комплекту Mesh.' >&2
+			exit 1
+		}
+		mkdir -p "$BACKUP_DIR"
+		cp /etc/config/wireless "$BACKUP_DIR/wireless"
+		apk list --installed 'wpad-*' > "$BACKUP_DIR/packages" 2>/dev/null || true
+		chmod 600 "$BACKUP_DIR/wireless" "$BACKUP_DIR/packages"
+		trap 'if [ "$CHANGED" = 1 ]; then restore_basic || true; fi' EXIT INT TERM
+		apk del wpad-basic-mbedtls >/dev/null
+		CHANGED=1
+		apk add --allow-untrusted "$MESH" >/dev/null
+		apk info -e wpad-mesh-mbedtls >/dev/null 2>&1
+		wifi reload >/dev/null 2>&1
+		sleep 4
+		iw dev 2>/dev/null | grep -q 'type AP'
+		CHANGED=0
+		trap - EXIT INT TERM
+		;;
+	restore-basic)
+		compatible || exit 1
+		restore_basic
+		;;
+	*)
+		echo 'Usage: oum-mesh-runtime status|installed|install|restore-basic' >&2
+		exit 2
+		;;
+esac

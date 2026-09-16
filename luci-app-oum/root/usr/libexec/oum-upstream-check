@@ -1,0 +1,103 @@
+#!/bin/sh
+# oum-upstream-check — сверка пинов VPN-движков с latest-релизами GitHub.
+#
+# Быстрый путь: кэш свеж (TTL 24ч) → exit 0 за миллисекунды.
+# Иначе — однократный фоновый рефреш (github api, ~3 запроса), caller не ждёт.
+# При недоступности сети кэш НЕ трогаем — UI молча ничего не показывает.
+#
+# Кэш /tmp/oum-upstream.cache, формат key=value:
+#   ts, openclash_pinned/latest/newer, podkop_*, zapret_* (newer: 1/0)
+
+CACHE=/tmp/oum-upstream.cache
+LOCKDIR=/tmp/oum-upstream.lock
+TTL=86400
+API=https://api.github.com
+ENGINE_MANAGER=/usr/libexec/oum-engine-manager
+
+now=$(date +%s 2>/dev/null) || exit 0
+
+if [ -f "$CACHE" ]; then
+	ts=$(sed -n 's/^ts=//p' "$CACHE" 2>/dev/null | head -n 1)
+	case "$ts" in
+		''|*[!0-9]*) ;;
+		*) [ $((now - ts)) -lt "$TTL" ] && exit 0 ;;
+	esac
+fi
+
+# single-flight: чужой рефреш идёт (лок моложе 10 мин) → выходим
+if ! mkdir "$LOCKDIR" 2>/dev/null; then
+	if [ -d "$LOCKDIR" ] && [ -n "$(find "$LOCKDIR" -mmin +10 2>/dev/null)" ]; then
+		rmdir "$LOCKDIR" 2>/dev/null
+		mkdir "$LOCKDIR" 2>/dev/null || exit 0
+	else
+		exit 0
+	fi
+fi
+
+(
+	# --- фоновый рефреш ---
+	norm() { # срезка ведущего v/V
+		v="$1"
+		case "$v" in
+			v*|V*) v=$(echo "$v" | cut -c2-) ;;
+		esac
+		echo "$v"
+	}
+
+	ver_newer() { # 0 (true), если A строго новее B; только числовые компоненты
+		awk -v a="$1" -v b="$2" 'BEGIN {
+			n = split(a, A, "."); m = split(b, B, ".");
+			for (i = 1; i <= n || i <= m; i++) {
+				x = (A[i] == "" ? 0 : A[i] + 0); y = (B[i] == "" ? 0 : B[i] + 0);
+				if (x > y) exit 0; if (x < y) exit 1;
+			}
+			exit 1;
+		}' 2>/dev/null
+	}
+
+	fetch_tag() { # $1 = owner/repo → tag_name или пусто
+		curl -s --max-time 8 "$API/repos/$1/releases/latest" 2>/dev/null \
+			| jsonfilter -e '@.tag_name' 2>/dev/null
+	}
+
+	pinned_from_url() { # $1 = VAR → версия из .../download/<ver>/... engine-manager
+		grep "^$1=" "$ENGINE_MANAGER" 2>/dev/null | head -n 1 \
+			| sed 's/.*\/download\///; s/\/.*//'
+	}
+
+	old_val() { # $1 = key → значение из прежнего кэша (для переживания офлайна)
+		sed -n "s/^$1=//p" "$CACHE" 2>/dev/null | head -n 1
+	}
+
+	emit() { # $1=name $2=owner/repo $3=VAR
+		name="$1"; repo="$2"; var="$3"
+		pinned=$(norm "$(pinned_from_url "$var")")
+		latest_raw=$(fetch_tag "$repo")
+		if [ -n "$latest_raw" ]; then
+			latest=$(norm "$latest_raw")
+			newer=0
+			if [ -n "$pinned" ] && [ -n "$latest" ] && ver_newer "$latest" "$pinned"; then
+				newer=1
+			fi
+		else
+			# офлайн/сбой API — сохраняем прежние значения
+			latest=$(old_val "${name}_latest")
+			newer=$(old_val "${name}_newer")
+			[ -z "$newer" ] && newer=0
+		fi
+		echo "${name}_pinned=$pinned"
+		echo "${name}_latest=$latest"
+		echo "${name}_newer=$newer"
+	}
+
+	tmp="$CACHE.$$.tmp"
+	{
+		echo "ts=$(date +%s)"
+		emit openclash vernesong/OpenClash OPENCLASH_URL
+		emit podkop itdoginfo/podkop PODKOP_RELEASE
+		emit zapret remittor/zapret-openwrt ZAPRET_URL
+	} >"$tmp" 2>/dev/null && mv "$tmp" "$CACHE" 2>/dev/null
+	rm -f "$tmp" 2>/dev/null
+	rmdir "$LOCKDIR" 2>/dev/null
+) >/dev/null 2>&1 &
+exit 0

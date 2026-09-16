@@ -17,5 +17,4 @@ uci -q set oum.main.active_source='none'
 uci -q set oum.main.pending_source='none'
 uci -q commit oum
 
-/bin/busybox passwd -l root >/dev/null
 /usr/libexec/oum-firstboot

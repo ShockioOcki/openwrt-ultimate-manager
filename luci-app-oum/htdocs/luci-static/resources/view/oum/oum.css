@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root{
+  --oum-bg:#faf9f7;--surface:#fff;--surface-warm:#fdfcfa;--surface-soft:#f5f3f0;
+  --border:#e7e5e4;--border-strong:#d6d3d1;--text:#1c1917;--text-soft:#57534e;--text-muted:#a8a29e;--text-faint:#d6d3d1;
+  --accent:#0f766e;--accent-soft:#ccfbf1;--accent-soft-2:#f0fdfa;--warning-bg:#fffbeb;--warning-border:#fcd34d;--warning-text:#92400e;
+  --danger:#be123c;--danger-soft:#fff1f2;--radius:8px;--radius-sm:8px;--shadow:none
+}
+.oum-dashboard,.oum-settings{max-width:1040px;margin:0 auto;font-family:'IBM Plex Sans',system-ui,sans-serif;color:var(--text);line-height:1.5}
+.oum-dashboard{background:var(--bg);border-radius:var(--radius);padding:4px 0 24px}
+.oum-page-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:20px 4px 16px;border-bottom:1px solid var(--border);margin-bottom:24px}
+.oum-page-head h2{margin:0;font-size:22px;font-weight:600;letter-spacing:-0.02em}
+.oum-page-head h2 span{font-weight:400;color:var(--text-muted);font-size:15px;margin-left:8px}
+.oum-cards{display:grid;grid-template-columns:1.25fr 1.25fr 0.9fr 0.9fr;gap:14px;margin:0 0 24px}
+@media(max-width:900px){.oum-cards{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.oum-cards{grid-template-columns:1fr}}
+.oum-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;position:relative;overflow:hidden}
+.oum-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--border)}
+.oum-card.is-up::before{background:var(--accent)}
+.oum-card.is-down::before{background:var(--danger)}
+.oum-card small{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);font-weight:500;margin-bottom:10px}
+.oum-dot{width:8px;height:8px;border-radius:999px;background:var(--text-faint);position:relative}
+.oum-dot.is-up{background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.oum-dot.is-up::after{content:'';position:absolute;inset:0;border-radius:999px;animation:pulse 2.4s infinite;background:var(--accent);opacity:0}
+@keyframes pulse{0%{transform:scale(1);opacity:.5}100%{transform:scale(2.2);opacity:0}}
+.oum-card strong{font-size:20px;font-weight:600}
+.oum-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin:0 0 20px}
+.mono{font-family:'IBM Plex Mono',monospace}
+.oum-clients th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}

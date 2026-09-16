@@ -1,0 +1,55 @@
+/* Shared radio presentation, scoped away from native editor dialogs. */
+body.theme-oum #maincontent .oum-radio-card { padding: 16px !important; border: 1px solid var(--oum-line) !important; border-radius: 14px !important; background: var(--oum-paper) !important; min-width: 0 !important; }
+body.theme-oum #maincontent .oum-radio-content { color: var(--oum-ink); font-size: 13px !important; line-height: 1.5; text-align: left; }
+body.theme-oum #maincontent .oum-radio-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+body.theme-oum #maincontent .oum-radio-title > strong { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+body.theme-oum #maincontent .oum-radio-title > strong::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--oum-subtle); }
+body.theme-oum #maincontent .oum-radio-title > strong.is-up::before { background: #36bd68; }
+body.theme-oum #maincontent .oum-radio-band { color: var(--oum-subtle); font-size: 12px; }
+body.theme-oum #maincontent .oum-radio-hardware { font-size: 13px; font-weight: 400; margin-bottom: 14px; overflow-wrap: anywhere; }
+body.theme-oum #maincontent .oum-radio-facts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+body.theme-oum #maincontent .oum-radio-fact { min-width: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px !important; line-height: 1.5; }
+body.theme-oum #maincontent .oum-radio-fact > span { color: var(--oum-subtle); font-size: 12px; }
+body.theme-oum #maincontent .oum-radio-fact > strong { font-weight: 500; overflow-wrap: anywhere; }
+body.theme-oum #maincontent .oum-radio-details { margin-top: 8px; font-size: 12px !important; }
+body.theme-oum #maincontent .oum-radio-details > summary { cursor: pointer; color: var(--oum-subtle); padding: 7px 0; width: fit-content; }
+body.theme-oum #maincontent .oum-radio-details > summary:focus-visible { outline: 2px solid var(--oum-action); outline-offset: 3px; }
+body.theme-oum #maincontent .oum-radio-details[open] > .oum-radio-facts { margin: 4px 0 10px; }
+body.theme-oum #maincontent .oum-radio-network { border-top: 1px solid var(--oum-line); margin-top: 10px; padding-top: 12px; font-size: 13px !important; text-align: left; }
+body.theme-oum #maincontent .oum-radio-ssid { display: block; font-size: 16px; margin-bottom: 8px; overflow-wrap: anywhere; }
+body.theme-oum #maincontent .oum-radio-network-facts { display: grid; gap: 6px; }
+body.theme-oum #maincontent .oum-radio-network-facts .oum-radio-fact { flex-direction: row; gap: 8px; align-items: baseline; }
+body.theme-oum #maincontent .oum-radio-extra-actions { display: flex; gap: 8px; }
+/* Keep original rows and action elements in place for native polling. */
+body.theme-oum #maincontent #cbi-wireless-wifi-device tr:is(.oum-radio-row,.oum-radio-net-row) > [data-name="_badge"] { display: none !important; }
+body.theme-oum #maincontent #cbi-wireless-wifi-device tr:is(.oum-radio-row,.oum-radio-net-row) > [data-name="_stat"] { width: auto !important; min-width: 0 !important; text-align: left !important; }
+@media (max-width: 900px) {
+ body.theme-oum #maincontent #cbi-wireless-wifi-device > table, body.theme-oum #maincontent #cbi-wireless-wifi-device > table > tbody { display: block !important; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr:is(.oum-radio-row,.oum-radio-net-row) { display: block !important; margin: 0 !important; padding: 16px !important; border: 1px solid var(--oum-line) !important; background: var(--oum-paper) !important; border-radius: 14px !important; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr.oum-radio-row { margin-top: 16px !important; border-radius: 14px 14px 0 0 !important; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr.oum-radio-net-row { border-top: 0 !important; border-radius: 0 !important; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr.oum-radio-net-row:has(+ .oum-radio-row), body.theme-oum #maincontent #cbi-wireless-wifi-device tr.oum-radio-net-row:last-child { border-radius: 0 0 14px 14px !important; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr:is(.oum-radio-row,.oum-radio-net-row) > td:not([data-name="_badge"]) { display: block !important; width: auto !important; min-width: 0 !important; padding: 0 !important; border: 0 !important; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device .oum-radio-network { border: 0; margin: 0; padding: 0; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr:is(.oum-radio-row,.oum-radio-net-row) .cbi-section-actions > div { display: grid !important; grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 8px !important; margin-top: 12px !important; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr.oum-radio-net-row .cbi-section-actions > div { grid-template-columns: repeat(3,minmax(0,1fr)) !important; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr:is(.oum-radio-row,.oum-radio-net-row) .cbi-button { width: auto !important; min-width: 0 !important; min-height: 30px !important; height: auto !important; margin: 0 !important; padding: 5px 8px !important; font-size: 12px !important; line-height: 18px !important; border-radius: 8px !important; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr.oum-radio-row .cbi-button-add { grid-column: 1 / -1 !important; justify-self: end !important; }
+}
+
+@media(max-width:900px) {
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr.oum-radio-net-row .cbi-section-actions .cbi-button { grid-column: auto !important; }
+}
+
+/* Radio cards supply the boundary; their list is only a heading and spacing. */
+body.theme-oum #maincontent #cbi-wireless-wifi-device:has(.oum-radio-row) {
+  padding: 0 !important; border: 0 !important; border-radius: 0 !important;
+  background: transparent !important; box-shadow: none !important;
+}
+body.theme-oum #maincontent #cbi-wireless-wifi-device:has(.oum-radio-row) > h3 { margin: 0 0 16px !important; }
+body.theme-oum #maincontent #cbi-wireless-wifi-device tr.oum-radio-row:first-child { margin-top: 0 !important; }
+
+@media(max-width:900px) {
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr.oum-radio-row .cbi-section-actions > div { grid-template-columns: 1.25fr .8fr 1fr !important; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device tr.oum-radio-row .cbi-button-add { grid-column: auto !important; justify-self: stretch !important; }
+}

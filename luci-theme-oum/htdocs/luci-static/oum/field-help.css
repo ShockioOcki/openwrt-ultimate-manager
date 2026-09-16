@@ -1,0 +1,15 @@
+@layer oum-form-buttons {
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-value-title,
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-value-title *,
+ body.theme-oum :is(#maincontent,#modal_overlay) .oum-help-trigger { -webkit-tap-highlight-color:transparent !important; }
+
+ body.theme-oum :is(#maincontent,#modal_overlay) .oum-field-help.oum-help-inline { display:contents !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-value-title button.oum-help-at-title { display:inline-flex !important; vertical-align:middle !important; width:22px !important; min-width:22px !important; height:22px !important; min-height:22px !important; margin:0 0 0 6px !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .oum-field-help { grid-column:1 / -1; display:block; margin:4px 0 0; padding:0; border:0; background:transparent; min-width:0; }
+ body.theme-oum :is(#maincontent,#modal_overlay) button.oum-help-trigger { display:flex !important; align-items:center !important; justify-content:center !important; box-sizing:border-box !important; width:28px !important; min-width:28px !important; height:28px !important; min-height:28px !important; padding:0 !important; margin:0 !important; border:1px solid var(--oum-line-strong) !important; border-radius:9px !important; background:var(--oum-paper-soft) !important; color:var(--oum-action) !important; font:600 13px/1 var(--oum-font) !important; cursor:pointer; touch-action:manipulation; }
+ body.theme-oum :is(#maincontent,#modal_overlay) button.oum-help-trigger:focus-visible { outline:2px solid var(--oum-action); outline-offset:2px; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .oum-field-help > .cbi-value-description[popover] { position:fixed !important; inset:auto; box-sizing:border-box !important; margin:0 !important; padding:10px 12px !important; border:1px solid var(--oum-line-strong) !important; border-radius:9px !important; background:var(--oum-paper) !important; color:var(--oum-ink) !important; font:400 12px/1.6 var(--oum-font) !important; white-space:normal !important; overflow-wrap:anywhere !important; overflow:auto !important; box-shadow:0 6px 20px rgb(0 0 0 / 18%) !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .oum-field-help > .cbi-value-description::before { display:none !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .oum-field-help > [popover]:not(:popover-open) { display:none !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .oum-field-help > :popover-open { display:block !important; }
+}

@@ -12,6 +12,8 @@ SOURCE_GROUPS = {
 
 MASS_RULE_PROVIDER_SOURCES = [
   ['private-domains', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/private.mrs', 2_592_000],
+  ['cn-domains', 'domain', 'https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/cn.mrs'],
+  ['category-games-not-cn', 'domain', 'https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-games-!cn.mrs'],
   ['category-ru', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/category-ru.mrs'],
   ['whitelist', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/whitelist.mrs'],
   ['microsoft', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/microsoft.mrs'],
@@ -27,6 +29,7 @@ MASS_RULE_PROVIDER_SOURCES = [
   ['pinterest', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/pinterest.mrs'],
   ['faceit', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/faceit.mrs'],
   ['private-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geoip@release/mihomo/private.mrs', 2_592_000],
+  ['cn-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geoip/cn.mrs'],
   ['direct-ips', 'ipcidr', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geoip@release/mihomo/direct.mrs'],
   ['github', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/github.mrs'],
   ['twitch-ads', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/twitch-ads.mrs'],
@@ -43,23 +46,30 @@ MASS_RULE_PROVIDER_SOURCES = [
   ['category-ads', 'domain', 'https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite@release/mihomo/category-ads.mrs']
 ].freeze
 
-MASS_RULES = [
+# Same domain snapshot as PassWall. Never use broad blocked ASN/IP lists:
+# a shared cloud network can host unrelated game servers.
+ROUTING_DIR = [ENV['OUM_ROUTING_DIR'], '/usr/share/oum/routing',
+  File.expand_path('../luci-app-oum/root/usr/share/oum/routing', __dir__)].compact.find { |path| File.file?(File.join(path, 'restricted-domains.txt')) }
+abort 'OUM routing lists missing' unless ROUTING_DIR
+RESTRICTED_DOMAINS = %w[regional restricted].flat_map do |kind|
+  File.readlines(File.join(ROUTING_DIR, "#{kind}-domains.txt"), chomp: true).map do |domain|
+    abort 'invalid routing domain' unless domain.match?(/\A[a-z0-9_.-]+\z/)
+    domain
+  end
+end.uniq.freeze
+MASS_RULES = (
+  %w[gearupbooster.com gearupportal.com guinfra.com sdp.gg].map { |domain| "DOMAIN-SUFFIX,#{domain},DIRECT" } + [
   'RULE-SET,private-domains,DIRECT', 'RULE-SET,private-ips,DIRECT,no-resolve',
-  'RULE-SET,win-spy,REJECT', 'RULE-SET,category-ads,REJECT',
-  'RULE-SET,samsung,DIRECT', 'RULE-SET,google-play,DIRECT',
-  'RULE-SET,meta-domains,META', 'RULE-SET,meta-ips,META,no-resolve',
-  'RULE-SET,github,PROXY', 'RULE-SET,twitch-ads,PROXY', 'RULE-SET,youtube,PROXY',
+  'RULE-SET,discord-domains,PROXY',
   'RULE-SET,telegram,PROXY', 'RULE-SET,telegram-ips,PROXY,no-resolve',
-  'RULE-SET,discord-domains,PROXY', 'RULE-SET,discord-voice-ips,PROXY,no-resolve',
-  'RULE-SET,ru-blocked-domains,PROXY', 'RULE-SET,ru-blocked-ips,PROXY,no-resolve',
-  'RULE-SET,category-ru,DIRECT', 'RULE-SET,whitelist,DIRECT',
-  'RULE-SET,microsoft,DIRECT', 'RULE-SET,apple,DIRECT',
-  'RULE-SET,epicgames,DIRECT', 'RULE-SET,riot,DIRECT',
-  'RULE-SET,escapefromtarkov,DIRECT', 'RULE-SET,steam,DIRECT',
-  'RULE-SET,origin,DIRECT', 'RULE-SET,twitch,DIRECT',
-  'RULE-SET,pinterest,DIRECT', 'RULE-SET,faceit,DIRECT',
-  'RULE-SET,direct-ips,DIRECT,no-resolve', 'MATCH,DIRECT'
-].freeze
+  'RULE-SET,category-games-not-cn,DIRECT',
+  'RULE-SET,category-ru,DIRECT', 'DOMAIN-SUFFIX,ru,DIRECT',
+  'DOMAIN-SUFFIX,xn--p1ai,DIRECT', 'DOMAIN-SUFFIX,su,DIRECT',
+  'RULE-SET,google-play,DIRECT', 'RULE-SET,microsoft,DIRECT',
+  'RULE-SET,samsung,DIRECT', 'RULE-SET,cn-domains,DIRECT',
+  'RULE-SET,cn-ips,DIRECT,no-resolve'
+  ] + RESTRICTED_DOMAINS.map { |domain| "DOMAIN-SUFFIX,#{domain},PROXY" } + ['MATCH,DIRECT']
+).freeze
 
 def percent_decode(value)
   value.to_s.tr('+', ' ').gsub(/%([0-9a-fA-F]{2})/) { Regexp.last_match(1).to_i(16).chr }.force_encoding('UTF-8')
@@ -350,6 +360,7 @@ end
 
 def apply_mass_routing(config)
   config['rule-providers'] = MASS_RULE_PROVIDER_SOURCES.each_with_object({}) do |(name, behavior, url, interval), providers|
+    next unless MASS_RULES.any? { |rule| rule.start_with?("RULE-SET,#{name},") }
     providers[name] = {
       'type' => 'http', 'behavior' => behavior, 'format' => 'mrs', 'url' => url,
       'path' => "./rule_provider/#{name}.mrs", 'interval' => interval || 86_400, 'proxy' => 'DIRECT'
@@ -360,6 +371,10 @@ def apply_mass_routing(config)
 end
 
 def base_config
+  server = ENV.fetch('OUM_DNS_SERVER', '1.1.1.1')
+  bootstrap = ENV.fetch('OUM_BOOTSTRAP_DNS', '1.0.0.1')
+  allowed = %w[77.88.8.8 77.88.8.1 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 9.9.9.9 149.112.112.112]
+  abort 'unsupported OUM DNS server' unless allowed.include?(server) && allowed.include?(bootstrap)
   {
     'mixed-port' => 7890,
     'allow-lan' => true,
@@ -375,8 +390,15 @@ def base_config
       'enhanced-mode' => 'fake-ip',
       'fake-ip-range' => '198.18.0.1/16',
       'fake-ip-filter' => ['*.lan', '*.local'],
-      'default-nameserver' => ['1.1.1.1', '8.8.8.8'],
-      'nameserver' => ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query']
+      'default-nameserver' => [bootstrap],
+      'nameserver' => [bootstrap],
+      'proxy-server-nameserver' => [bootstrap],
+      'direct-nameserver' => [bootstrap],
+      'respect-rules' => true,
+      'nameserver-policy' => RESTRICTED_DOMAINS.each_with_object({}) { |domain, policy| policy["+.#{domain}"] = ["tcp://#{server}:53#PROXY"] }.merge(
+        'rule-set:telegram' => ["tcp://#{server}:53#PROXY"],
+        '+.ru' => [bootstrap], '+.su' => [bootstrap], '+.xn--p1ai' => [bootstrap],
+        'rule-set:category-games-not-cn,category-ru,cn-domains' => [bootstrap])
     }
   }
 end

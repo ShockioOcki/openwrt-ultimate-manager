@@ -1,0 +1,29 @@
+/* Overview groups are headings around individual cards, not nested cards. */
+@layer oum-overview {
+ body.theme-oum:is([data-page="admin-status-overview"],[data-page="admin"],[data-page=""]) #maincontent .cbi-section:has(> div > :is(.network-status-table, #status_leases, #status_leases6)) {
+   border: 0 !important; border-radius: 0 !important; padding: 0 !important;
+   background: transparent !important; box-shadow: none !important; margin-bottom: 24px !important;
+ }
+ body.theme-oum:is([data-page="admin-status-overview"],[data-page="admin"],[data-page=""]) #maincontent .cbi-section:has(> div > :is(.network-status-table, #status_leases, #status_leases6)) > .cbi-title {
+   margin: 0 0 14px !important; padding: 0 !important; border: 0 !important;
+ }
+}
+
+@layer oum-overview {
+ @media (max-width: 900px) {
+  body.theme-oum:is([data-page="admin-status-overview"],[data-page="admin"],[data-page=""]) #maincontent .network-status-table { gap: 14px !important; }
+  body.theme-oum:is([data-page="admin-status-overview"],[data-page="admin"],[data-page=""]) #maincontent .network-status-table > .ifacebox {
+   box-sizing: border-box !important; width: 100% !important; max-width: 100% !important;
+   flex: 0 0 100% !important; margin: 0 !important;
+  }
+ }
+}
+
+/* Routing tabs contain their own row cards. */
+@layer oum-overview {
+ body.theme-oum[data-page="admin-status-routesj"] #maincontent .cbi-section[data-tab] {
+  border: 0 !important; border-radius: 0 !important; padding: 0 !important;
+  background: transparent !important; box-shadow: none !important;
+ }
+ body.theme-oum[data-page="admin-status-routesj"] #maincontent .cbi-section[data-tab] > table { width: 100% !important; margin-inline: 0 !important; }
+}

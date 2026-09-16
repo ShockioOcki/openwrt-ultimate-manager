@@ -71,48 +71,364 @@ apply_wifi() {
 	write_status success applied 'Настройки Wi-Fi применены. Подключитесь к сети заново, если её имя изменилось.'
 }
 
+toggle_wifi() {
+	enabled="$(json_value .enabled)"
+	mkdir -p "$ROLLBACK"
+	cp /etc/config/wireless "$ROLLBACK/wireless-toggle"
+	chmod 600 "$ROLLBACK/wireless-toggle"
+	state_file="$ROLLBACK/wireless-toggle-enabled"
+	if [ "$enabled" = true ]; then
+		if [ -s "$state_file" ]; then
+			while IFS= read -r section; do
+				printf '%s' "$section" | grep -Eq '^[A-Za-z0-9_]+$' || continue
+				[ "$(uci -q get "wireless.$section.mode" || true)" = ap ] || continue
+				uci -q set "wireless.$section.disabled=0"
+			done < "$state_file"
+		else
+			for section in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-iface$/\1/p'); do
+				[ "$(uci -q get "wireless.$section.mode" || true)" = ap ] || continue
+				uci -q set "wireless.$section.disabled=0"
+			done
+		fi
+	else
+		: > "$state_file"
+		for section in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-iface$/\1/p'); do
+			[ "$(uci -q get "wireless.$section.mode" || true)" = ap ] || continue
+			[ "$(uci -q get "wireless.$section.disabled" || echo 0)" = 1 ] || printf '%s\n' "$section" >> "$state_file"
+			uci -q set "wireless.$section.disabled=1"
+		done
+		chmod 600 "$state_file"
+	fi
+	uci -q commit wireless || fail commit_failed 'Не удалось сохранить состояние Wi-Fi.'
+	if ! wifi reload >/dev/null 2>&1; then
+		cp "$ROLLBACK/wireless-toggle" /etc/config/wireless
+		wifi reload >/dev/null 2>&1 || true
+		fail reload_failed 'Wi-Fi не перезапустился; предыдущие настройки восстановлены.'
+	fi
+	write_status success applied "$([ "$enabled" = true ] && echo 'Wi-Fi включён.' || echo 'Wi-Fi выключен. Для включения подключитесь кабелем к LAN-порту.')"
+}
+
+prepare_usb_wan() {
+	if ! info="$(/usr/libexec/oum-mobile-manager prepare 2>/tmp/oum-mobile-error)"; then
+		message="$(cat /tmp/oum-mobile-error 2>/dev/null || true)"
+		fail usb_prepare_failed "${message:-Не удалось подготовить USB-модем. Проверьте подключение и повторите.}"
+	fi
+	printf '%s\n' "$info"
+}
+
+restore_wan_backup() {
+	cp "$ROLLBACK/network" /etc/config/network
+	[ ! -f "$ROLLBACK/oum-wan" ] || cp "$ROLLBACK/oum-wan" /etc/config/oum
+	/etc/init.d/network reload >/dev/null 2>&1 || true
+}
+
 apply_wan() {
 	wan_type="$(json_value .wan_type)"
 	username="$(json_value .pppoe_user)"
 	password="$(json_value .pppoe_password)"
-	[ "$wan_type" = dhcp ] || [ "$wan_type" = pppoe ] || fail invalid_input 'Некорректный тип подключения.'
+	mobile_apn="$(json_value .mobile_apn)"
+	mobile_pin="$(json_value .mobile_pin)"
+	mobile_username="$(json_value .mobile_username)"
+	mobile_password="$(json_value .mobile_password)"
+	mobile_auth="$(json_value .mobile_auth)"
+	[ "$wan_type" = dhcp ] || [ "$wan_type" = pppoe ] || [ "$wan_type" = usb ] || fail invalid_input 'Некорректный тип подключения.'
 	[ "$wan_type" != pppoe ] || [ -n "$username" ] || fail invalid_input 'Логин PPPoE не задан.'
+	usb_info=""
+	usb_family=""
+	usb_device=""
+	if [ "$wan_type" = usb ]; then
+		usb_info="$(prepare_usb_wan)"
+		usb_family="${usb_info%% *}"
+		usb_device="${usb_info#* }"
+		[ "$usb_device" != "$usb_info" ] || fail usb_device_invalid 'Не удалось определить управляющий интерфейс USB-модема.'
+	fi
+	case "$usb_device" in ''|*[!A-Za-z0-9_./-]*) [ "$wan_type" != usb ] || fail usb_device_invalid 'USB-модем создал интерфейс с неподдерживаемым именем.' ;; esac
 	mkdir -p "$ROLLBACK"
 	cp /etc/config/network "$ROLLBACK/network"
-	chmod 600 "$ROLLBACK/network"
-	uci -q set "network.wan.proto=$wan_type"
+	cp /etc/config/oum "$ROLLBACK/oum-wan"
+	chmod 600 "$ROLLBACK/network" "$ROLLBACK/oum-wan"
+	current_source="$(uci -q get oum.main.wan_source 2>/dev/null || echo wired)"
+	if [ "$current_source" != usb ]; then
+		wired_device="$(uci -q get network.wan.device 2>/dev/null || true)"
+		wired6_device="$(uci -q get network.wan6.device 2>/dev/null || true)"
+		[ -z "$wired_device" ] || uci -q set "oum.main.wired_wan_device=$wired_device"
+		[ -z "$wired6_device" ] || uci -q set "oum.main.wired_wan6_device=$wired6_device"
+	fi
+	if [ "$wan_type" = usb ]; then
+		case "$usb_family" in
+			rndis|ethernet) modem_proto=dhcp ;;
+			qmi|mbim|ncm) modem_proto="$usb_family" ;;
+			ppp) modem_proto=3g ;;
+			*) restore_wan_backup; fail usb_protocol_unknown 'Режим USB-модема не поддерживается.' ;;
+		esac
+		uci -q set "network.wan.proto=$modem_proto"
+		uci -q set "network.wan.device=$usb_device"
+		if [ "$modem_proto" = dhcp ]; then
+			[ -z "$(uci -q get network.wan6 2>/dev/null || true)" ] || uci -q set "network.wan6.device=$usb_device"
+		else
+			uci -q set "network.wan.apn=$mobile_apn"
+			uci -q set "network.wan.auth=$mobile_auth"
+			uci -q set network.wan.pdptype='ipv4'
+			[ -z "$mobile_pin" ] || uci -q set "network.wan.pincode=$mobile_pin"
+			[ -z "$mobile_username" ] || uci -q set "network.wan.username=$mobile_username"
+			[ -z "$mobile_password" ] || uci -q set "network.wan.password=$mobile_password"
+			[ "$modem_proto" != 3g ] || uci -q set network.wan.service='umts'
+		fi
+		uci -q set oum.main.wan_source='usb'
+		uci -q set "oum.main.usb_wan_family=$usb_family"
+	else
+		wired_device="$(uci -q get oum.main.wired_wan_device 2>/dev/null || true)"
+		wired6_device="$(uci -q get oum.main.wired_wan6_device 2>/dev/null || true)"
+		[ -z "$wired_device" ] || uci -q set "network.wan.device=$wired_device"
+		[ -z "$wired6_device" ] || [ -z "$(uci -q get network.wan6 2>/dev/null || true)" ] || uci -q set "network.wan6.device=$wired6_device"
+		uci -q set "network.wan.proto=$wan_type"
+		uci -q set oum.main.wan_source='wired'
+		uci -q delete oum.main.usb_wan_family || true
+	fi
 	if [ "$wan_type" = pppoe ]; then
 		uci -q set "network.wan.username=$username"
 		[ -z "$password" ] || uci -q set "network.wan.password=$password"
-	else
+	elif [ "$wan_type" != usb ]; then
 		uci -q delete network.wan.username || true
 		uci -q delete network.wan.password || true
+		uci -q delete network.wan.apn || true
+		uci -q delete network.wan.auth || true
+		uci -q delete network.wan.pincode || true
+		uci -q delete network.wan.pdptype || true
+		uci -q delete network.wan.service || true
 	fi
-	uci -q commit network || fail commit_failed 'Не удалось сохранить подключение.'
+	uci -q commit network || { restore_wan_backup; fail commit_failed 'Не удалось сохранить подключение.'; }
+	uci -q commit oum || { restore_wan_backup; fail commit_failed 'Не удалось сохранить источник подключения.'; }
 	if ! /etc/init.d/network reload >/dev/null 2>&1; then
-		cp "$ROLLBACK/network" /etc/config/network
-		/etc/init.d/network reload >/dev/null 2>&1 || true
+		restore_wan_backup
 		fail reload_failed 'Сеть не перезапустилась; предыдущие настройки восстановлены.'
 	fi
-	write_status success applied 'Настройки WAN применены. Проверяем подключение…'
+	if [ "$wan_type" = usb ]; then
+		connected=0
+		wait_total=10
+		[ "$modem_proto" = dhcp ] || wait_total=45
+		delay=0
+		while [ "$delay" -lt "$wait_total" ]; do
+			sleep 1
+			delay=$((delay + 1))
+			[ "$(ubus call network.interface.wan status 2>/dev/null | jsonfilter -e '@.up' || true)" = true ] || continue
+			connected=1
+			break
+		done
+		[ "$connected" = 1 ] || { restore_wan_backup; fail usb_no_lease 'USB-модем не подключился к сети. Проверьте SIM-карту, PIN и APN; предыдущий WAN восстановлен.'; }
+		write_status success applied "$([ "$usb_family" = rndis ] && echo 'Интернет через Android подключён. Кабельный WAN сохранён для возврата.' || echo 'Мобильный USB-модем подключён. Кабельный WAN сохранён для возврата.')"
+	else
+		write_status success applied 'Настройки WAN применены. Проверяем подключение…'
+	fi
+}
+
+apply_lan() {
+	address="$(json_value .address)"
+	case "$address" in ''|*[!0-9.]*) fail invalid_input 'Некорректный LAN-адрес.' ;; esac
+	mkdir -p "$ROLLBACK"
+	cp /etc/config/network "$ROLLBACK/network-lan"
+	uci -q get network.lan.ipaddr | sed 's#/.*##' > "$ROLLBACK/lan-address"
+	chmod 600 "$ROLLBACK/network-lan" "$ROLLBACK/lan-address"
+	uci -q set "network.lan.ipaddr=$address"
+	uci -q set network.lan.netmask='255.255.255.0'
+	uci -q commit network || fail commit_failed 'Не удалось сохранить LAN-адрес.'
+	write_status success applied "LAN-адрес изменён на $address/24. Переподключитесь к роутеру."
+	(sleep 3; /etc/init.d/network reload) >/tmp/oum-lan-apply.log 2>&1 &
+}
+
+apply_mesh() {
+	enabled="$(json_value .enabled)"
+	mesh_id="$(json_value .mesh_id)"
+	password="$(json_value .password)"
+	band="$(json_value .band)"
+	if [ "$enabled" = 1 ]; then
+		/usr/libexec/oum-mesh-manager enable "$mesh_id" "$password" "$band" ||
+			fail mesh_failed 'Mesh не запустился; предыдущая Wi-Fi-конфигурация восстановлена.'
+		write_status success applied 'Mesh-интерфейс создан и подключён к LAN.'
+	else
+		/usr/libexec/oum-mesh-manager disable || fail mesh_failed 'Не удалось отключить Mesh.'
+		write_status success applied 'Mesh-интерфейс отключён.'
+	fi
+}
+
+restore_wisp_backup() {
+	[ ! -f "$ROLLBACK/wireless-wisp" ] || cp "$ROLLBACK/wireless-wisp" /etc/config/wireless
+	[ ! -f "$ROLLBACK/network-wisp" ] || cp "$ROLLBACK/network-wisp" /etc/config/network
+	[ ! -f "$ROLLBACK/firewall-wisp" ] || cp "$ROLLBACK/firewall-wisp" /etc/config/firewall
+	/etc/init.d/network reload >/dev/null 2>&1 || true
+	wifi reload >/dev/null 2>&1 || true
+	/etc/init.d/firewall reload >/dev/null 2>&1 || true
+}
+
+apply_wisp() {
+	enabled="$(json_value .enabled)"
+	ssid="$(json_value .ssid)"
+	password="$(json_value .password)"
+	band="$(json_value .band)"
+	mkdir -p "$ROLLBACK"
+	cp /etc/config/wireless "$ROLLBACK/wireless-wisp"
+	cp /etc/config/network "$ROLLBACK/network-wisp"
+	cp /etc/config/firewall "$ROLLBACK/firewall-wisp"
+	chmod 600 "$ROLLBACK/wireless-wisp" "$ROLLBACK/network-wisp" "$ROLLBACK/firewall-wisp"
+	wan_zone="$(uci -q show firewall | sed -n "s/^firewall\.\([^.=]*\)\.name='wan'$/\1/p" | head -n 1)"
+	[ -n "$wan_zone" ] || { restore_wisp_backup; fail firewall_missing 'Не найдена WAN-зона firewall.'; }
+	uci -q del_list "firewall.$wan_zone.network=wwan" || true
+	if [ "$enabled" != true ]; then
+		uci -q delete wireless.oum_wisp || true
+		uci -q delete network.wwan || true
+		uci -q commit wireless
+		uci -q commit network
+		uci -q commit firewall
+		/etc/init.d/network reload >/dev/null 2>&1 || { restore_wisp_backup; fail wisp_reload_failed 'Не удалось отключить Wi-Fi репитер.'; }
+		wifi reload >/dev/null 2>&1 || { restore_wisp_backup; fail wisp_reload_failed 'Не удалось перезапустить Wi-Fi.'; }
+		/etc/init.d/firewall reload >/dev/null 2>&1 || true
+		write_status success disabled 'Репитер отключён; кабельный WAN снова используется как обычно.'
+		return
+	fi
+	radio=''
+	for candidate in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-device$/\1/p'); do
+		[ "$(uci -q get "wireless.$candidate.band" || true)" = "$band" ] || continue
+		radio="$candidate"
+		break
+	done
+	[ -n "$radio" ] || { restore_wisp_backup; fail wisp_radio_missing 'Не найден выбранный радиодиапазон.'; }
+	uci -q set wireless.oum_wisp='wifi-iface'
+	uci -q set "wireless.oum_wisp.device=$radio"
+	uci -q set wireless.oum_wisp.mode='sta'
+	uci -q set wireless.oum_wisp.network='wwan'
+	uci -q set "wireless.oum_wisp.ssid=$ssid"
+	uci -q set wireless.oum_wisp.disabled='0'
+	if [ -n "$password" ]; then
+		uci -q set wireless.oum_wisp.encryption='psk2'
+		uci -q set "wireless.oum_wisp.key=$password"
+	else
+		uci -q set wireless.oum_wisp.encryption='none'
+		uci -q delete wireless.oum_wisp.key || true
+	fi
+	uci -q set network.wwan='interface'
+	uci -q set network.wwan.proto='dhcp'
+	uci -q add_list "firewall.$wan_zone.network=wwan"
+	uci -q commit wireless
+	uci -q commit network
+	uci -q commit firewall
+	/etc/init.d/network reload >/dev/null 2>&1 || { restore_wisp_backup; fail wisp_reload_failed 'Сеть не приняла настройки репитера.'; }
+	wifi reload >/dev/null 2>&1 || { restore_wisp_backup; fail wisp_reload_failed 'Wi-Fi не принял настройки репитера.'; }
+	/etc/init.d/firewall reload >/dev/null 2>&1 || true
+	connected=0
+	for delay in 1 2 3 4 5 6 7 8 9 10; do
+		sleep 2
+		[ "$(ubus call network.interface.wwan status 2>/dev/null | jsonfilter -e '@.up' || true)" = true ] || continue
+		connected=1
+		break
+	done
+	[ "$connected" = 1 ] || { restore_wisp_backup; fail wisp_connect_failed 'Не удалось подключиться к Wi-Fi. Проверьте имя сети и пароль.'; }
+	write_status success connected 'Репитер подключён; интернет приходит по Wi-Fi, локальная сеть OUM изолирована.'
+}
+
+rollback_wisp() {
+	[ -f "$ROLLBACK/wireless-wisp" ] && [ -f "$ROLLBACK/network-wisp" ] && [ -f "$ROLLBACK/firewall-wisp" ] || fail rollback_missing 'Предыдущая конфигурация репитера не найдена.'
+	restore_wisp_backup
+	write_status success rolled_back 'Предыдущая конфигурация Wi-Fi репитера восстановлена.'
+}
+
+apply_adguard() {
+	mode="$(json_value .mode)"
+	mkdir -p "$ROLLBACK"
+	cp /etc/config/dhcp "$ROLLBACK/dhcp-adguard"
+	cp /etc/config/oum "$ROLLBACK/oum-adguard"
+	chmod 600 "$ROLLBACK/dhcp-adguard" "$ROLLBACK/oum-adguard"
+	uci -q set "oum.main.adguard_mode=$mode"
+	uci -q commit oum
+	if ! /usr/libexec/oum-adguard >/tmp/oum-adguard.log 2>&1; then
+		cp "$ROLLBACK/dhcp-adguard" /etc/config/dhcp
+		cp "$ROLLBACK/oum-adguard" /etc/config/oum
+		/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+		fail adguard_failed 'DNS-фильтр не применился; прежняя конфигурация восстановлена.'
+	fi
+	write_status success applied 'DNS-фильтр сохранён. Переподключите устройства к Wi-Fi для немедленного применения.'
+}
+
+rollback_lan() {
+	[ -f "$ROLLBACK/network-lan" ] || fail rollback_missing 'Предыдущая LAN-конфигурация не найдена.'
+	previous="$(cat "$ROLLBACK/lan-address" 2>/dev/null || true)"
+	cp "$ROLLBACK/network-lan" /etc/config/network
+	write_status success rolled_back "Предыдущий LAN-адрес ${previous:-роутера} восстановлен."
+	(sleep 3; /etc/init.d/network reload) >/tmp/oum-lan-rollback.log 2>&1 &
 }
 
 rollback_config() {
 	kind="$1"
 	[ -f "$ROLLBACK/$kind" ] || fail rollback_missing 'Предыдущая конфигурация не найдена.'
 	cp "$ROLLBACK/$kind" "/etc/config/$kind"
+	[ "$kind" != network ] || [ ! -f "$ROLLBACK/oum-wan" ] || cp "$ROLLBACK/oum-wan" /etc/config/oum
 	if [ "$kind" = wireless ]; then wifi reload >/dev/null 2>&1; else /etc/init.d/network reload >/dev/null 2>&1; fi
 	write_status success rolled_back 'Предыдущие настройки восстановлены.'
 }
 
+apply_dns() {
+	requested_engine="$(json_value .engine)"
+	server="$(json_value .server)"
+	bootstrap="$(json_value .bootstrap)"
+	engine="$(/usr/libexec/oum-engine-manager current)"
+	[ "$requested_engine" = "$engine" ] || fail engine_changed 'Активный VPN-движок изменился. Повторите настройку DNS.'
+	write_status running dns 'Применяем основной и Bootstrap DNS выбранного VPN-движка…'
+	/usr/libexec/oum-dns-manager apply "$engine" "$server" "$bootstrap" ||
+		fail dns_failed 'DNS не прошёл проверку; предыдущая конфигурация восстановлена.'
+	uci -q set "oum.main.dns_$engine=$server"
+	uci -q set "oum.main.bootstrap_dns_$engine=$bootstrap"
+	uci -q commit oum
+	write_status success applied 'Основной и Bootstrap DNS сохранены; активный VPN-движок перезапущен.'
+}
+
 case "$ACTION" in
 	wifi) write_status running applying 'Применяем настройки Wi-Fi…'; apply_wifi ;;
+	wifi_toggle) write_status running applying 'Изменяем состояние Wi-Fi…'; toggle_wifi ;;
 	wan) write_status running applying 'Применяем настройки подключения…'; apply_wan ;;
+	lan) write_status running applying 'Сохраняем новый LAN-адрес…'; apply_lan ;;
+	mesh) write_status running applying 'Проверяем и применяем Mesh…'; apply_mesh ;;
+	mesh_runtime) write_status running installing 'Устанавливаем совместимую поддержку Mesh…'; /usr/libexec/oum-mesh-runtime install || fail mesh_runtime_failed 'Mesh-компонент не установился; исходный Wi-Fi восстановлен.'; write_status success installed 'Mesh готов. Wi-Fi перезапущен, обычные точки доступа сохранены.' ;;
+	usb_prepare) write_status running installing 'Устанавливаем поддержку USB-накопителей…'; /usr/libexec/oum-usb-manager prepare || fail usb_prepare_failed 'Не удалось установить драйверы накопителя. Проверьте журнал и подключение к интернету.'; write_status success installed 'Поддержка накопителей установлена; USB-диск обнаружен.' ;;
+	usb_format) device="$(json_value .device)"; confirm="$(json_value .confirm)"; write_status running formatting 'Форматируем USB-накопитель в ext4…'; /usr/libexec/oum-usb-manager format "$device" "$confirm" || fail usb_format_failed 'Форматирование не завершилось; внутреннее хранилище роутера не изменялось.'; write_status success mounted 'USB-накопитель отформатирован и подключён.' ;;
+	usb_mount) device="$(json_value .device)"; write_status running mounting 'Подключаем USB-накопитель…'; /usr/libexec/oum-usb-manager mount "$device" || fail usb_mount_failed 'Накопитель не подключился. На первом этапе поддерживается ext4.'; write_status success mounted 'USB-накопитель подключён.' ;;
+	usb_unmount) write_status running unmounting 'Останавливаем запись и отключаем USB-накопитель…'; /usr/libexec/oum-usb-manager unmount || fail usb_unmount_failed 'Накопитель занят. Остановите использующие его службы и повторите.'; write_status success unmounted 'Накопитель безопасно отключён; его можно извлечь.' ;;
+	usb_smb_enable) write_status running installing 'Настраиваем гостевой SMB-доступ…'; /usr/libexec/oum-usb-manager smb-enable || fail usb_smb_enable_failed 'Не удалось запустить SMB. Накопитель и его данные не изменены.'; write_status success enabled 'Общая папка OUM доступна без пароля в домашней сети.' ;;
+	usb_smb_disable) write_status running stopping 'Останавливаем SMB-доступ…'; /usr/libexec/oum-usb-manager smb-disable || fail usb_smb_disable_failed 'Не удалось остановить SMB.'; write_status success disabled 'SMB-доступ выключен; файлы сохранены на накопителе.' ;;
+	usb_aria2_enable) write_status running installing 'Настраиваем aria2 и AriaNg…'; /usr/libexec/oum-usb-manager aria2-enable || fail usb_aria2_enable_failed 'Не удалось запустить загрузчик. Накопитель и файлы сохранены.'; write_status success enabled 'aria2 работает; панель AriaNg готова.' ;;
+	usb_aria2_disable) write_status running stopping 'Останавливаем aria2…'; /usr/libexec/oum-usb-manager aria2-disable || fail usb_aria2_disable_failed 'Не удалось остановить aria2.'; write_status success disabled 'aria2 выключен; задания и файлы сохранены.' ;;
+	usb_dlna_enable) write_status running installing 'Настраиваем медиасервер miniDLNA…'; /usr/libexec/oum-usb-manager dlna-enable || fail usb_dlna_enable_failed 'Не удалось запустить медиасервер. Файлы на накопителе сохранены.'; write_status success enabled 'Медиасервер OUM Media доступен в домашней сети.' ;;
+	usb_dlna_disable) write_status running stopping 'Останавливаем медиасервер…'; /usr/libexec/oum-usb-manager dlna-disable || fail usb_dlna_disable_failed 'Не удалось остановить медиасервер.'; write_status success disabled 'Медиасервер выключен; медиатека сохранена.' ;;
+	usb_sorter_enable) write_status running installing 'Устанавливаем медиасортировщик…'; /usr/libexec/oum-usb-manager sorter-enable || fail usb_sorter_enable_failed 'Не удалось включить сортировщик. Файлы на накопителе не изменены.'; write_status success enabled 'Сортировщик включён и проверяет завершённые загрузки каждые 5 минут.' ;;
+	usb_sorter_disable) write_status running stopping 'Отключаем автоматическую сортировку…'; /usr/libexec/oum-usb-manager sorter-disable || fail usb_sorter_disable_failed 'Не удалось отключить сортировщик.'; write_status success disabled 'Автоматическая сортировка выключена; настройки и файлы сохранены.' ;;
+	usb_sorter_run) write_status running sorting 'Проверяем завершённые загрузки…'; /usr/libexec/oum-usb-manager sorter-run || fail usb_sorter_run_failed 'Сортировка не выполнена. Проверьте, нет ли активных загрузок aria2.'; write_status success sorted 'Готовые фильмы и сериалы обработаны.' ;;
+	usb_swap_enable) write_status running preparing 'Создаём swap-файл 512 МБ на USB-накопителе…'; /usr/libexec/oum-usb-manager swap-enable || fail usb_swap_enable_failed 'Не удалось включить swap. Проверьте накопитель и свободное место.'; write_status success enabled 'Swap 512 МБ включён и будет восстанавливаться после подключения накопителя.' ;;
+	usb_swap_disable) write_status running stopping 'Отключаем swap на USB-накопителе…'; /usr/libexec/oum-usb-manager swap-disable || fail usb_swap_disable_failed 'Не удалось отключить swap. Не извлекайте накопитель.'; write_status success disabled 'Swap выключен; файл сохранён для быстрого повторного включения.' ;;
+	wisp) write_status running applying 'Подключаем репитер к выбранной Wi-Fi сети…'; apply_wisp ;;
+	adguard) write_status running applying 'Применяем DNS-фильтр…'; apply_adguard ;;
+	project_update) write_status running downloading 'Загружаем и проверяем новую версию OUM…'; /usr/libexec/oum-project-manager update || fail update_failed 'Обновление OUM не установилось; текущая версия сохранена.'; write_status success updated 'OUM обновлён. Интерфейс перезагружается.' ;;
+	project_rollback) write_status running rollback 'Восстанавливаем предыдущую версию OUM…'; /usr/libexec/oum-project-manager rollback || fail rollback_failed 'Не удалось восстановить предыдущую версию OUM.'; write_status success rolled_back 'Предыдущая версия OUM восстановлена.' ;;
 	rollback_wifi) write_status running rollback 'Восстанавливаем Wi-Fi…'; rollback_config wireless ;;
 	rollback_wan) write_status running rollback 'Восстанавливаем подключение…'; rollback_config network ;;
-	engine) target="$(json_value .engine)"; write_status running preparing 'Готовим безопасную замену VPN-движка…'; if ! OUM_ENGINE_STATUS="$STATUS" /usr/libexec/oum-engine-manager switch "$target"; then message="$(cat /tmp/oum-engine-error 2>/dev/null || true)"; fail engine_failed "${message:-Не удалось заменить VPN-движок; выполнен автоматический возврат.}"; fi; write_status success switched 'VPN-движок заменён. Если у него ещё нет конфигурации, добавьте подключение ниже.' ;;
+	rollback_lan) write_status running rollback 'Восстанавливаем LAN-адрес…'; rollback_lan ;;
+	rollback_wisp) write_status running rollback 'Восстанавливаем репитер…'; rollback_wisp ;;
+	dns) apply_dns ;;
+	passwall_geodata) write_status running downloading 'Загружаем и проверяем GeoSite/GeoIP…'; /usr/libexec/oum-passwall-geodata || fail geodata_failed 'Новые Geo-базы не прошли проверку; прежние файлы восстановлены.'; write_status success updated 'GeoSite и GeoIP обновлены, проверены и применены.' ;;
+	engine) target="$(json_value .engine)"; [ "$target" != podkop ] || /usr/libexec/oum-awg-manager ready || fail reboot_required 'После первичной установки OUM один раз перезапустите роутер для активации AmneziaWG.'; write_status running preparing 'Проверяем прямой доступ и выполняем чистую замену VPN-движка…'; if ! OUM_ENGINE_STATUS="$STATUS" /usr/libexec/oum-engine-manager switch "$target"; then message="$(cat /tmp/oum-engine-error 2>/dev/null || true)"; fail engine_failed "${message:-Не удалось выполнить чистую установку VPN-движка.}"; fi; mkdir -p /etc/oum; : > /etc/oum/reboot-required; write_status success switched 'Новый VPN-движок установлен. Можно перезагрузить роутер сейчас или сделать это позже.' ;;
+	engine_update) target="$(json_value .engine)"; write_status running checking 'Сверяем установленную версию с проверенной версией OUM…'; if ! OUM_ENGINE_STATUS="$STATUS" OUM_ENGINE_ACTION=engine_update /usr/libexec/oum-engine-manager update "$target"; then message="$(cat /tmp/oum-engine-error 2>/dev/null || true)"; fail engine_update_failed "${message:-Не удалось проверить или установить обновление VPN-движка.}"; fi; result="$(cat /tmp/oum-engine-update-result 2>/dev/null || echo current)"; if [ "$result" = updated ]; then write_status success updated 'VPN-движок обновлён; настройки и активное подключение сохранены.'; else write_status success current 'Установлена актуальная проверенная версия VPN-движка.'; fi ;;
+	podkop_configure) interface="$(json_value .interface)"; write_status running configuring 'Связываем Podkop с отдельным туннелем и настраиваем Zapret для YouTube…'; OUM_JOB_STATUS="$STATUS" OUM_JOB_ACTION="$ACTION" /usr/libexec/oum-podkop-config configure "$interface" || fail podkop_failed 'Podkop не прошёл проверку; службы остановлены, прежняя конфигурация сохранена.'; write_status success configured 'Podkop работает через отдельный туннель; Zapret для прямого YouTube завершает запуск.' ;;
+	podkop_awg) write_status running awg_installing 'Проверяем комплект AmneziaWG и создаём отдельный туннель…'; OUM_JOB_STATUS="$STATUS" OUM_JOB_ACTION="$ACTION" /usr/libexec/oum-awg-manager import "$REQUEST" || fail awg_failed 'AWG-туннель не прошёл проверку; прежняя сеть восстановлена.'; write_status success configured 'AWG-туннель создан и Podkop запущен через него.' ;;
+	podkop_proxy) write_status running proxy_configuring 'Проверяем Reality и создаём защищённое подключение Podkop…'; OUM_JOB_STATUS="$STATUS" OUM_JOB_ACTION="$ACTION" /usr/libexec/oum-podkop-config proxy "$REQUEST" || fail podkop_proxy_failed 'Reality не прошёл проверку; предыдущее подключение восстановлено.'; write_status success configured 'Reality проверен и используется Podkop.' ;;
+	podkop_routing) write_status running routing 'Проверяем списки и перестраиваем маршрутизацию Podkop…'; /usr/libexec/oum-podkop-config routing "$REQUEST" || fail podkop_routing_failed 'Новые правила не прошли проверку; прежняя маршрутизация восстановлена.'; write_status success routed 'Маршрутизация Podkop сохранена и проверена.' ;;
+	podkop_youtube) mode="$(json_value .mode)"; write_status running youtube 'Переключаем маршрут YouTube и проверяем сервисы…'; OUM_JOB_STATUS="$STATUS" OUM_JOB_ACTION="$ACTION" /usr/libexec/oum-podkop-config youtube "$REQUEST" || fail podkop_youtube_failed 'Новый режим YouTube не прошёл проверку; предыдущий восстановлен.'; write_status success configured "$([ "$mode" = vpn ] && echo 'YouTube направлен через защищённое подключение; Zapret остановлен.' || echo 'YouTube идёт напрямую и обрабатывается Zapret.')" ;;
+	zapret_quic) enabled="$(json_value .enabled)"; write_status running quic 'Изменяем глобальный режим QUIC…'; /usr/libexec/oum-zapret-quic "$([ "$enabled" = 1 ] && echo enable || echo disable)" || fail zapret_quic_failed 'Не удалось изменить режим QUIC; предыдущий firewall восстановлен.'; write_status success configured "$([ "$enabled" = 1 ] && echo 'QUIC заблокирован: клиенты будут использовать TCP/TLS.' || echo 'QUIC снова разрешён.')" ;;
+	zapret_manager_install) write_status running downloading 'Загружаем и проверяем закреплённый Zapret Manager…'; /usr/libexec/oum-zapret-manager install || fail zapret_manager_failed 'Не удалось подготовить Zapret Manager или не совпала контрольная сумма.'; write_status success installed 'Zapret Manager подготовлен. Запускайте командой oum-zapret-manager из root SSH.' ;;
+	zapret_auto) write_status running testing 'Готовим автоматический подбор стратегии Zapret…'; OUM_JOB_STATUS="$STATUS" OUM_JOB_ACTION="$ACTION" /usr/libexec/oum-zapret-strategy auto || fail zapret_test_failed 'Рабочая стратегия не найдена; предыдущая конфигурация восстановлена.'; write_status success applied 'Лучшая стратегия YouTube выбрана, проверена и применена.' ;;
+	zapret_apply) strategy="$(json_value .strategy)"; write_status running applying "Применяем стратегию $strategy…"; OUM_JOB_STATUS="$STATUS" OUM_JOB_ACTION="$ACTION" /usr/libexec/oum-zapret-strategy apply "$strategy" || fail zapret_apply_failed 'Стратегия не прошла проверку; предыдущая конфигурация восстановлена.'; write_status success applied "Стратегия $strategy применена." ;;
+	zapret_check) write_status running testing 'Проверяем текущую стратегию Zapret…'; OUM_JOB_STATUS="$STATUS" OUM_JOB_ACTION="$ACTION" /usr/libexec/oum-zapret-strategy check || fail zapret_check_failed 'Текущая стратегия не прошла проверку.'; write_status success checked 'Текущая стратегия Zapret прошла проверку.' ;;
+	zapret_restore) write_status running rollback 'Возвращаем предыдущую стратегию Zapret…'; /usr/libexec/oum-zapret-strategy restore || fail zapret_restore_failed 'Не удалось вернуть предыдущую стратегию.'; write_status success restored 'Предыдущая стратегия Zapret восстановлена.' ;;
 	restore) write_status running restoring 'Проверяем и восстанавливаем резервную копию…'; /usr/libexec/oum-backup restore || fail restore_failed 'Резервная копия отклонена; текущие настройки сохранены.'; write_status success restored 'Резервная копия восстановлена.' ;;
 	reset_vpn) write_status running resetting 'Удаляем настройки VPN…'; /usr/libexec/oum-reset-vpn || fail reset_failed 'Не удалось сбросить VPN.'; write_status success reset 'VPN сброшен. Можно добавить новый источник.' ;;
+	gearup_install) write_status running installing 'Ставим GearUP: TUN-модуль, плагин, persist…'; /usr/libexec/oum-gearup install || fail gearup_failed 'GearUP не установился; подробности в /tmp/oum-gearup-install.log.'; write_status success installed 'GearUP установлен. Привяжите роутер в мобильном приложении GearUP.' ;;
+	gearup_uninstall) write_status running removing 'Удаляем GearUP…'; /usr/libexec/oum-gearup uninstall || fail gearup_uninstall_failed 'Не удалось полностью удалить GearUP.'; write_status success removed 'GearUP удалён. Исключения доменов и kmod-tun оставлены.' ;;
 	reset_all) write_status running resetting 'Возвращаем мастер первого запуска…'; /usr/libexec/oum-reset-first-run || fail reset_failed 'Не удалось вернуть мастер первого запуска.'; write_status success reset 'Мастер первого запуска восстановлен.' ;;
 	*) fail invalid_action 'Неизвестная системная операция.' ;;
 esac

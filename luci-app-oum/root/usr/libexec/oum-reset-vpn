@@ -14,6 +14,15 @@ if [ -x /etc/init.d/passwall ] && [ -f /etc/config/passwall ]; then
 	cp /etc/config/passwall "$ROLLBACK/passwall-before-vpn-reset"
 	chmod 600 "$ROLLBACK/passwall-before-vpn-reset"
 fi
+if [ -x /etc/init.d/podkop ] && [ -f /etc/config/podkop ]; then
+	cp /etc/config/podkop "$ROLLBACK/podkop-before-vpn-reset"
+	[ ! -f /etc/config/zapret ] || cp /etc/config/zapret "$ROLLBACK/zapret-before-vpn-reset"
+	chmod 600 "$ROLLBACK/podkop-before-vpn-reset"
+	/etc/init.d/podkop stop >/dev/null 2>&1 || true
+	/etc/init.d/podkop disable >/dev/null 2>&1 || true
+	/etc/init.d/zapret stop >/dev/null 2>&1 || true
+	/etc/init.d/zapret disable >/dev/null 2>&1 || true
+fi
 
 for section in $(uci -q show oum | sed -n "s/^oum\.\([^.=]*\)=device$/\1/p"); do
 	uci -q delete "oum.$section" || true
@@ -48,6 +57,8 @@ uci -q delete oum.main.managed_direct_macs || true
 uci -q delete oum.main.managed_policy_ips || true
 uci -q delete oum.main.managed_passwall_direct_ips || true
 uci -q delete oum.main.managed_passwall_vpn_ips || true
+uci -q delete oum.main.managed_podkop_direct_ips || true
+uci -q delete oum.main.managed_podkop_vpn_ips || true
 uci -q commit oum
 
 rm -f /etc/oum/active_source /etc/oum/active_profile /etc/oum/proxy_backend

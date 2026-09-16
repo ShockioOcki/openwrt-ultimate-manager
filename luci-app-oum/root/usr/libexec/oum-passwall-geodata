@@ -1,0 +1,65 @@
+#!/bin/sh
+
+set -eu
+
+ASSET_DIR=/usr/share/v2ray
+WORK=/tmp/oum-passwall-geodata.$$
+SITE_URL='https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat'
+IP_URL='https://github.com/Loyalsoldier/geoip/releases/latest/download/geoip.dat'
+INSTALLED=0
+
+cleanup() { rm -rf "$WORK"; }
+rollback() {
+	[ "$INSTALLED" = 1 ] || return 0
+	cp "$WORK/geosite.old" "$ASSET_DIR/geosite.dat"
+	cp "$WORK/geoip.old" "$ASSET_DIR/geoip.dat"
+	/etc/init.d/passwall restart >/dev/null 2>&1 || true
+	INSTALLED=0
+}
+on_exit() { rollback; cleanup; }
+trap 'exit 1' HUP INT TERM
+trap on_exit EXIT
+
+download_verified() {
+	url="$1" output="$2" checksum="$3"
+	curl -fL --connect-timeout 10 --max-time 120 "$url" -o "$output"
+	curl -fL --connect-timeout 10 --max-time 30 "$url.sha256sum" -o "$checksum"
+	expected="$(awk 'NR == 1 { print $1 }' "$checksum")"
+	actual="$(sha256sum "$output" | awk '{ print $1 }')"
+	[ -n "$expected" ] && [ "$actual" = "$expected" ]
+}
+
+validate_assets() {
+	for list in category-ai-\!cn discord apple-update google-play microsoft samsung xiaomi cn category-games-\!cn category-ru tld-ru; do
+		geoview -input "$WORK/geosite.dat" -type geosite -list "$list" -format json -output "$WORK/site.json" >/dev/null 2>&1
+	done
+	for list in private cn ru; do
+		geoview -input "$WORK/geoip.dat" -type geoip -list "$list" -format json -output "$WORK/ip.json" >/dev/null 2>&1
+	done
+}
+
+mkdir -p "$WORK" "$ASSET_DIR"
+download_verified "$SITE_URL" "$WORK/geosite.dat" "$WORK/geosite.sha256sum"
+download_verified "$IP_URL" "$WORK/geoip.dat" "$WORK/geoip.sha256sum"
+validate_assets
+
+cp "$ASSET_DIR/geosite.dat" "$WORK/geosite.old"
+cp "$ASSET_DIR/geoip.dat" "$WORK/geoip.old"
+cp "$WORK/geosite.dat" "$ASSET_DIR/geosite.dat.new"
+cp "$WORK/geoip.dat" "$ASSET_DIR/geoip.dat.new"
+mv "$ASSET_DIR/geosite.dat.new" "$ASSET_DIR/geosite.dat"
+mv "$ASSET_DIR/geoip.dat.new" "$ASSET_DIR/geoip.dat"
+chmod 644 "$ASSET_DIR/geosite.dat" "$ASSET_DIR/geoip.dat"
+INSTALLED=1
+
+/etc/init.d/passwall restart >/tmp/oum-passwall-geodata.log 2>&1
+ready=0
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+	sleep 2
+	if pidof xray >/dev/null 2>&1 && nft list table inet passwall >/dev/null 2>&1 && ps w | grep -q '[d]nsmasq_default'; then
+		ready=1
+		break
+	fi
+done
+[ "$ready" = 1 ] || { rollback; exit 1; }
+INSTALLED=0

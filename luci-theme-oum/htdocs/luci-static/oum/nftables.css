@@ -1,0 +1,29 @@
+/* Native firewall rules: conditions and actions, without nested cards. */
+@layer oum-nftables {
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent :is(.nft-table,.nft-chains,.nft-chain) { min-width:0 !important; max-width:100% !important; padding:0 !important; border:0 !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-table > h3 { margin:0 0 24px !important; font-size:19px !important; overflow-wrap:anywhere; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-chain { margin:0 0 28px !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-chain > h4 { margin:0 0 8px !important; font-size:15px !important; line-height:1.5; overflow-wrap:anywhere; scroll-margin-top:90px; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-chain-hook { margin:0 0 12px !important; padding:0 !important; border:0 !important; background:transparent !important; color:var(--oum-subtle); font-size:12px !important; line-height:1.5; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-chain-hook ul { margin:0 !important; padding:0 !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules { display:table !important; width:100% !important; max-width:100% !important; table-layout:fixed !important; min-width:0 !important; border-collapse:collapse !important; margin:0 !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tbody { display:table-row-group !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr, body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr.table-titles { display:table-row !important; margin:0 !important; padding:0 !important; border:0 !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules :is(td,th) { display:table-cell !important; min-width:0 !important; padding:10px 8px !important; margin:0 !important; border:0 !important; border-bottom:1px solid var(--oum-line) !important; background:transparent !important; vertical-align:top !important; text-align:left !important; font-size:12px !important; line-height:1.6 !important; white-space:normal !important; overflow-wrap:anywhere !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules :is(td,th):first-child { width:56% !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules :is(td,th):nth-child(2) { width:44% !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules th { color:var(--oum-subtle) !important; font-size:11px !important; text-transform:none !important; font-weight:500 !important; letter-spacing:normal !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules td::before, body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr::before, body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr::after { display:none !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules tr:nth-child(even) { background:var(--oum-paper-soft) !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules .ifacebadge { display:inline !important; padding:0 !important; margin:0 4px 0 0 !important; border:0 !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; color:var(--oum-ink) !important; font:inherit !important; white-space:normal !important; overflow-wrap:anywhere !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules .ifacebadge > :is(var,strong,span) { display:inline !important; font:inherit !important; white-space:normal !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules .ifacebadge strong { font-weight:600 !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules .ifacebadge var { color:var(--oum-subtle) !important; font-style:normal !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules :is(.nft-set,.nft-list,.nft-set-items,.nft-list-items) { display:inline !important; max-width:none !important; white-space:normal !important; overflow:visible !important; text-overflow:clip !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules a { color:var(--oum-action); text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules .nft-counter { font-variant-numeric:tabular-nums !important; }
+ body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules .cbi-tooltip { max-width:min(300px,80vw) !important; white-space:normal !important; overflow-wrap:anywhere !important; }
+ @media(max-width:600px) {
+  body.theme-oum[data-page="admin-status-nftables"] #maincontent .nft-rules :is(td,th) { padding:9px 5px !important; }
+ }
+}

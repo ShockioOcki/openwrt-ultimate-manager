@@ -1,0 +1,242 @@
+#!/bin/sh
+
+set -eu
+
+LOG=/tmp/oum-mobile-manager.log
+
+emit() {
+	printf '%s=%s\n' "$1" "$2"
+}
+
+installed() {
+	apk info -e "$1" >/dev/null 2>&1
+}
+
+usb_root() {
+	for pass in known signaled fallback; do
+		for path in /sys/bus/usb/devices/*; do
+			[ -f "$path/idVendor" ] || continue
+			vid="$(cat "$path/idVendor")"
+			[ "$vid" = 1d6b ] && continue
+			[ "$(cat "$path/bDeviceClass" 2>/dev/null || true)" = 09 ] && continue
+			case "$pass" in
+				known) known_mobile_vendor "$vid" || continue ;;
+				signaled)
+					interface_matches "$path" 02 0e 00 2>/dev/null ||
+					interface_matches "$path" e0 01 02 2>/dev/null ||
+					interface_matches "$path" e0 01 03 2>/dev/null ||
+					interface_matches "$path" 02 0d 00 2>/dev/null || continue
+					;;
+			esac
+			printf '%s\n' "$path"
+			return 0
+		done
+	done
+	return 1
+}
+
+interface_matches() {
+	root="$1"
+	class="$2"
+	subclass="$3"
+	protocol="$4"
+	for path in "$root":*; do
+		[ -f "$path/bInterfaceClass" ] || continue
+		[ "$(cat "$path/bInterfaceClass")" = "$class" ] || continue
+		[ "$(cat "$path/bInterfaceSubClass")" = "$subclass" ] || continue
+		[ "$(cat "$path/bInterfaceProtocol")" = "$protocol" ] || continue
+		return 0
+	done
+	return 1
+}
+
+storage_only() {
+	root="$1"
+	found=0
+	for path in "$root":*; do
+		[ -f "$path/bInterfaceClass" ] || continue
+		found=1
+		[ "$(cat "$path/bInterfaceClass")" = 08 ] || return 1
+	done
+	[ "$found" = 1 ]
+}
+
+network_by_driver() {
+	wanted="$1"
+	for path in /sys/class/net/*/device; do
+		[ -e "$path" ] || continue
+		driver="$(basename "$(readlink -f "$path/driver" 2>/dev/null || true)")"
+		case " $wanted " in *" $driver "*) basename "$(dirname "$path")"; return 0 ;; esac
+	done
+	return 1
+}
+
+control_by_driver() {
+	wanted="$1"
+	for device in /dev/cdc-wdm* /dev/wwan*qmi* /dev/wwan*mbim*; do
+		[ -c "$device" ] || continue
+		name="$(basename "$device")"
+		if [ -e "/sys/class/usbmisc/$name/device/driver" ]; then
+			driver="$(basename "$(readlink -f "/sys/class/usbmisc/$name/device/driver")")"
+		else
+			driver="$(basename "$(readlink -f "/sys/class/wwan/$name/device/driver" 2>/dev/null || true)")"
+		fi
+		case " $wanted " in *" $driver "*) printf '%s\n' "$device"; return 0 ;; esac
+	done
+	return 1
+}
+
+serial_device() {
+	for devices in "$(ls /dev/ttyACM* 2>/dev/null | sort)" "$(ls /dev/ttyUSB* 2>/dev/null | sort -r)"; do
+		for device in $devices; do
+			[ -c "$device" ] || continue
+			if command -v gcom >/dev/null 2>&1; then
+				reply="$(gcom -d "$device" -s /etc/gcom/getcardinfo.gcom 2>/dev/null || true)"
+				compact="$(printf '%s' "$reply" | tr -d '[:space:]')"
+				case "$compact" in ''|*ERROR*) continue ;; esac
+			fi
+			printf '%s\n' "$device"
+			return 0
+		done
+	done
+	return 1
+}
+
+detect_family() {
+	device="$(network_by_driver rndis_host 2>/dev/null || true)"
+	[ -z "$device" ] || { printf 'rndis %s\n' "$device"; return 0; }
+	device="$(network_by_driver cdc_ether 2>/dev/null || true)"
+	[ -z "$device" ] || { printf 'ethernet %s\n' "$device"; return 0; }
+	device="$(control_by_driver cdc_mbim 2>/dev/null || true)"
+	[ -z "$device" ] || { printf 'mbim %s\n' "$device"; return 0; }
+	device="$(control_by_driver qmi_wwan 2>/dev/null || true)"
+	[ -z "$device" ] || { printf 'qmi %s\n' "$device"; return 0; }
+	device="$(network_by_driver 'cdc_ncm huawei_cdc_ncm' 2>/dev/null || true)"
+	if [ -n "$device" ]; then
+		control="$(serial_device 2>/dev/null || true)"
+		[ -z "$control" ] || { printf 'ncm %s\n' "$control"; return 0; }
+	fi
+	device="$(serial_device 2>/dev/null || true)"
+	[ -z "$device" ] || { printf 'ppp %s\n' "$device"; return 0; }
+	return 1
+}
+
+known_mobile_vendor() {
+	case "$1" in
+		03f0|05c6|0bdb|1199|12d1|1410|19d2|1bc7|1e0e|2c7c|2cb7|413c) return 0 ;;
+	esac
+	return 1
+}
+
+status() {
+	root="$(usb_root 2>/dev/null || true)"
+	if [ -z "$root" ]; then
+		emit attached 0
+		emit family none
+		emit device ''
+		return 0
+	fi
+	vid="$(cat "$root/idVendor")"
+	pid="$(cat "$root/idProduct")"
+	vendor="$(tr '\r\n=' '   ' < "$root/manufacturer" 2>/dev/null || true)"
+	product="$(tr '\r\n=' '   ' < "$root/product" 2>/dev/null || true)"
+	info="$(detect_family 2>/dev/null || true)"
+	family="${info%% *}"
+	device="${info#* }"
+	[ "$device" != "$info" ] || device=''
+	mode=0
+	storage_only "$root" 2>/dev/null && mode=1
+	attached=0
+	[ -n "$info" ] && attached=1
+	known_mobile_vendor "$vid" && attached=1
+	interface_matches "$root" e0 01 02 2>/dev/null && attached=1
+	interface_matches "$root" 02 0e 00 2>/dev/null && attached=1
+	interface_matches "$root" e0 01 03 2>/dev/null && attached=1
+	interface_matches "$root" 02 0d 00 2>/dev/null && attached=1
+	[ -n "$family" ] || family="$([ "$mode" = 1 ] && echo storage || echo unknown)"
+	emit attached "$attached"
+	emit family "$family"
+	emit device "$device"
+	emit vendor "$vendor"
+	emit product "$product"
+	emit vid "$vid"
+	emit pid "$pid"
+	emit storage_mode "$mode"
+	emit needs_prepare "$([ -n "$device" ] && echo 0 || echo 1)"
+}
+
+install_packages() {
+	# shellcheck disable=SC2086
+	apk -U add $* >> "$LOG" 2>&1
+}
+
+ensure_protocol() {
+	case "$1" in
+		qmi) installed uqmi || install_packages uqmi ;;
+		mbim) installed umbim || install_packages umbim ;;
+		ncm) installed comgt-ncm || install_packages comgt-ncm ;;
+		ppp) installed comgt && installed luci-proto-3g || install_packages comgt luci-proto-3g ;;
+	esac
+}
+
+wait_for_usb() {
+	count=0
+	while [ "$count" -lt "$1" ]; do
+		root="$(usb_root 2>/dev/null || true)"
+		[ -z "$root" ] || return 0
+		count=$((count + 1))
+		sleep 1
+	done
+	return 1
+}
+
+prepare() {
+	: > "$LOG"
+	root="$(usb_root 2>/dev/null || true)"
+	[ -n "$root" ] || { echo 'Подключённый USB-модем не найден.' >&2; return 2; }
+	if storage_only "$root"; then
+		installed usb-modeswitch || install_packages usb-modeswitch
+		/etc/init.d/usbmode start >> "$LOG" 2>&1 || true
+		sleep 3
+		wait_for_usb 12 || { echo 'Модем переключён из режима CD. Переподключите его и повторите.' >&2; return 3; }
+		root="$(usb_root 2>/dev/null || true)"
+		storage_only "$root" && { echo 'Модем остался в режиме CD. Переподключите его и повторите.' >&2; return 3; }
+	fi
+	info="$(detect_family 2>/dev/null || true)"
+	[ -z "$info" ] || { ensure_protocol "${info%% *}"; printf '%s\n' "$info"; return 0; }
+	if interface_matches "$root" e0 01 03; then
+		install_packages kmod-usb-net-rndis
+	elif interface_matches "$root" 02 0e 00 || interface_matches "$root" e0 01 02; then
+		install_packages umbim
+	elif interface_matches "$root" 02 06 00; then
+		install_packages kmod-usb-net-cdc-ether
+	elif interface_matches "$root" 02 0d 00; then
+		install_packages comgt-ncm
+	elif interface_matches "$root" 02 02 01; then
+		install_packages kmod-usb-acm comgt
+	else
+		# Vendor-specific modem interfaces do not identify QMI versus serial PPP.
+		# Probe both kernel bindings, then install the userspace matching the winner.
+		install_packages kmod-usb-serial-option uqmi
+	fi
+	modprobe rndis_host 2>/dev/null || true
+	modprobe cdc_mbim 2>/dev/null || true
+	modprobe cdc_ncm 2>/dev/null || true
+	modprobe huawei_cdc_ncm 2>/dev/null || true
+	modprobe qmi_wwan 2>/dev/null || true
+	modprobe option 2>/dev/null || true
+	sleep 3
+	info="$(detect_family 2>/dev/null || true)"
+	case "$info" in
+		ppp\ *) ensure_protocol ppp; info="$(detect_family 2>/dev/null || true)" ;;
+		ncm\ *) installed comgt-ncm || install_packages comgt-ncm ;;
+	esac
+	[ -n "$info" ] || { echo 'Драйвер установлен, но рабочий интерфейс модема не найден.' >&2; return 4; }
+	printf '%s\n' "$info"
+}
+
+case "${1:-status}" in
+	status) status ;;
+	prepare) prepare ;;
+	*) echo "usage: $0 {status|prepare}" >&2; exit 2 ;;
+esac

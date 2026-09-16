@@ -1,0 +1,42 @@
+#!/bin/sh
+
+set -eu
+
+value="$(printf '%s' "${1:-}" | awk '{ print tolower($0) }')"
+value="${value#*://}"
+value="${value%%/*}"
+value="${value%%:*}"
+case "$value" in ''|*[!a-z0-9._-]*) exit 2 ;; esac
+
+matches="$(geoview -action lookup -input /usr/share/v2ray/geosite.dat -type geosite -value "$value" 2>/dev/null || true)"
+has() { printf '%s\n' "$matches" | grep -qx "$1"; }
+
+route=direct
+rule='По умолчанию напрямую'
+case "$value" in
+	gearupbooster.com|*.gearupbooster.com|gearupportal.com|*.gearupportal.com|guinfra.com|*.guinfra.com|sdp.gg|*.sdp.gg)
+		route=direct; rule='GearUP direct' ;;
+esac
+if [ "$rule" = 'GearUP direct' ]; then
+ :
+elif has DISCORD; then
+ route=vpn; rule='Discord proxy'
+elif has TELEGRAM; then
+ route=vpn; rule='Telegram proxy'
+elif has CATEGORY-GAMES-\!CN; then
+ rule='International games direct'
+elif has APPLE-UPDATE || has GOOGLE-PLAY || has MICROSOFT || has SAMSUNG || has XIAOMI; then
+ rule='Updates and downloads direct'
+elif has CN; then
+ rule='China direct'
+elif has CATEGORY-RU || has TLD-RU; then
+ rule='Russia direct'
+else
+ for kind in regional restricted; do
+  if awk -v host="$value" 'host == $0 || (length(host)>length($0) && substr(host,length(host)-length($0),1)=="." && substr(host,length(host)-length($0)+1)==$0) { found=1; exit } END { exit !found }' "/usr/share/oum/routing/$kind-domains.txt"; then
+   route=vpn; rule="OUM $kind services"; break
+  fi
+ done
+fi
+
+printf 'domain=%s\nroute=%s\nrule=%s\ncategories=%s\n' "$value" "$route" "$rule" "$(printf '%s' "$matches" | tr '\n' ', ' | sed 's/, $//')"
