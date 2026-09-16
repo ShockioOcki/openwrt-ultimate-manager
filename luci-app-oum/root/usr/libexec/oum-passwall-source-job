@@ -131,7 +131,7 @@ first_managed_node() {
 activate_source() {
 	node="$(first_managed_node)" || return 1
 	[ -n "$node" ] || return 1
-	/usr/libexec/oum-passwall-bypass-russia "$node" || return 1
+	/usr/libexec/oum-passwall-bypass-russia "$node" >> "$LOG" 2>&1 || return 1
 	uci -q batch <<EOF
 set passwall.@global[0].tcp_node='$SHUNT'
 set passwall.@global[0].udp_node='tcp'
@@ -167,6 +167,7 @@ trap cleanup EXIT INT TERM
 case "$kind" in subscription|proxy) ;; awg) fail unsupported_type 'AWG используется как отдельный туннель. Для него выберите Podkop + Zapret.' ;; *) fail invalid_type 'Неизвестный тип подключения.' ;; esac
 [ "$input" = "$JOB_DIR/input" ] && [ -s "$input" ] || fail missing_input 'Данные подключения не найдены.'
 [ -s "$PASSWALL_CONFIG" ] && [ -x /etc/init.d/passwall ] && [ -r "$PASSWALL_SUBSCRIBE" ] || fail runtime_missing 'PassWall установлен не полностью.'
+[ -x /usr/libexec/oum-passwall-bypass-russia ] || fail runtime_missing 'Не установлен скрипт маршрутизации OUM для PassWall. Обновите установку OUM.'
 command -v xray >/dev/null 2>&1 || fail runtime_missing 'Xray для PassWall не установлен.'
 
 : > "$LOG"

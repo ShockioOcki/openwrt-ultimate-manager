@@ -419,6 +419,17 @@
 }
 .oum-route-row > input { position: absolute; width: 1px !important; min-width: 1px !important; height: 1px !important; min-height: 1px !important; opacity: 0; pointer-events: none; }
 .oum-route-row > strong { font-size: .82rem; font-weight: 600; white-space: nowrap; }
+/* Device routing picker: keep native option popovers readable in dark mode. */
+.oum-policy { color: var(--oum-ink) !important; background-color: var(--oum-field) !important; border-color: var(--oum-line-strong) !important; color-scheme: light; }
+.oum-policy option { color: #17231f; background: #ffffff; }
+.oum-app[data-theme="dark"] .oum-policy,
+html[data-theme="dark"] .oum-policy,
+body.dark .oum-policy { color-scheme: dark; color: #edf2fb !important; background-color: #18243a !important; }
+.oum-app[data-theme="dark"] .oum-policy option,
+html[data-theme="dark"] .oum-policy option,
+body.dark .oum-policy option { color: #edf2fb; background: #18243a; }
+.oum-policy:focus-visible { outline: 2px solid var(--oum-action) !important; outline-offset: 2px; }
+
 .oum-route-icon { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border-radius: 50%; background: var(--oum-field-soft); }
 .oum-route-icon img { width: 16px; height: 16px; object-fit: contain; }
 .oum-route-row:has(input[value="vpn"]:checked) { border-color: var(--oum-action) !important; background: var(--oum-action); color: #fff; box-shadow: 0 2px 10px rgba(40,104,215,.22); }
@@ -2599,7 +2610,7 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
 }
 /* fix Podkop widget margins from edges like demo */
 @media (max-width: 900px){
-  .oum-dashboard #podkop-panel { margin:0 8px !important; padding:14px !important; border-radius:13px !important; }
+  .oum-dashboard #podkop-panel { margin:0 !important; padding:14px !important; border-radius:13px !important; }
   .oum-dashboard #podkop-panel .oum-podkop-summary { padding:0 0 12px !important; margin:0 !important; }
   .oum-mobile-podkop-actions { gap:6px !important; margin:12px 0 0 !important; padding:0 !important; }
   .oum-mobile-podkop-actions button { padding:10px 5px !important; min-height:56px !important; }
@@ -3077,6 +3088,57 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
 .oum-mobile-settings-hub,
 .oum-settings-sheet { display: none; }
 
+/* Device controls also open on desktop; other settings keep their own layout. */
+@media (min-width: 901px) {
+  html.oum-settings-sheet-open:has(.oum-parental-sheet:not([hidden])),
+  html.oum-settings-sheet-open:has(.oum-parental-sheet:not([hidden])) body { overflow: hidden !important; }
+  .oum-parental-sheet:not([hidden]) {
+    position: fixed;
+    inset: 0;
+    z-index: 140;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, .52);
+  }
+  .oum-parental-sheet .oum-settings-sheet-panel {
+    display: flex;
+    flex-direction: column;
+    width: min(560px, 100%);
+    max-height: calc(100dvh - 48px);
+    padding: 20px;
+    overflow: hidden;
+    border-radius: var(--oum-r-surface);
+    background: var(--oum-paper);
+    color: var(--oum-ink);
+  }
+  .oum-parental-sheet .oum-settings-sheet-head {
+    display: flex;
+    flex: 0 0 auto;
+    min-height: 44px;
+    margin-bottom: 12px;
+    padding: 0;
+    background: none;
+    color: var(--oum-ink);
+    box-shadow: none;
+  }
+  .oum-parental-sheet .oum-settings-sheet-close {
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    color: var(--oum-ink);
+    background: var(--oum-paper);
+    border: 1px solid var(--oum-line);
+    border-radius: var(--oum-r-control);
+  }
+  .oum-parental-sheet .oum-settings-sheet-content {
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+}
+
 @media (max-width: 900px) {
   html.oum-settings-sheet-open,
   html.oum-settings-sheet-open body { overflow: hidden !important; }
@@ -3426,15 +3488,15 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
 /* domains etalon: fix overlapping, hide summary, make 2-col segment, single save blue, no reset */
 #oum-domains-clone .oum-custom-rules { border: none !important; padding: 0 !important; background: transparent !important; margin: 0 !important; }
 #oum-domains-clone .oum-custom-rules > summary { display: none !important; }
-#oum-domains-clone .oum-custom-route-tabs { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 4px !important; background: #f1f5f9 !important; padding: 3px !important; border-radius: 12px !important; margin: 0 0 12px !important; border: none !important; }
-#oum-domains-clone .oum-custom-route-tab { padding: 7px !important; font-size: 12px !important; font-weight: 600 !important; border-radius: 8px !important; border: none !important; background: transparent !important; color: #64748b !important; }
-#oum-domains-clone .oum-custom-route-tab[data-active="true"] { background: #fff !important; color: #0f172a !important; box-shadow: 0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06) !important; }
+#oum-domains-clone .oum-custom-route-tabs { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 4px !important; background: var(--oum-field-soft) !important; padding: 3px !important; border-radius: 12px !important; margin: 0 0 12px !important; border: none !important; }
+#oum-domains-clone .oum-custom-route-tab { padding: 7px !important; font-size: 12px !important; font-weight: 600 !important; border-radius: 8px !important; border: none !important; background: transparent !important; color: var(--oum-subtle) !important; }
+#oum-domains-clone .oum-custom-route-tab[data-active="true"] { background: var(--oum-paper) !important; color: var(--oum-ink) !important; box-shadow: 0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06) !important; }
 #oum-domains-clone .oum-custom-route-pane { display: grid !important; grid-template-columns: 1fr !important; gap: 12px !important; }
 #oum-domains-clone .oum-custom-route-pane[hidden] { display: none !important; }
 #oum-domains-clone .oum-route-field { gap: 6px !important; }
-#oum-domains-clone .oum-route-field > strong { font-size: 12px !important; color: #1f2937 !important; margin-bottom: 2px !important; }
-#oum-domains-clone .oum-route-field textarea { min-height: 96px !important; width: 100% !important; border: 1px solid #e5e7eb !important; border-radius: 12px !important; padding: 12px 14px !important; font-size: 14px !important; line-height: 1.45 !important; background: #fff !important; margin-top: 6px !important; margin-bottom: 4px !important; display: block !important; }
-#oum-domains-clone .oum-custom-route-help { font-size: 11px !important; color: #6b7280 !important; margin: 0 !important; }
+#oum-domains-clone .oum-route-field > strong { font-size: 12px !important; color: var(--oum-ink) !important; margin-bottom: 2px !important; }
+#oum-domains-clone .oum-route-field textarea { min-height: 96px !important; width: 100% !important; border: 1px solid var(--oum-line) !important; border-radius: 12px !important; padding: 12px 14px !important; font-size: 14px !important; line-height: 1.45 !important; background: var(--oum-paper) !important; margin-top: 6px !important; margin-bottom: 4px !important; display: block !important; }
+#oum-domains-clone .oum-custom-route-help { font-size: 11px !important; color: var(--oum-subtle) !important; margin: 0 !important; }
 #oum-podkop-sheet-domains .oum-bottom-sheet > button:last-child { background: #2563eb !important; color: #fff !important; border: none !important; border-radius: 12px !important; height: 42px !important; font-weight: 600 !important; }
 #oum-domains-clone .oum-custom-route-pane { padding: 2px 0 4px !important; }
 #oum-domains-clone .oum-route-field { padding: 0 2px !important; }
@@ -3445,12 +3507,12 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
 /* diag etalon: blue run, centered helper, card rows with arrow/toggle, no save */
 #oum-diag-clone .oum-diagnostic-run { background: #2563eb !important; color: #fff !important; border: none !important; border-radius: 12px !important; height: 44px !important; font-weight: 600 !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 6px !important; width: 100% !important; }
 #oum-diag-clone .oum-diagnostic-run::before { content: "⚡"; font-size: 14px; }
-#oum-diag-clone #podkop-diagnostic-summary { text-align: center !important; font-size: 11px !important; color: #6b7280 !important; margin: 8px 0 12px !important; }
-#oum-diag-clone .oum-diagnostic-side-card { border: 1px solid #e5e7eb !important; border-radius: 12px !important; padding: 12px !important; background: #fff !important; }
+#oum-diag-clone #podkop-diagnostic-summary { text-align: center !important; font-size: 11px !important; color: var(--oum-subtle) !important; margin: 8px 0 12px !important; }
+#oum-diag-clone .oum-diagnostic-side-card { border: 1px solid var(--oum-line) !important; border-radius: 12px !important; padding: 12px !important; background: var(--oum-paper) !important; }
 #oum-diag-clone .oum-diagnostic-side-card h4 { font-size: 13px !important; margin: 0 0 8px !important; }
 #oum-podkop-sheet-diag .oum-bottom-sheet > button:last-child { display: none !important; }
 #oum-diag-clone .oum-expert-tools > summary { display: flex !important; justify-content: space-between !important; align-items: center !important; }
-#oum-diag-clone .oum-expert-tools > summary::after { content: "только SSH"; font-size: 11px; color: #9ca3af; font-weight: 500; }
+#oum-diag-clone .oum-expert-tools > summary::after { content: "только SSH"; font-size: 11px; color: var(--oum-subtle); font-weight: 500; }
 
 /* center fix for podkop widget */
 .oum-dashboard #podkop-panel { padding:14px !important; }
@@ -3757,46 +3819,7 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
     padding: 0 11px !important;
     font-size: .75rem !important;
   }
-  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick {
-    grid-template-columns: 1fr !important;
-    gap: 0 !important;
-    margin-top: 12px;
-    border-top: 1px solid var(--oum-line);
-  }
-  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node {
-    min-height: 48px;
-    padding: 10px 0 !important;
-    border: 0 !important;
-    border-bottom: 1px solid var(--oum-line) !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-  }
-  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node-copy {
-    display: grid !important;
-    grid-template-columns: 24px minmax(0,1fr) auto;
-    align-items: center !important;
-    gap: 9px !important;
-    text-align: left !important;
-  }
-  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node-flag {
-    font-size: 20px !important;
-  }
-  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-node-name {
-    font-size: .86rem !important;
-  }
-  .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-quick .oum-delay {
-    font-size: .78rem !important;
-    white-space: nowrap;
-  }
-  .oum-node-controls[data-engine="passwall"] .oum-all-nodes-btn {
-    min-height: 42px !important;
-    margin-top: 8px !important;
-    padding: 10px 0 !important;
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    font-size: .78rem !important;
-  }
+
 }
 
 /* cards75: порядок в 4 карточках, особенно Клиенты (текст залезал под QR). */
@@ -4017,3 +4040,172 @@ html[data-theme="dark"] .oum-node.oum-pick .oum-delay { color: var(--oum-subtle)
   .oum-support-command-row { grid-template-columns: 1fr; }
   .oum-support-command-row .btn,.oum-support-active-actions .btn { width: 100%; }
 }
+
+
+/* PassWall quick choices: three compact buttons, one shared picker. */
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] #quick-node-list {
+ display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:8px !important; border:0 !important;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] #quick-node-list .oum-node {
+ display:block !important; min-width:0 !important; padding:10px 6px !important; border:1px solid var(--oum-line) !important;
+ border-radius:10px !important; background:var(--oum-paper-soft) !important; cursor:pointer;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] #quick-node-list .oum-node-copy {
+ display:flex !important; flex-direction:column !important; align-items:center !important; gap:5px !important; text-align:center !important;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] #quick-node-list .oum-node-flag { font-size:24px !important; line-height:28px !important; }
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] #quick-node-list .oum-node-name {
+ display:block !important; width:100%; white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important; font-size:12px !important; line-height:18px !important;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] #quick-node-list .oum-delay { font-size:12px !important; line-height:18px !important; }
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] #quick-node-list .is-current { border-color:var(--oum-action) !important; }
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] #show-all-nodes {
+ display:flex !important; justify-content:space-between !important; align-items:center !important; min-height:36px !important;
+ padding:8px 12px !important; border:1px solid var(--oum-line-strong) !important; border-radius:9px !important;
+ background:var(--oum-paper-soft) !important; color:var(--oum-ink) !important; margin-top:10px !important;
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] #node-picker { display:none !important; }
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] .oum-node-actions { margin-left:auto !important; }
+#oum-nodes-sheet:not(.active) { display:none !important; }
+@media (min-width:901px) {
+ #oum-nodes-sheet.active { position:fixed !important; inset:0 !important; z-index:1000 !important; display:flex !important; flex-direction:row !important; align-items:center !important; justify-content:center !important; box-sizing:border-box !important; margin:0 !important; background:rgb(0 0 0 / 45%); padding:24px !important; }
+ #oum-nodes-sheet .oum-bottom-sheet { width:min(920px,100%); max-width:100% !important; margin:0 !important; max-height:min(85dvh,calc(100dvh - 48px)) !important; overflow:auto; padding:24px; border:1px solid var(--oum-line); border-radius:16px; background:var(--oum-paper); }
+ #oum-nodes-sheet .sheet-handle { display:none; }
+ #oum-nodes-sheet #all-node-list { display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:8px; margin-top:12px; }
+ #oum-nodes-sheet .oum-node-copy { min-width:0; }
+ #oum-nodes-sheet .oum-node-name { overflow:hidden; text-overflow:ellipsis; }
+ #oum-nodes-sheet #oum-pick-confirm { display:none; }
+ #oum-nodes-sheet #oum-pick-confirm.show { display:block; width:auto; max-width:100%; margin:16px 0 0 auto; }
+}
+@media (max-width:900px) {
+ .oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] #measure-nodes { min-height:30px !important; height:30px !important; padding:4px 8px !important; font-size:11px !important; line-height:20px !important; }
+}
+
+@layer oum-form-buttons {
+ @media(max-width:900px) {
+  body.theme-oum #maincontent #node-controls #measure-nodes { min-height:30px !important; height:30px !important; padding:4px 8px !important; font-size:11px !important; line-height:20px !important; }
+ }
+}
+@media(min-width:901px) {
+ #oum-nodes-sheet .oum-bottom-sheet { display:flex; flex-direction:column; overflow:hidden; }
+ #oum-nodes-sheet #oum-nodes-sheet-list { overflow:auto; min-height:0; }
+ #oum-nodes-sheet #oum-pick-confirm.show { flex-shrink:0; }
+}
+.oum-dashboard.oum-app .oum-node-controls[data-engine="passwall"] #quick-node-list { margin-bottom:0 !important; }
+
+/* Viewport-owned overlay: independent of dashboard width and alignment. */
+@media(min-width:901px) {
+ body.theme-oum > #oum-nodes-sheet.active {
+  position:fixed !important; inset:0 !important; width:100% !important; height:100% !important;
+  max-width:none !important; max-height:none !important; margin:0 !important;
+  display:grid !important; place-items:center !important; padding:24px !important;
+  transform:none !important;
+ }
+ body.theme-oum > #oum-nodes-sheet > .oum-bottom-sheet {
+  justify-self:center !important; align-self:center !important;
+  margin:0 !important; position:relative !important; inset:auto !important; transform:none !important;
+ }
+}
+
+/* Node selection expands in the page; no overlay or nested scroll area. */
+body.theme-oum #node-controls > #oum-nodes-sheet.oum-node-expanded.active {
+ display:block !important; position:static !important; inset:auto !important;
+ width:100% !important; max-width:none !important; height:auto !important; max-height:none !important;
+ margin:12px 0 0 !important; padding:0 !important; background:transparent !important;
+ border:0 !important; box-shadow:none !important; transform:none !important; overflow:visible !important;
+}
+#oum-nodes-sheet.oum-node-expanded #oum-nodes-sheet-list { overflow:visible !important; }
+#oum-nodes-sheet.oum-node-expanded #all-node-list {
+ display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:8px !important; margin:0 !important;
+}
+#oum-nodes-sheet.oum-node-expanded #oum-pick-confirm { display:none !important; }
+#oum-nodes-sheet.oum-node-expanded #oum-pick-confirm.show {
+ display:block !important; width:fit-content !important; max-width:100% !important; margin:12px 0 0 auto !important;
+}
+@media(max-width:900px) {
+ #oum-nodes-sheet.oum-node-expanded #all-node-list { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+}
+
+/* Podkop sheets inherit the active palette even outside the dashboard root. */
+#oum-domains-clone .oum-route-field textarea { color: var(--oum-ink) !important; box-sizing: border-box; }
+#oum-diag-clone .oum-diagnostic-side-card { color: var(--oum-ink); }
+#oum-diag-clone .oum-diagnostic-side-card h4 { color: var(--oum-ink) !important; }
+#oum-diag-clone .oum-muted { color: var(--oum-subtle) !important; }
+html[data-theme="dark"] .oum-mobile-podkop-actions button[data-active="true"] { color: #a9caff !important; }
+.oum-mobile-podkop-actions button svg { stroke: currentColor; }
+
+/* These icons are external SVG images, so stroke:currentColor cannot recolor them. */
+.oum-mobile-podkop-actions .oum-mobile-podkop-icon img {
+  width: 18px !important;
+  height: 18px !important;
+  object-fit: contain;
+  filter: brightness(0) saturate(100%) !important;
+  opacity: .75;
+}
+html[data-theme="dark"] .oum-mobile-podkop-actions .oum-mobile-podkop-icon img {
+  filter: brightness(0) invert(1) !important;
+  opacity: .9;
+}
+
+@media (min-width:901px) {
+  .oum-usb-panel .oum-usb-maintenance { display:contents; }
+  .oum-usb-panel .oum-usb-maintenance > summary { display:none; }
+  .oum-usb-panel .oum-usb-maintenance > .btn { display:block; }
+}
+@media (max-width:900px) {
+/* USB sheet: one quiet list, with compact actions and no nested cards. */
+.oum-usb-panel.oum-mobile-sheet-active .oum-usb-head { display:none!important; }
+.oum-usb-panel .oum-usb-device { border:0!important; background:transparent!important; padding:0 0 12px!important; border-radius:0!important; }
+.oum-usb-panel .oum-usb-services { display:block!important; }
+.oum-usb-panel .oum-usb-service { display:grid!important; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:12px; padding:14px 0!important; border:0!important; border-bottom:1px solid var(--oum-line)!important; border-radius:0!important; background:transparent!important; box-shadow:none!important; }
+.oum-usb-panel .oum-usb-service:last-child { border-bottom:0!important; }
+.oum-usb-panel .oum-usb-service .btn { width:auto!important; min-width:96px; min-height:36px!important; margin:0!important; padding:6px 10px!important; }
+.oum-usb-panel .oum-usb-service.is-active strong { color:var(--oum-good); }
+.oum-usb-panel .oum-usb-service-actions { display:grid; gap:6px; }
+.oum-usb-panel .oum-usb-maintenance { border:0!important; padding:6px 0!important; background:transparent!important; }
+.oum-usb-panel .oum-usb-maintenance summary { color:var(--oum-subtle); font-size:13px; cursor:pointer; padding:6px 0; }
+.oum-usb-panel .oum-usb-maintenance .btn { margin-top:8px!important; }
+.oum-usb-panel .oum-usb-next { font-size:12px; line-height:1.4; }
+
+}
+
+/* Maintenance controls share a baseline, spacing and native file button. */
+.oum-maintenance-card { display:flex; flex-direction:column; gap:12px; }
+.oum-maintenance-card > h4, .oum-maintenance-card > p { margin:0!important; }
+.oum-maintenance-card > .oum-help { flex:1; }
+.oum-maintenance-card .oum-setting-actions { display:grid!important; grid-template-columns:1fr!important; gap:8px!important; margin:0!important; }
+.oum-maintenance-card .btn { width:100%!important; min-height:36px!important; margin:0!important; padding:7px 12px!important; border-radius:9px!important; line-height:20px!important; }
+.oum-maintenance-card .oum-file { width:100%; min-width:0; font-size:12px; padding:0!important; height:36px!important; color:var(--oum-subtle); background:var(--oum-field); border:1px solid var(--oum-line-strong); border-radius:9px; }
+.oum-maintenance-card .oum-file::file-selector-button { height:34px; padding:0 10px; margin-right:8px; border:0; border-right:1px solid var(--oum-line); background:var(--oum-field-soft); color:var(--oum-ink); font:inherit; cursor:pointer; }
+/* First run follows the compact forms used throughout OUM. */
+.oum-first-run { max-width:720px; min-height:0!important; margin:0 auto; padding:24px; background:var(--oum-paper); border:1px solid var(--oum-line); border-radius:16px; }
+.oum-first-run .oum-setup-head { align-items:center; gap:16px; }
+.oum-first-run .oum-setup-head h2 { font-size:22px; margin:0 0 6px; }
+.oum-first-run .oum-progress { display:flex; gap:6px; margin:20px 0!important; }
+.oum-first-run .oum-progress span { flex:1; height:4px; border-radius:4px; background:var(--oum-line); }
+.oum-first-run .oum-progress span.active { background:var(--oum-action); }
+.oum-first-run .oum-step { padding-top:0!important; border:0!important; }
+.oum-first-run .oum-step[hidden], .oum-first-run [hidden] { display:none!important; }
+.oum-first-run .oum-step h3 { font-size:18px; margin:0 0 12px; }
+.oum-first-run .oum-choice { display:flex; align-items:flex-start; gap:12px; padding:12px!important; margin:8px 0; border:1px solid var(--oum-line); border-radius:10px; background:transparent; box-shadow:none; }
+.oum-first-run .oum-choice:has(input:checked) { border-color:var(--oum-action); background:var(--oum-action-soft); }
+.oum-first-run .oum-choice > input { flex:0 0 18px; width:18px!important; height:18px!important; margin:3px 0 0!important; accent-color:var(--oum-action); }
+.oum-first-run .oum-choice strong, .oum-first-run .oum-choice small { display:block; }
+.oum-first-run .oum-choice small { color:var(--oum-subtle); font-size:13px; line-height:1.45; margin-top:3px; }
+.oum-first-run .oum-note { background:transparent; border:0; padding:8px 0; color:var(--oum-subtle); font-size:13px; }
+.oum-first-run .oum-actions { display:flex!important; justify-content:flex-end; gap:8px; border-top:1px solid var(--oum-line); padding-top:16px; margin-top:20px; }
+.oum-first-run .oum-actions .btn { width:auto!important; min-height:38px; margin:0; padding:8px 16px; border-radius:9px; }
+@media(max-width:600px) {
+ .oum-first-run { padding:16px; border:0; border-radius:0; }
+ .oum-first-run .oum-setup-head { display:block; }
+ .oum-first-run .oum-setup-counter { display:inline-block; margin-top:8px; }
+ .oum-first-run .oum-grid { grid-template-columns:1fr!important; gap:12px; }
+ .oum-first-run .oum-actions .btn { flex:1; min-width:0; }
+}
+
+/* Monochrome service logos need explicit contrast; preserve the Russian flag. */
+html[data-theme="dark"] .oum-route-row:not([data-route-row^="russia_"]) .oum-route-icon img,
+html[data-theme="dark"] [data-route-pill]:not([data-route-pill^="russia_"]) > img { filter:brightness(0) invert(.9); }
+.oum-route-row[data-route-row^="russia_"] .oum-route-icon img { filter:none!important; }
+html[data-theme="dark"] .oum-route-row:has(input[value="vpn"]:checked):not([data-route-row^="russia_"]) .oum-route-icon img,
+html[data-theme="dark"] [data-route-pill].active:not([data-route-pill^="russia_"]) > img { filter:brightness(0) invert(1); }

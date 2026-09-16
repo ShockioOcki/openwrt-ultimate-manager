@@ -175,7 +175,7 @@ ensure_protocol() {
 		qmi) installed uqmi || install_packages uqmi ;;
 		mbim) installed umbim || install_packages umbim ;;
 		ncm) installed comgt-ncm || install_packages comgt-ncm ;;
-		ppp) installed comgt || install_packages comgt ;;
+		ppp) installed comgt && installed luci-proto-3g || install_packages comgt luci-proto-3g ;;
 	esac
 }
 
@@ -228,7 +228,7 @@ prepare() {
 	sleep 3
 	info="$(detect_family 2>/dev/null || true)"
 	case "$info" in
-		ppp\ *) installed comgt || { install_packages comgt; info="$(detect_family 2>/dev/null || true)"; } ;;
+		ppp\ *) ensure_protocol ppp; info="$(detect_family 2>/dev/null || true)" ;;
 		ncm\ *) installed comgt-ncm || install_packages comgt-ncm ;;
 	esac
 	[ -n "$info" ] || { echo 'Драйвер установлен, но рабочий интерфейс модема не найден.' >&2; return 4; }

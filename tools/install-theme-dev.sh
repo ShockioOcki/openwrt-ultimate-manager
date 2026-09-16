@@ -26,6 +26,35 @@ cp "$SOURCE_DIR/htdocs/luci-static/oum/bootstrap-base.css" /www/luci-static/oum/
 cp "$SOURCE_DIR/htdocs/luci-static/oum/bootstrap-mobile.css" /www/luci-static/oum/bootstrap-mobile.css
 cp "$SOURCE_DIR/htdocs/luci-static/oum/cascade.css" /www/luci-static/oum/cascade.css
 cp "$SOURCE_DIR/htdocs/luci-static/oum/stock-layout.css" /www/luci-static/oum/stock-layout.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/wireless-list.css" /www/luci-static/oum/wireless-list.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/buttons.css" /www/luci-static/oum/buttons.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/compact-inputs.css" /www/luci-static/oum/compact-inputs.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/clients.css" /www/luci-static/oum/clients.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/overview.css" /www/luci-static/oum/overview.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/routes.css" /www/luci-static/oum/routes.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/nftables.css" /www/luci-static/oum/nftables.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/logs.css" /www/luci-static/oum/logs.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/logs.js" /www/luci-static/oum/logs.js
+cp "$SOURCE_DIR/htdocs/luci-static/oum/processes.css" /www/luci-static/oum/processes.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/packages.css" /www/luci-static/oum/packages.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/startup.css" /www/luci-static/oum/startup.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/mounts.css" /www/luci-static/oum/mounts.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/flash.css" /www/luci-static/oum/flash.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/network-mobile.css" /www/luci-static/oum/network-mobile.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/desktop-network.css" /www/luci-static/oum/desktop-network.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/dhcp.css" /www/luci-static/oum/dhcp.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/leases.js" /www/luci-static/oum/leases.js
+cp "$SOURCE_DIR/htdocs/luci-static/oum/tabs.css" /www/luci-static/oum/tabs.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/field-help.css" /www/luci-static/oum/field-help.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/checkboxes.css" /www/luci-static/oum/checkboxes.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/checkboxes.js" /www/luci-static/oum/checkboxes.js
+cp "$SOURCE_DIR/htdocs/luci-static/oum/field-help.js" /www/luci-static/oum/field-help.js
+cp "$SOURCE_DIR/htdocs/luci-static/oum/startup.js" /www/luci-static/oum/startup.js
+cp "$SOURCE_DIR/htdocs/luci-static/oum/processes.js" /www/luci-static/oum/processes.js
+cp "$SOURCE_DIR/htdocs/luci-static/oum/routes.js" /www/luci-static/oum/routes.js
+cp "$SOURCE_DIR/htdocs/luci-static/oum/radios.css" /www/luci-static/oum/radios.css
+cp "$SOURCE_DIR/htdocs/luci-static/oum/radios.js" /www/luci-static/oum/radios.js
+cp "$SOURCE_DIR/htdocs/luci-static/oum/form-actions.js" /www/luci-static/oum/form-actions.js
 cp "$SOURCE_DIR/htdocs/luci-static/oum/logo.svg" /www/luci-static/oum/logo.svg
 cp "$SOURCE_DIR/htdocs/luci-static/oum/brand.svg" /www/luci-static/oum/brand.svg
 cp "$SOURCE_DIR/htdocs/luci-static/oum/fonts/"* /www/luci-static/oum/fonts/
@@ -45,6 +74,8 @@ chmod 644 \
 	/www/luci-static/oum/bootstrap-mobile.css \
 	/www/luci-static/oum/cascade.css \
 	/www/luci-static/oum/stock-layout.css \
+	/www/luci-static/oum/wireless-list.css \
+	/www/luci-static/oum/buttons.css \
 	/www/luci-static/oum/logo.svg \
 	/www/luci-static/oum/brand.svg \
 	/www/luci-static/oum/fonts/* \

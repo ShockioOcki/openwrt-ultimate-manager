@@ -24,13 +24,21 @@ cp "$ROOT/tools/install-theme-dev.sh" "$PACKAGE/tools/install-theme-dev.sh"
 cp "$ROOT/dist/oum-test.sh" "$PACKAGE/dist/oum-test.sh"
 cp "$ROOT/helpers/source_converter.rb" "$PACKAGE/helpers/source_converter.rb"
 
-find "$PACKAGE" -type f -exec touch -h -t 202001010000.00 {} +
-tar -czf "$PAYLOAD" -C "$PACKAGE" .
+python3 "$ROOT/tools/prepare-release.py" "$PACKAGE"
+python3 "$ROOT/tools/audit-release.py" "$PACKAGE"
+
+find "$PACKAGE" -exec touch -h -t 202001010000.00 {} +
+tar --sort=name --owner=0 --group=0 --numeric-owner -czf "$PAYLOAD" -C "$PACKAGE" .
 PAYLOAD_SHA256="$(sha256sum "$PAYLOAD" | awk '{ print $1 }')"
 PAYLOAD_SIZE="$(wc -c <"$PAYLOAD" | tr -d ' ')"
-INSTALLER_VERSION="$(
-	find "$PACKAGE" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12
+# Include installer logic as well as the payload in the build identity.
+BUILD_ID="$(
+	{ printf '%s\n' "$PAYLOAD_SHA256"; cat "$HEADER"; } | sha256sum | cut -c1-12
 )"
+
+RELEASE_VERSION="$(sed -n 's/^PKG_VERSION:=//p' "$ROOT/luci-app-oum/Makefile")"
+[ -n "$RELEASE_VERSION" ] || { echo "Missing release version" >&2; exit 1; }
+INSTALLER_VERSION="$RELEASE_VERSION+$BUILD_ID"
 
 sed \
 	-e "s/@OUM_INSTALLER_VERSION@/$INSTALLER_VERSION/g" \

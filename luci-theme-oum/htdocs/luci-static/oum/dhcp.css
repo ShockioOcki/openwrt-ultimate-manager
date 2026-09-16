@@ -1,0 +1,38 @@
+/* Mobile DHCP forms and lease tables; preserve native controls and tabs. */
+@layer oum-form-buttons {
+ @media(max-width:900px) {
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view .cbi-section,
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view .cbi-section-node { border:0 !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; padding:0 !important; margin:0 0 14px !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view .cbi-value { padding:10px 0 !important; margin:0 !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view .cbi-section-descr { font-size:12px !important; line-height:1.6 !important; margin:0 0 12px !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view table,
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view tbody { display:block !important; width:100% !important; min-width:0 !important; border:0 !important; background:transparent !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view :is(thead,tr.table-titles) { display:none !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view tr:has(> td) { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:10px 12px !important; padding:12px 0 !important; margin:0 !important; border:0 !important; border-bottom:1px solid var(--oum-line) !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view td { display:block !important; min-width:0 !important; width:auto !important; padding:0 !important; border:0 !important; white-space:normal !important; overflow-wrap:anywhere !important; font-size:12px !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view td::before { content:attr(data-title); display:block !important; position:static !important; width:auto !important; padding:0 !important; margin:0 0 3px !important; font-size:12px !important; color:var(--oum-subtle) !important; text-transform:none !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #lease_status_table td:first-child { grid-column:1 / -1; font-weight:600 !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view tr.placeholder > td,
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view td.cbi-section-actions { grid-column:1 / -1; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view .cbi-section-actions > div { display:flex !important; flex-wrap:wrap !important; justify-content:flex-end !important; gap:8px !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view .cbi-section-actions button { width:auto !important; margin:0 !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view .cbi-section-create { margin:12px 0 !important; }
+ }
+}
+
+@layer oum-form-buttons {
+ body.theme-oum #lease_status_table .oum-lease-toggle { display:none; }
+ @media(max-width:900px) {
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view #lease_status_table tr.oum-lease-row { gap:3px 12px !important; padding:8px 0 !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view #lease_status_table .oum-lease-original,
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view #lease_status_table .oum-lease-row > td:first-child::before { display:none !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view #lease_status_table .oum-lease-row:not(.oum-lease-expanded) > td:nth-child(n+3) { display:none !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view #lease_status_table .oum-lease-row > td:nth-child(2) { grid-column:1 / -1; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view #lease_status_table .oum-lease-row > td:nth-child(2)::before { display:none !important; }
+ body.theme-oum[data-page="admin-network-dhcp"] #maincontent #view #lease_status_table button.oum-lease-toggle { position:relative !important; display:block !important; width:100% !important; min-width:0 !important; min-height:30px !important; height:auto !important; border:0 !important; background:transparent !important; color:var(--oum-ink) !important; padding:4px 24px 4px 0 !important; margin:0 !important; text-align:left !important; box-shadow:none !important; font:500 12px/1.5 var(--oum-font) !important; -webkit-tap-highlight-color:transparent; }
+ body.theme-oum #lease_status_table .oum-lease-name { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+ body.theme-oum #lease_status_table .oum-lease-expanded .oum-lease-name { white-space:normal; overflow-wrap:anywhere; }
+ body.theme-oum #lease_status_table .oum-lease-arrow { position:absolute; right:5px; top:10px; width:6px; height:6px; border:solid var(--oum-subtle); border-width:0 1.5px 1.5px 0; transform:rotate(45deg); }
+ body.theme-oum #lease_status_table .oum-lease-expanded .oum-lease-arrow { transform:rotate(225deg); }
+ }
+}

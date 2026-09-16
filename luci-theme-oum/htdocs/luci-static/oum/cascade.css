@@ -79,7 +79,9 @@ body.theme-oum code, body.theme-oum pre { font-variant-numeric: tabular-nums; }
   height: auto;
   max-height: 100vh;
   max-height: 100dvh;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
   border-right: 1px solid var(--oum-line);
   background: var(--oum-paper);
   scrollbar-width: thin;
@@ -178,7 +180,7 @@ body.theme-oum code, body.theme-oum pre { font-variant-numeric: tabular-nums; }
   background: var(--oum-action-soft) !important;
   color: var(--oum-action-dark) !important;
 }
-.oum-system-sidebar-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.oum-system-sidebar-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-bottom: 12px; }
 .oum-system-sidebar-actions .btn { display: grid; min-width: 0; min-height: 42px; margin: 0 !important; padding: 8px 10px; place-items: center; text-decoration: none; }
 .oum-system-sidebar-actions .oum-theme-toggle { border-color: var(--oum-action) !important; color: var(--oum-action-dark) !important; }
 .oum-system-sidebar-actions .oum-logout:hover { border-color: var(--oum-bad) !important; background: var(--oum-bad-soft) !important; color: var(--oum-bad) !important; }
@@ -231,7 +233,7 @@ body.theme-oum h2 { margin: 0 0 18px; font-size: 22px; }
 .cbi-section .cbi-section { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .cbi-section-node { padding: 0; background: transparent; }
 .cbi-section-descr, .cbi-value-description, .help-block, .text-muted { color: var(--oum-subtle) !important; }
-.cbi-value { display: grid; grid-template-columns: minmax(150px, 26%) minmax(0, 1fr); gap: 18px; padding: 13px 0; border-bottom: 1px solid var(--oum-line); }
+:where(.cbi-value:has(> .cbi-value-title):has(> .cbi-value-field)) { display: grid; grid-template-columns: minmax(150px, 26%) minmax(0, 1fr); gap: 18px; padding: 13px 0; border-bottom: 1px solid var(--oum-line); }
 .cbi-value:last-child { border-bottom: 0; }
 .cbi-value-title { width: auto; padding: 9px 0 0; color: var(--oum-ink); font-weight: 650; }
 .cbi-value-field { width: auto; min-width: 0; }
@@ -798,10 +800,12 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
     transform: translateX(-102%);
-    transition: transform .2s ease-out;
-    box-shadow: 18px 0 50px rgba(15, 22, 34, .18);
+    transition: transform .2s ease-out, visibility .2s;
+    visibility: hidden;
+    pointer-events: none;
+    box-shadow: none;
   }
-  #oum-system-sidebar.is-open { transform: translateX(0); }
+  #oum-system-sidebar.is-open { transform: translateX(0); visibility: visible; pointer-events: auto; box-shadow: 18px 0 50px rgba(15, 22, 34, .18); }
   #oum-system-header {
     min-height: 58px;
     padding-top: max(9px, env(safe-area-inset-top));
@@ -842,7 +846,7 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
   .cbi-section > h3, .panel > h3 { margin-top: 0; font-size: 17px; }
   .cbi-section-descr, .cbi-value-description, .help-block { font-size: 12px; line-height: 1.45; }
   .cbi-value { display: grid; width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 11px 0; }
-  .cbi-value-title { display: block; width: 100% !important; margin: 0; padding: 0; font-size: 13px; }
+  .cbi-value-title { display: block; text-align: left; width: 100% !important; margin: 0; padding: 0; font-size: 13px; }
   .cbi-value-field { display: block; width: 100% !important; min-width: 0; margin: 0 !important; }
   .cbi-value-field > input:not([type="checkbox"]):not([type="radio"]),
   .cbi-value-field > select,
@@ -855,25 +859,25 @@ body.theme-oum[data-page="admin-system-flash"] .cbi-map-tabbed > .cbi-section:fi
   body.theme-oum .cbi-page-actions .cbi-button { flex: 1 1 140px; margin: 0 !important; }
 
   /* Stock LuCI records become touch-friendly cards instead of a clipped desktop grid. */
-  body.theme-oum .table:not(.assoclist),
-  body.theme-oum .table:not(.assoclist) > tbody { display: block; width: 100% !important; min-width: 0 !important; }
-  body.theme-oum .table:not(.assoclist) > .tr,
-  body.theme-oum .table:not(.assoclist) > tbody > .tr,
-  body.theme-oum .table:not(.assoclist) > tbody > tr { display: grid; width: 100% !important; min-width: 0 !important; margin: 0 0 10px; padding: 5px 0; grid-template-columns: minmax(0, 1fr); border: 1px solid var(--oum-line); border-radius: 11px; background: var(--oum-paper); overflow: hidden; }
-  body.theme-oum .table:not(.assoclist) > .tr.table-titles,
-  body.theme-oum .table:not(.assoclist) > tbody > .tr.table-titles { display: none !important; }
-  body.theme-oum .table:not(.assoclist) .td,
-  body.theme-oum .table:not(.assoclist) td { display: grid; width: 100% !important; min-width: 0 !important; padding: 9px 11px; grid-template-columns: minmax(96px, 38%) minmax(0, 1fr); gap: 10px; align-items: center; border: 0; border-bottom: 1px solid var(--oum-line); background: transparent; overflow: visible; white-space: normal; overflow-wrap: anywhere; }
-  body.theme-oum .table:not(.assoclist) .td:last-child,
-  body.theme-oum .table:not(.assoclist) td:last-child { border-bottom: 0; }
-  body.theme-oum .table:not(.assoclist) .td[data-title]::before,
-  body.theme-oum .table:not(.assoclist) td[data-title]::before { content: attr(data-title); display: block; color: var(--oum-faint); font-size: 10px; font-weight: 750; letter-spacing: .04em; line-height: 1.25; text-transform: uppercase; }
-  body.theme-oum .table:not(.assoclist) .td.cbi-section-actions,
-  body.theme-oum .table:not(.assoclist) td.cbi-section-actions { display: flex; padding: 10px 11px; flex-wrap: wrap; gap: 8px; }
-  body.theme-oum .table:not(.assoclist) .td.cbi-section-actions::before,
-  body.theme-oum .table:not(.assoclist) td.cbi-section-actions::before { flex: 0 0 100%; }
-  body.theme-oum .table:not(.assoclist) .td.cbi-section-actions .btn,
-  body.theme-oum .table:not(.assoclist) td.cbi-section-actions .btn { flex: 1 1 120px; margin: 0 !important; }
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist),
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) > tbody { display: block; width: 100% !important; min-width: 0 !important; }
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) > .tr,
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) > tbody > .tr,
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) > tbody > tr { display: grid; width: 100% !important; min-width: 0 !important; margin: 0 0 10px; padding: 5px 0; grid-template-columns: minmax(0, 1fr); border: 1px solid var(--oum-line); border-radius: 11px; background: var(--oum-paper); overflow: hidden; }
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) > .tr.table-titles,
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) > tbody > .tr.table-titles { display: none !important; }
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) .td,
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) td { display: grid; width: 100% !important; min-width: 0 !important; padding: 9px 11px; grid-template-columns: minmax(96px, 38%) minmax(0, 1fr); gap: 10px; align-items: center; border: 0; border-bottom: 1px solid var(--oum-line); background: transparent; overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) .td:last-child,
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) td:last-child { border-bottom: 0; }
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) .td[data-title]::before,
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) td[data-title]::before { content: attr(data-title); display: block; color: var(--oum-faint); font-size: 10px; font-weight: 750; letter-spacing: .04em; line-height: 1.25; text-transform: uppercase; }
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) .td.cbi-section-actions,
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) td.cbi-section-actions { display: flex; padding: 10px 11px; flex-wrap: wrap; gap: 8px; }
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) .td.cbi-section-actions::before,
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) td.cbi-section-actions::before { flex: 0 0 100%; }
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) .td.cbi-section-actions .btn,
+  body.theme-oum:is([data-page^="admin-status-"],[data-page^="admin-network-"],[data-page^="admin-system-"]) .table:not(.assoclist) td.cbi-section-actions .btn { flex: 1 1 120px; margin: 0 !important; }
   body.theme-oum .table .placeholder { min-height: 48px; place-items: center; color: var(--oum-subtle); }
 
   /* Overview system facts are one compact key/value list, not nine record cards. */
@@ -2027,59 +2031,19 @@ body.theme-oum .cbi-tabmenu > li.cbi-tab > a {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
 }
 
-/* 2. Fix right-aligned labels -> Minimalist clean top/left layout */
-body.theme-oum .cbi-value {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: flex-start !important;
-  gap: 8px !important;
-  padding: 16px 0 !important;
-  border-bottom: 1px solid var(--oum-line) !important;
-  margin: 0 !important;
+/* Form layout belongs to LuCI and the application. Theme only supplies defaults. */
+:where(body.theme-oum .cbi-value-title) {
+  font-size: 13.5px;
+  color: var(--oum-ink);
 }
-
-[data-darkmode="true"] body.theme-oum .cbi-value {
-  border-color: rgba(255, 255, 255, 0.06) !important;
-}
-
-body.theme-oum .cbi-value:last-child {
-  border-bottom: 0 !important;
-}
-
-body.theme-oum .cbi-value label.cbi-value-title,
-body.theme-oum .cbi-value-title {
-  display: block !important;
-  width: 100% !important;
-  flex: none !important;
-  text-align: left !important;
-  padding: 0 !important;
-  margin: 0 0 2px 0 !important;
-  font-size: 13.5px !important;
-  font-weight: 600 !important;
-  color: var(--oum-ink) !important;
-  letter-spacing: 0.01em !important;
-}
-
-[data-darkmode="true"] body.theme-oum .cbi-value label.cbi-value-title,
-[data-darkmode="true"] body.theme-oum .cbi-value-title {
-  color: #cbd5e1 !important;
-}
-
-body.theme-oum .cbi-value-field {
-  width: 100% !important;
-  max-width: 680px !important;
-  margin-left: 0 !important;
-  flex: none !important;
-}
+:where(body.theme-oum .cbi-value-field) { min-width: 0; }
 
 /* 3. Inputs, Selects & Textareas */
 body.theme-oum .cbi-value-field input[type="text"]:not([type="checkbox"]):not([type="radio"]),
 body.theme-oum .cbi-value-field input[type="password"],
 body.theme-oum .cbi-value-field select,
 body.theme-oum .cbi-value-field textarea {
-  width: 100% !important;
   max-width: 100% !important;
-  height: auto !important;
   min-height: 42px !important;
   padding: 10px 14px !important;
   border-radius: 10px !important;
@@ -2125,8 +2089,8 @@ body.theme-oum .cbi-value-field input#localtime {
 }
 
 body.theme-oum .cbi-value-field .control-group {
-  display: flex !important;
-  flex-wrap: wrap !important;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px !important;
   margin-top: 6px !important;
 }
@@ -6126,3 +6090,302 @@ body.theme-oum[data-page^="oum-"][data-page] #modal_overlay [hidden] {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* Activation and strategy progress: matching dark surfaces in every viewport. */
+html[data-theme="dark"] .oum-act-step {
+  background: #1b2638;
+  border-color: #334155;
+  color: #b6c2d4;
+}
+html[data-theme="dark"] .oum-act-step[data-state="active"] {
+  background: #332b19;
+  border-color: #705823;
+  color: #f7d77a;
+}
+html[data-theme="dark"] .oum-act-step[data-state="done"],
+html[data-theme="dark"] .oum-act-result[data-state="success"] {
+  background: #12362e;
+  border-color: #25604e;
+  color: #83e5b9;
+}
+html[data-theme="dark"] .oum-act-step[data-state="failed"],
+html[data-theme="dark"] .oum-act-result[data-state="failed"] {
+  background: #3b232b;
+  border-color: #79404b;
+  color: #ffb4bc;
+}
+html[data-theme="dark"] .oum-act-step[data-state="active"] .oum-act-ico::before {
+  border-color: #705823;
+  border-top-color: #f7d77a;
+}
+html[data-theme="dark"] .oum-act-title { color: #edf2fb; }
+html[data-theme="dark"] .oum-act-desc { color: #aeb9ca; }
+html[data-theme="dark"] .oum-act-bar { background: #334155; }
+@media (prefers-reduced-motion: reduce) {
+  .oum-act-step[data-state="active"] .oum-act-ico::before { animation: none; }
+}
+
+/* Podkop owns field dependencies; preserve its native form structure. */
+body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-value.hidden,
+body.theme-oum[data-page="admin-services-podkop"] #maincontent [hidden] {
+  display: none !important;
+}
+body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-value:not(.hidden):not([hidden]) {
+  border: 0 !important;
+  padding: 10px 0 !important;
+  min-width: 0;
+}
+body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-value-field {
+  min-width: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+}
+body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-value-field textarea {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 120px;
+}
+body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-dynlist {
+  width: min(100%, 360px) !important;
+  max-width: 100% !important;
+}
+@media (min-width: 901px) {
+  body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-value:not(.hidden):not([hidden]) {
+    display: grid !important;
+    grid-template-columns: 210px minmax(0, 1fr) !important;
+    align-items: start !important;
+    gap: 12px 20px !important;
+  }
+  body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-value-title {
+    width: auto !important;
+    float: none !important;
+    text-align: right !important;
+    padding: 8px 0 0 !important;
+    margin: 0 !important;
+    font-weight: 500 !important;
+  }
+  body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-value-field :is(select, input[type="text"], input[type="number"], .cbi-dropdown) {
+    width: min(100%, 360px) !important;
+    max-width: 100% !important;
+  }
+}
+@media (max-width: 900px) {
+  body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-value:not(.hidden):not([hidden]):not([data-widget="CBI.FlagValue"]) {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 6px !important;
+  }
+  body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-value-title {
+    width: auto !important;
+    text-align: left !important;
+  }
+}
+body.theme-oum[data-page="admin-services-podkop"] #maincontent div.cbi-section[data-tab]:not([data-tab-active="true"]) {
+  display: none !important;
+}
+body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-dynlist .add-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+}
+body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-dynlist .add-item > input {
+  flex: 1 1 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+}
+body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-dynlist .add-item > .btn {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+}
+body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-dynlist .item {
+  background: var(--oum-paper) !important;
+  color: var(--oum-ink) !important;
+  border-color: var(--oum-line) !important;
+}
+
+/* Diagnostic mount is a complete page, not a label/value form row. */
+body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-value[data-name="_mount_node"]:not(.hidden):not([hidden]) {
+  display: block !important;
+  width: 100% !important;
+  padding: 0 !important;
+}
+body.theme-oum[data-page="admin-services-podkop"] #maincontent .cbi-value[data-name="_mount_node"] > output {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+body.theme-oum #diagnostic-status {
+  display: grid !important;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr) !important;
+  align-items: start !important;
+  gap: 16px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+body.theme-oum #diagnostic-status :is(.pdk_diagnostic-page__left-bar,.pdk_diagnostic-page__right-bar) {
+  display: grid !important;
+  gap: 12px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+body.theme-oum #diagnostic-status :is(.pdk_diagnostic-page__right-bar__wiki,.pdk_diagnostic-page__right-bar__actions,.pdk_diagnostic-page__right-bar__system-info,.pdk_diagnostic_alert) {
+  border-width: 1px !important;
+  border-radius: 10px !important;
+  padding: 12px !important;
+  min-width: 0 !important;
+  box-shadow: none !important;
+}
+body.theme-oum #diagnostic-status :is(.pdk_diagnostic-page__right-bar__wiki,.pdk_diagnostic-page__right-bar__actions,.pdk_diagnostic-page__right-bar__system-info,.pdk_diagnostic_alert--skipped) {
+  background: var(--oum-paper) !important;
+  border-color: var(--oum-line) !important;
+  color: var(--oum-ink) !important;
+}
+body.theme-oum #diagnostic-status .pdk-partial-button {
+  width: 100% !important;
+  min-height: 36px !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 7px 10px !important;
+  line-height: 1.35 !important;
+  white-space: normal !important;
+}
+body.theme-oum #diagnostic-status .pdk-partial-button__icon { flex: 0 0 16px; }
+body.theme-oum #diagnostic-status .pdk_diagnostic_alert__content { min-width: 0; }
+body.theme-oum #diagnostic-status .pdk_diagnostic_alert__description { overflow-wrap: anywhere; }
+body.theme-oum #diagnostic-status .pdk_diagnostic-page__right-bar__system-info__row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+}
+body.theme-oum #diagnostic-status .pdk_diagnostic-page__right-bar__system-info__row > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  body.theme-oum #diagnostic-status { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* LuCI compatibility invariants: visual styling cannot override application state. */
+body.theme-oum :is(#maincontent, #modal_overlay) .cbi-value.hidden,
+body.theme-oum :is(#maincontent, #modal_overlay) [hidden],
+body.theme-oum :is(#maincontent, #modal_overlay) .cbi-section[data-tab]:not([data-tab-active="true"]) {
+  display: none !important;
+}
+/* DummyValue panels have no label/field pair. Do not squeeze a whole app into a label column. */
+body.theme-oum :is(#maincontent, #modal_overlay) .cbi-value:not(.hidden):not([hidden]):has(> output):not(:has(> .cbi-value-title)) {
+  display: block !important;
+  width: 100%;
+  min-width: 0;
+}
+body.theme-oum :is(#maincontent, #modal_overlay) .cbi-value > output {
+  display: block;
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+@media (max-width: 900px) {
+  body.theme-oum .cbi-value > .cbi-value-title { text-align: left; }
+}
+
+/* Dashboard reserves bottom-navigation space once, on the outer app. */
+@media (max-width: 900px) {
+  body.theme-oum[data-page^="oum"] .oum-dashboard.oum-app {
+    min-height: 0 !important;
+    align-content: start !important;
+  }
+  body.theme-oum[data-page^="oum"] .oum-dashboard.oum-app > .oum-main {
+    min-height: 0 !important;
+    padding-bottom: 0 !important;
+    align-content: start !important;
+  }
+}
+@media (max-width: 900px) {
+  body.theme-oum:is([data-page="oum"], [data-page="oum-dashboard"]) #maincontent { min-height: 0 !important; }
+  body.theme-oum:is([data-page="oum"], [data-page="oum-dashboard"]) .oum-system-footer { display: none !important; }
+}
+
+/* Device sheet uses the same dark palette as the dashboard. */
+html[data-theme="dark"] #oum-device-custom .oum-bottom-sheet {
+  background: var(--oum-paper) !important;
+  color: var(--oum-ink) !important;
+}
+html[data-theme="dark"] #oum-device-custom :is(.oum-sheet-title, strong) { color: var(--oum-ink) !important; }
+html[data-theme="dark"] #oum-device-custom :is(small, .oum-mobile-device-message) { color: var(--oum-subtle) !important; }
+html[data-theme="dark"] #oum-device-custom :is(.oum-mobile-device-identity, .oum-mobile-parental-row) {
+  background: var(--oum-field-soft) !important;
+  border-color: var(--oum-line) !important;
+}
+html[data-theme="dark"] #oum-device-custom .oum-mobile-device-facts {
+  background: var(--oum-line) !important;
+  border-color: var(--oum-line) !important;
+}
+html[data-theme="dark"] #oum-device-custom .oum-mobile-device-facts > div {
+  background: var(--oum-paper) !important;
+  border-color: var(--oum-line) !important;
+}
+html[data-theme="dark"] #oum-device-custom .oum-mobile-device-field :is(input, select),
+html[data-theme="dark"] #oum-device-custom :is(.oum-mobile-alias-save, .oum-mobile-parental-toggle) {
+  background: var(--oum-field-soft) !important;
+  color: var(--oum-ink) !important;
+  border-color: var(--oum-line) !important;
+}
+html[data-theme="dark"] #oum-device-custom .sheet-handle { background: var(--oum-line-strong) !important; }
+
+/* Wi-Fi sheet follows the theme; the QR canvas keeps its white quiet zone. */
+html[data-theme="dark"] #oum-qr-custom .oum-bottom-sheet {
+  background: var(--oum-paper) !important;
+  color: var(--oum-ink) !important;
+}
+html[data-theme="dark"] #oum-qr-custom :is(.oum-sheet-title, .oum-qr-network strong, .oum-qr-wrap > strong) {
+  color: var(--oum-ink) !important;
+}
+html[data-theme="dark"] #oum-qr-custom .oum-qr-network {
+  background: var(--oum-field-soft) !important;
+  color: var(--oum-subtle) !important;
+}
+html[data-theme="dark"] #oum-qr-custom .oum-qr-wrap > span { color: var(--oum-subtle) !important; }
+html[data-theme="dark"] #oum-qr-custom .sheet-handle { background: var(--oum-line-strong) !important; }
+
+/* Keep one PassWall surface even before a source/node-controls exists. */
+@media (max-width: 900px) {
+  body.theme-oum .oum-dashboard.oum-app #node-panel:has(#passwall-panel:not([hidden])) {
+    padding: 0 !important;
+    border: 1px solid var(--oum-line) !important;
+    border-radius: 15px !important;
+    background: var(--oum-paper) !important;
+  }
+  body.theme-oum .oum-dashboard.oum-app #node-panel #passwall-panel {
+    margin: 0 !important;
+    padding: 14px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+}
+
+/* First-run is a standalone wizard, without the administration shell. */
+body.theme-oum[data-page="oum-setup"] :is(#oum-system-sidebar,#oum-system-header,#oum-menu-overlay,.oum-bottom-nav,.oum-system-footer,#tabmenu) { display:none!important; }
+body.theme-oum[data-page="oum-setup"] { margin:0!important; padding:0!important; }
+body.theme-oum[data-page="oum-setup"] #oum-system-stage { margin:0!important; min-height:100dvh; }
+body.theme-oum[data-page="oum-setup"] #maincontent.container { display:flex; flex-direction:column; justify-content:center; min-height:100vh; min-height:100dvh; width:100%; max-width:none; box-sizing:border-box; margin:0!important; padding:24px!important; }
+body.theme-oum[data-page="oum-setup"] #view { width:100%; margin:0!important; }
+body.theme-oum[data-page="oum-setup"] .oum-first-run { width:100%; max-width:720px; box-sizing:border-box; margin:0 auto!important; padding:24px!important; border:1px solid var(--oum-line)!important; border-radius:16px!important; box-shadow:none!important; }
+@media(max-width:600px) {
+ body.theme-oum[data-page="oum-setup"] #maincontent.container { padding:16px max(12px,env(safe-area-inset-right)) 16px max(12px,env(safe-area-inset-left))!important; }
+ body.theme-oum[data-page="oum-setup"] .oum-first-run { padding:18px!important; }
+}
+
+/* The native theme picker must not impose its intrinsic width on the sidebar. */
+#oum-system-sidebar .oum-system-sidebar-foot,
+#oum-system-sidebar .oum-system-sidebar-actions,
+#oum-system-sidebar .oum-theme-picker { min-width:0; max-width:100%; box-sizing:border-box; }
+#oum-system-sidebar .oum-theme-picker { display:grid; gap:4px; }
+#oum-system-sidebar #oum-theme-select { width:100%; min-width:0!important; max-width:100%; box-sizing:border-box; padding:8px 22px 8px 8px; }
+#oum-system-sidebar .oum-system-sidebar-actions { align-items:end; }
+#oum-system-sidebar .oum-system-sidebar-actions .btn { max-width:100%; box-sizing:border-box; }
+html[data-theme="dark"] #oum-system-sidebar #topmenu :is(li.active,li.open) > a,
+html[data-theme="dark"] #oum-system-sidebar :is(a.active,a.is-active,a[aria-current="page"]) { color:#b9d0ff!important; background:var(--oum-action-soft); border-color:var(--oum-line-strong); }

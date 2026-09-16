@@ -1,0 +1,23 @@
+/* Use the established important layer to override native mobile tables. */
+@layer oum-form-buttons {
+ body.theme-oum[data-page="admin-status-processes"] #maincontent .oum-process-toggle { display:none; }
+ @media (max-width:900px) {
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table:has(.oum-process-row),
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table:has(.oum-process-row) tbody { display:block !important; width:100% !important; min-width:0 !important; max-width:100% !important; overflow:visible !important; border:0 !important; background:transparent !important; padding:0 !important; margin:0 !important; }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent table:has(.oum-process-row) tr.table-titles { display:none !important; }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent tr.oum-process-row { display:block !important; width:100% !important; min-width:0 !important; box-sizing:border-box !important; padding:0 !important; margin:0 !important; border:0 !important; border-bottom:1px solid var(--oum-line) !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent tr.oum-process-row > td { display:none !important; }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent tr.oum-process-row > td:nth-child(3),
+  body.theme-oum[data-page="admin-status-processes"] #maincontent tr.oum-process-open > td:last-child { display:block !important; width:100% !important; min-width:0 !important; box-sizing:border-box !important; padding:0 !important; margin:0 !important; border:0 !important; background:transparent !important; }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent tr.oum-process-row > td::before,
+  body.theme-oum[data-page="admin-status-processes"] #maincontent tr.oum-process-row > td:nth-child(3) > span { display:none !important; }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent button.oum-process-toggle { display:block !important; position:relative !important; box-sizing:border-box !important; width:100% !important; height:auto !important; min-height:70px !important; padding:13px 30px 13px 2px !important; margin:0 !important; border:0 !important; border-radius:0 !important; color:var(--oum-ink) !important; background:transparent !important; text-align:left !important; box-shadow:none !important; cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent .oum-process-toggle .oum-process-chevron { content:'' !important; display:block !important; position:absolute; right:7px; top:29px; width:7px; height:7px; border:solid var(--oum-subtle); border-width:0 1.5px 1.5px 0; transform:rotate(45deg); }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent .oum-process-toggle[aria-expanded="true"] .oum-process-chevron { transform:rotate(225deg); }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent .oum-process-name { display:block; font:500 14px/1.4 var(--oum-font); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent .oum-process-open .oum-process-name { white-space:normal; overflow-wrap:anywhere; }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent .oum-process-meta { display:block; margin-top:5px; color:var(--oum-subtle); font:400 11px/1.5 var(--oum-font); font-variant-numeric:tabular-nums; white-space:normal; }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent tr.oum-process-row .cbi-section-actions > div { display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:6px !important; padding:0 0 12px !important; margin:0 !important; width:100% !important; }
+  body.theme-oum[data-page="admin-status-processes"] #maincontent tr.oum-process-row .cbi-section-actions button { display:flex !important; width:100% !important; min-width:0 !important; max-width:100% !important; height:44px !important; min-height:44px !important; margin:0 !important; padding:4px !important; font-size:12px !important; line-height:15px !important; white-space:normal !important; }
+ }
+}

@@ -39,19 +39,22 @@ MIHOMO_URL=https://github.com/MetaCubeX/mihomo/releases/download/v1.19.30/mihomo
 MIHOMO_SHA=58896873736d28628f66de3677c8654fa0f180662523148e136cff4f6e890069
 
 PODKOP_VERSION=0.7.22-r1
+PODKOP_RU_APK=luci-i18n-podkop-ru-0.7.22.apk
+PODKOP_RU_VERSION=0.260818.58098
 PODKOP_RELEASE=https://github.com/itdoginfo/podkop/releases/download/0.7.22
 PODKOP_ASSETS='podkop-0.7.22-r1.apk|5abf1422f73819d0834fd3ca81ccd55aaa7631e8665dc03e8c0d629811302e27
-luci-app-podkop-0.7.22-r1.apk|72addad80b71a9f44ea64af011c24b405c98b7a2b94751166a5668deeab7ad53'
+luci-app-podkop-0.7.22-r1.apk|72addad80b71a9f44ea64af011c24b405c98b7a2b94751166a5668deeab7ad53
+luci-i18n-podkop-ru-0.7.22.apk|8977ce5f659b0cafefbcc7ae9f549c6eddf6a95fbfeac934e418b033bcda414a'
 ZAPRET_VERSION=72.20260307-r1
 ZAPRET_ARCHIVE=zapret_v72.20260307_aarch64_cortex-a53.zip
 ZAPRET_URL=https://github.com/remittor/zapret-openwrt/releases/download/v72.20260307/$ZAPRET_ARCHIVE
 ZAPRET_SHA=fda00483a87071555e4bf3ae40ee815ee6c7f6a386f2860b646ce7e9347572dd
-PODKOP_REMOVE='luci-app-podkop podkop sing-box luci-app-zapret zapret'
+PODKOP_REMOVE='luci-i18n-podkop-ru luci-app-podkop podkop sing-box luci-app-zapret zapret'
 
 CURRENT=none
 CURRENT_WAS_ENABLED=0
 OUM_RUNTIME='curl ruby ruby-yaml unzip'
-OUM_CORE_RUNTIME='luci-base rpcd rpcd-mod-ucode uhttpd uhttpd-mod-ubus ubus ubusd libubus20251202 procd netifd firewall4 dnsmasq'
+OUM_CORE_RUNTIME='luci-base rpcd rpcd-mod-ucode uhttpd uhttpd-mod-ubus ubus ubusd procd netifd firewall4'
 
 update_status() {
 	[ -n "$STATUS" ] || return 0
@@ -90,7 +93,10 @@ ensure_oum_runtime() {
 	# Keep the router control plane as explicit world constraints. Removing a
 	# third-party LuCI package must never make apk consider LuCI/ubus/network
 	# packages orphaned and purge them as transitive dependencies.
-	apk add $OUM_CORE_RUNTIME >> "$LOG" 2>&1 || return 1
+	# Keep the installed DNS variant; libubus is resolved by ubus for this firmware.
+	dns_package=dnsmasq
+	installed dnsmasq-full && dns_package=dnsmasq-full
+	apk add $OUM_CORE_RUNTIME "$dns_package" >> "$LOG" 2>&1 || return 1
 	command -v curl >/dev/null 2>&1 || return 1
 	command -v ruby >/dev/null 2>&1 || return 1
 	installed ruby-yaml
@@ -335,7 +341,8 @@ install_openclash() {
 install_podkop() {
 	apk add --allow-untrusted \
 		"$WORK/podkop/podkop-$PODKOP_VERSION.apk" \
-		"$WORK/podkop/luci-app-podkop-$PODKOP_VERSION.apk" >> "$LOG" 2>&1 || return 1
+		"$WORK/podkop/luci-app-podkop-$PODKOP_VERSION.apk" \
+		"$WORK/podkop/$PODKOP_RU_APK" >> "$LOG" 2>&1 || return 1
 	if [ "${OUM_SKIP_ZAPRET:-0}" != "1" ]; then
 		# remittor's post-install starts nfqws immediately with run_on_boot=1.
 		# On RB03 that Podkop+Zapret boot combination is the repeatable crash
@@ -418,6 +425,7 @@ engine_update_needed() {
 		podkop)
 			[ "$(installed_version podkop)" = "$PODKOP_VERSION" ] || return 0
 			[ "$(installed_version luci-app-podkop)" = "$PODKOP_VERSION" ] || return 0
+			[ "$(installed_version luci-i18n-podkop-ru)" = "$PODKOP_RU_VERSION" ] || return 0
 			if [ "${OUM_SKIP_ZAPRET:-0}" != 1 ]; then
 				[ "$(installed_version zapret)" = "$ZAPRET_VERSION" ] || return 0
 				[ "$(installed_version luci-app-zapret)" = "$ZAPRET_VERSION" ] || return 0
@@ -453,7 +461,8 @@ update_podkop_in_place() {
 	/etc/init.d/podkop stop >> "$LOG" 2>&1 || true
 	apk add --allow-untrusted \
 		"$WORK/podkop/podkop-$PODKOP_VERSION.apk" \
-		"$WORK/podkop/luci-app-podkop-$PODKOP_VERSION.apk" >> "$LOG" 2>&1 || return 1
+		"$WORK/podkop/luci-app-podkop-$PODKOP_VERSION.apk" \
+		"$WORK/podkop/$PODKOP_RU_APK" >> "$LOG" 2>&1 || return 1
 	if [ "${OUM_SKIP_ZAPRET:-0}" != 1 ]; then
 		apk add --no-scripts --allow-untrusted \
 			"$WORK/podkop/zapret-$ZAPRET_VERSION.apk" \

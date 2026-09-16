@@ -1,0 +1,12 @@
+/* Shared compact single-line fields. Preserve multiline editors. */
+@layer oum-form-buttons {
+ @media(max-width:900px) {
+ body.theme-oum :is(#maincontent,#modal_overlay) :is(input[type="text"],input[type="number"],input[type="password"],input[type="search"],input[type="email"],input[type="url"],select:not([multiple])) { box-sizing:border-box !important; min-height:36px !important; height:36px !important; padding-top:5px !important; padding-bottom:5px !important; line-height:24px !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown:not(.btn):not(.cbi-button) { min-height:36px !important; height:auto !important; padding-top:0 !important; padding-bottom:0 !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown:not(.btn):not(.cbi-button) > ul:not(.dropdown) { min-height:34px !important; padding-top:3px !important; padding-bottom:3px !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-section-create:has(.cbi-section-create-name) { display:flex !important; flex-wrap:wrap !important; align-items:center !important; gap:8px !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-section-create:has(.cbi-section-create-name) > div { flex:1 1 180px !important; min-width:0 !important; width:auto !important; margin:0 !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) input.cbi-section-create-name { width:100% !important; min-width:0 !important; margin:0 !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-section-create:has(.cbi-section-create-name) > button { flex:0 0 auto !important; width:auto !important; min-width:0 !important; max-width:100% !important; margin:0 0 0 auto !important; white-space:normal !important; word-break:normal !important; }
+ }
+}

@@ -54,28 +54,29 @@ ruby -ryaml -e '
   abort "AWG_Tunnel group missing" unless groups.any? { |item| item["name"] == "AWG_Tunnel" }
   abort "PROXY does not select AWG_Tunnel" unless groups.find { |item| item["name"] == "PROXY" }.fetch("proxies").include?("AWG_Tunnel")
   abort "unexpected AWG node rename" unless config.fetch("proxies").first["name"] == "OUM-AWG"
-  abort "mass rule providers missing" unless config.fetch("rule-providers").key?("ru-blocked-domains")
+  abort "restricted domain snapshot missing" unless config.fetch("rules").include?("DOMAIN-SUFFIX,openai.com,PROXY")
   abort "mass routing missing" unless config.fetch("rules").include?("RULE-SET,google-play,DIRECT")
   abort "Chinese domains must be direct" unless config.fetch("rules").include?("RULE-SET,cn-domains,DIRECT")
   abort "Chinese IPs must be direct" unless config.fetch("rules").include?("RULE-SET,cn-ips,DIRECT,no-resolve")
   abort "International games must be direct" unless config.fetch("rules").include?("RULE-SET,category-games-not-cn,DIRECT")
   rules = config.fetch("rules")
   abort "Discord must take precedence over games" unless rules.index("RULE-SET,discord-domains,PROXY") < rules.index("RULE-SET,category-games-not-cn,DIRECT")
-  abort "blocked services must take precedence over games" unless rules.index("RULE-SET,ru-blocked-domains,PROXY") < rules.index("RULE-SET,category-games-not-cn,DIRECT")
+  abort "games must take precedence over bulk lists" unless rules.index("RULE-SET,category-games-not-cn,DIRECT") < rules.index("DOMAIN-SUFFIX,openai.com,PROXY")
   abort "Samsung must be direct" unless config.fetch("rules").include?("RULE-SET,samsung,DIRECT")
   %w[gearupbooster.com gearupportal.com guinfra.com sdp.gg].each do |domain|
     abort "GearUP must be direct: #{domain}" unless config.fetch("rules").include?("DOMAIN-SUFFIX,#{domain},DIRECT")
   end
-  abort "Meta must use its selector" unless config.fetch("rules").include?("RULE-SET,meta-domains,META")
+  abort "unknown traffic must stay direct" unless rules.last == "MATCH,DIRECT"
+  abort "broad blocked IP list present" if rules.any? { |r| r.include?("ru-blocked-ips") || r.include?("meta-ips") }
   abort "aggregate game list must not be used" if config.fetch("rule-providers").key?("category-games")
-  abort "unexpected torrent block" if config.fetch("rules").any? { |rule| rule.downcase.include?("torrent") }
+  abort "unexpected torrent block" if config.fetch("rules").any? { |rule| rule.downcase.include?("torrent") && rule.end_with?(",REJECT") }
 ' "$TMP/standalone.yaml"
 
 OUM_DNS_SERVER=9.9.9.9 OUM_BOOTSTRAP_DNS=149.112.112.112 ruby "$ROOT/helpers/source_converter.rb" standalone "$TMP/standalone-quad9.yaml" "$TMP/awg.yaml" awg
 ruby -ryaml -e '
   dns = YAML.load_file(ARGV[0]).fetch("dns")
   abort "selected bootstrap DNS was not applied" unless dns.fetch("default-nameserver") == ["149.112.112.112"]
-  abort "selected resolver was not applied" unless dns.fetch("nameserver") == ["9.9.9.9"]
+  abort "selected resolver was not applied" unless dns.fetch("nameserver") == ["149.112.112.112"] && dns.fetch("nameserver-policy").fetch("+.openai.com") == ["tcp://9.9.9.9:53#PROXY"]
 ' "$TMP/standalone-quad9.yaml"
 
 ruby "$ROOT/helpers/source_converter.rb" awg "$ROOT/tests/fixtures/awg-v2.conf" "$TMP/awg-collision.yaml" AWG_Tunnel

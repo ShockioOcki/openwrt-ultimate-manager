@@ -1,0 +1,82 @@
+/* Native network presentation. No changes to protocols, polling or UCI. */
+@layer oum-form-buttons {
+ @media(max-width:900px) {
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network > .cbi-map-tabbed,
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network > .cbi-map-tabbed > .cbi-section { border:0 !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; padding:0 !important; margin:0 0 16px !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-interface .cbi-section-table-row,
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device .cbi-section-table-row { border:0 !important; border-bottom:1px solid var(--oum-line) !important; border-radius:0 !important; box-shadow:none !important; background:transparent !important; padding:12px 0 !important; margin:0 0 8px !important; width:100% !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-interface td { border:0 !important; background:transparent !important; padding:6px 0 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-interface .ifacebox { box-shadow:none !important; max-width:100% !important; flex-wrap:wrap !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-interface [data-name="_ifacestat"] > div > span { white-space:normal !important; overflow-wrap:anywhere !important; border:0 !important; padding:3px 0 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-interface .cbi-section-actions > div { gap:8px !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device table,
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tbody { display:block !important; width:100% !important; min-width:0 !important; border:0 !important; background:transparent !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device thead { display:none !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device .cbi-section-table-row { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:8px 12px !important; box-sizing:border-box !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device td { display:block !important; padding:0 !important; border:0 !important; min-width:0 !important; width:auto !important; background:transparent !important; white-space:normal !important; overflow-wrap:anywhere !important; font-size:12px !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device td[data-name="name"],
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device td[data-name="type"],
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device td.cbi-section-actions { grid-column:1 / -1 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device td::before { content:attr(data-title); position:static !important; display:block !important; width:auto !important; padding:0 !important; margin:0 0 3px !important; font-size:12px !important; font-weight:400 !important; text-transform:none !important; color:var(--oum-subtle) !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device td:is([data-name="name"],[data-name="type"],.cbi-section-actions)::before { display:none !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device td[data-name="name"] > .ifacebadge { border:0 !important; background:transparent !important; padding:0 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device .cbi-section-actions > div { display:flex !important; justify-content:flex-end !important; flex-wrap:wrap !important; gap:8px !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device .cbi-section-actions button { flex:0 1 auto !important; width:auto !important; min-width:0 !important; margin:0 !important; }
+  body.theme-oum[data-page="admin-network-network"] #modal_overlay .cbi-map,
+  body.theme-oum[data-page="admin-network-network"] #modal_overlay .cbi-section,
+  body.theme-oum[data-page="admin-network-network"] #modal_overlay .cbi-section-node { border:0 !important; border-radius:0 !important; box-shadow:none !important; background:transparent !important; padding:0 !important; min-width:0 !important; }
+  body.theme-oum[data-page="admin-network-network"] #modal_overlay .cbi-value,
+  body.theme-oum[data-page="admin-network-network"] #maincontent [data-tab="globals"] .cbi-value { padding:12px 0 !important; margin:0 !important; min-width:0 !important; }
+  body.theme-oum[data-page="admin-network-network"] #modal_overlay .cbi-value-description,
+  body.theme-oum[data-page="admin-network-network"] #maincontent [data-tab="globals"] .cbi-value-description { font-size:12px !important; line-height:1.6 !important; overflow-wrap:anywhere !important; }
+  body.theme-oum[data-page="admin-network-network"] #modal_overlay :is(.cbi-value-field,.cbi-dropdown,.cbi-dynlist) { min-width:0 !important; max-width:100% !important; }
+  body.theme-oum[data-page="admin-network-network"] #modal_overlay :is(input[type="text"],input[type="number"],select,textarea) { min-width:0 !important; max-width:100% !important; box-sizing:border-box !important; }
+  body.theme-oum[data-page="admin-network-network"] #modal_overlay .ifacebadge { max-width:100% !important; white-space:normal !important; overflow-wrap:anywhere !important; box-sizing:border-box !important; }
+ }
+}
+
+/* Compact device summaries without hiding status or actions. */
+@layer oum-form-buttons {
+ @media(max-width:900px) {
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr.cbi-section-table-row { padding:10px 0 !important; margin:0 !important; gap:6px 12px !important; grid-template-columns:minmax(0,2fr) minmax(0,1fr) !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td[data-name="name"] { grid-column:1 !important; grid-row:1 !important; align-self:center !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td[data-name="type"] { grid-column:2 !important; grid-row:1 !important; align-self:center !important; text-align:right !important; color:var(--oum-subtle) !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device td[data-name="name"] > .ifacebadge { display:inline-flex !important; align-items:center !important; gap:6px !important; margin:0 !important; min-height:24px !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device td[data-name="name"] > .ifacebadge > .cbi-tooltip-container > img { width:20px !important; height:20px !important; margin:0 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td:is([data-name="macaddr"],[data-name="mtu"])::before { display:inline !important; margin:0 6px 0 0 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td.cbi-section-actions { padding-top:2px !important; }
+ }
+}
+
+@layer oum-form-buttons {
+ @media(max-width:900px) {
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr.cbi-section-table-row { grid-template-columns:minmax(0,max-content) minmax(0,1fr) !important; column-gap:16px !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td[data-name="type"] { text-align:left !important; }
+ }
+}
+
+@layer oum-form-buttons {
+ @media(max-width:900px) {
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td[data-name="name"] { grid-column:1 / -1 !important; grid-row:1 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td[data-name="macaddr"] { grid-column:1 / -1 !important; grid-row:2 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td[data-name="type"] { grid-column:1 !important; grid-row:3 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td[data-name="mtu"] { grid-column:2 !important; grid-row:3 !important; }
+ }
+}
+
+/* Device layout from the user's mockup: facts left, actions right. */
+@layer oum-form-buttons {
+ @media(max-width:900px) {
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr.cbi-section-table-row { grid-template-columns:max-content minmax(0,1fr) !important; gap:3px 8px !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td[data-name="name"] { grid-column:1 !important; grid-row:1 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td[data-name="type"] { grid-column:2 !important; grid-row:1 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td[data-name="macaddr"] { grid-column:1 / 3 !important; grid-row:2 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td[data-name="mtu"] { grid-column:1 / 3 !important; grid-row:3 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td.cbi-section-actions { grid-column:1 / 3 !important; grid-row:4 !important; align-self:center !important; padding-top:5px !important; }
+ }
+ @media(min-width:460px) and (max-width:900px) {
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr.cbi-section-table-row { grid-template-columns:max-content minmax(0,1fr) auto !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device tr > td.cbi-section-actions { grid-column:3 !important; grid-row:1 / 4 !important; padding:0 !important; }
+  body.theme-oum[data-page="admin-network-network"] #maincontent #cbi-network-device .cbi-section-actions > div { flex-wrap:nowrap !important; }
+ }
+}

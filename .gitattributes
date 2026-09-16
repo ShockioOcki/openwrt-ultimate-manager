@@ -1,0 +1,2 @@
+# Self-extracting installer embeds a compressed binary payload.
+dist/oum-install.sh binary

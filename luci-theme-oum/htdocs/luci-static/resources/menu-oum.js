@@ -134,7 +134,7 @@ return baseclass.extend({
 			var hasChildren = !!submenu.firstElementChild;
 			var active = child.name === activeName;
 			var link = E('a', { href: hasChildren ? '#' : L.url(url, child.name) }, [ _(child.title) ]);
-			var li = E('li', { 'class': (hasChildren ? 'dropdown ' : '') + (active ? 'active open' : '') }, [ link, submenu ]);
+			var li = E('li', { 'data-oum-section': child.name, 'class': (hasChildren ? 'dropdown ' : '') + (active ? 'active open' : '') }, [ link, submenu ]);
 
 			if (!nested && hasChildren) {
 				if (MODE_ICONS[child.name]) {

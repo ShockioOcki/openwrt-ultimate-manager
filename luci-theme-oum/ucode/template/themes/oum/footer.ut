@@ -18,8 +18,9 @@
 			}
 			function ensureMobileBottomNav() {
 				var existing = document.querySelector('.oum-bottom-nav');
+				if (document.body.dataset.page === 'oum-setup') { if (existing) existing.remove(); return; }
 				var oumPage = isOumPage();
-				var luciPage = /\/cgi-bin\/luci\/admin(?:\/|$)/.test(location.pathname);
+				var luciPage = !oumPage && (/\/cgi-bin\/luci\/admin(?:\/|$)/.test(location.pathname) || /^\/cgi-bin\/luci\/?$/.test(location.pathname));
 				if ((!oumPage && !luciPage) || window.innerWidth > 900) {
 					if (existing && existing.dataset.themeOwned === 'true') existing.remove();
 					return;
@@ -35,7 +36,7 @@
 					var topItems = document.querySelectorAll('#topmenu > li');
 					if (!topItems.length) return;
 					var fallback = ['Состояние', 'Система', 'Службы', 'Сеть'];
-					var keys = ['status', 'system', 'services', 'network'];
+					var keys = ['status', 'network', 'services', 'system'];
 					var icons = [
 						'<path d="M3 12h4l2-6 4 12 2-6h6"/>',
 						'<circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M4.9 4.9 7 7m10 10 2.1 2.1M2 12h3m14 0h3M4.9 19.1 7 17m10-10 2.1-2.1"/>',
@@ -47,12 +48,14 @@
 					nav.dataset.themeOwned = 'true'; nav.dataset.navKind = 'luci';
 					nav.setAttribute('aria-label', 'Разделы LuCI');
 					for (var li = 0; li < Math.min(4, topItems.length); li++) {
-						var source = topItems[li], sourceAnchor = source.querySelector(':scope > a');
+						var source = document.querySelector('#topmenu > li[data-oum-section="' + keys[li] + '"]');
+						if (!source) continue;
+						var sourceAnchor = source.querySelector(':scope > a');
 						var btn = document.createElement('button');
-						btn.type = 'button'; btn.dataset.luciSection = String(li);
-						btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + icons[li] + '</svg><span>' + ((sourceAnchor && sourceAnchor.textContent.trim()) || fallback[li]) + '</span>';
+						btn.type = 'button'; btn.dataset.luciSection = keys[li];
+						btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + icons[({status:0,system:1,services:2,network:3})[keys[li]]] + '</svg><span>' + ((sourceAnchor && sourceAnchor.textContent.trim()) || fallback[li]) + '</span>';
 						if (source.classList.contains('active') || source.classList.contains('open')) { btn.classList.add('active'); btn.setAttribute('aria-current', 'page'); }
-						btn.addEventListener('click', function() { openLuciSection(Number(this.dataset.luciSection)); });
+						btn.addEventListener('click', function() { openLuciSection(this.dataset.luciSection); });
 						nav.appendChild(btn);
 					}
 					document.body.appendChild(nav);
@@ -67,7 +70,7 @@
 				nav.dataset.themeOwned = 'true'; nav.dataset.navKind = 'oum';
 				nav.setAttribute('aria-label', 'Основная навигация');
 				nav.innerHTML = '<button type="button" data-nav="dashboard" aria-label="Главная"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg><span>Главная</span></button>' +
-					'<button type="button" data-nav="parental" aria-label="Родительский контроль"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg><span>Семья</span></button>' +
+					'<button type="button" data-nav="parental" aria-label="Родительский контроль"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg><span>Контроль</span></button>' +
 					'<button type="button" data-nav="settings" aria-label="Настройки"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Настройки</span></button>' +
 					'<button type="button" data-nav="help" aria-label="Помощь"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-1.5 2-1.5 3"/><circle cx="12" cy="17" r=".8" fill="currentColor" stroke="none"/></svg><span>Помощь</span></button>';
 				var routes = { dashboard: 'dashboard', parental: 'parental', settings: 'settings', help: 'help' };
@@ -93,15 +96,17 @@
 				if (document.querySelector('.oum-app') && legacyObserver) legacyObserver.disconnect();
 			}
 			var OUM_DIST = '{{ version.distname }} {{ version.distversion }}';
+			var menuOpener = null;
 			var mobileMenu = null, luciSectionMenu = null, menuVpnBtn = null, menuSegBtns = [];
 			function closeLuciSection() {
-				if (luciSectionMenu) luciSectionMenu.remove();
+				if (luciSectionMenu) { luciSectionMenu.remove(); if (menuOpener && menuOpener.isConnected) menuOpener.focus(); }
 				luciSectionMenu = null;
 				document.body.classList.remove('oum-menu-open');
 			}
-			function openLuciSection(index) {
-				var source = document.querySelectorAll('#topmenu > li')[index];
+			function openLuciSection(key) {
+				var source = document.querySelector('#topmenu > li[data-oum-section="' + key + '"]');
 				if (!source) return;
+				menuOpener = document.activeElement;
 				if (luciSectionMenu) luciSectionMenu.remove();
 				var titleLink = source.querySelector(':scope > a');
 				var links = source.querySelectorAll('.dropdown-menu a');
@@ -122,6 +127,8 @@
 				}
 				wrap.appendChild(panel); document.body.appendChild(wrap); luciSectionMenu = wrap;
 				panel.querySelector('.oum-mobile-menu-close').addEventListener('click', closeLuciSection);
+				panel.querySelector('.oum-mobile-menu-close').focus();
+				panel.setAttribute('aria-label', titleLink ? titleLink.textContent.trim() : 'Раздел');
 				wrap.addEventListener('click', function(ev) { if (ev.target === wrap) closeLuciSection(); });
 				var touchY = null, dragY = 0, canDrag = false;
 				panel.addEventListener('touchstart', function(ev) {
@@ -162,13 +169,11 @@
 				return true;
 			}
 			function paintMenuTheme() {
-				var dark = root.getAttribute('data-theme') === 'dark';
+				var selectedMode = localStorage.getItem('oum-theme-mode') || 'light';
 				for (var i = 0; i < menuSegBtns.length; i++) {
-					var b = menuSegBtns[i], ac = (b.getAttribute('data-theme-mode') === 'dark') === dark;
+					var b = menuSegBtns[i], ac = b.getAttribute('data-theme-mode') === selectedMode;
 					b.classList.toggle('is-active', ac);
-					b.style.background = ac ? '#fff' : 'transparent';
-					b.style.color = ac ? '#0f172a' : '#64748b';
-					b.style.boxShadow = ac ? '0 1px 3px rgba(0,0,0,.08)' : 'none';
+					b.setAttribute('aria-pressed', String(ac));
 				}
 			}
 			function paintMenuVpn() {
@@ -177,10 +182,11 @@
 			}
 			function setMode(mode) {
 				localStorage.setItem('oum-theme-mode', mode);
+				var select=document.getElementById('oum-theme-select'); if(select)select.value=mode;
 				localStorage.setItem('oum-theme', mode);
 				applyMode(mode);
 				var themeColor = document.querySelector('meta[name="theme-color"]');
-				if (themeColor) themeColor.setAttribute('content', mode === 'dark' ? '#0f1622' : '#eef0ea');
+				if (themeColor) themeColor.setAttribute('content', root.getAttribute('data-theme') === 'dark' ? '#0f1622' : '#eef0ea');
 				paintMenuTheme();
 			}
 			function ensureMobileMenu() {
@@ -198,7 +204,7 @@
 				p.innerHTML = '<span class="oum-mobile-menu-handle" aria-hidden="true"></span>' +
 					'<header class="oum-mobile-menu-head"><h3>Меню</h3><button type="button" class="oum-mobile-menu-close" aria-label="Закрыть">×</button></header>' +
 					'<a class="oum-mobile-menu-luci" href="' + luciHref + '"><span>' + luciLabel + '</span><b aria-hidden="true">›</b></a>' +
-					'<div class="oum-mobile-menu-theme"><span>Тема</span><div class="oum-apple-segment oum-mobile-menu-seg"><button type="button" data-theme-mode="dark">Тёмная</button><button type="button" data-theme-mode="light">Светлая</button></div></div>' +
+					'<div class="oum-mobile-menu-theme"><span>Тема</span><div class="oum-apple-segment oum-mobile-menu-seg"><button type="button" data-theme-mode="dark">Тёмная</button><button type="button" data-theme-mode="light">Светлая</button><button type="button" data-theme-mode="auto">Системная</button></div></div>' +
 					'<button type="button" class="oum-mobile-menu-btn is-danger" data-menu-act="vpn">◉ Отключить VPN</button>' +
 					'<button type="button" class="oum-mobile-menu-btn" data-menu-act="reboot">○ Перезагрузка</button>' +
 					'<button type="button" class="oum-mobile-menu-btn is-danger-text" data-menu-act="logout">Выйти</button>' +
@@ -256,7 +262,7 @@
 				if (c) window.setTimeout(function() { c.focus(); }, 210);
 			}
 			function applyMode(mode) {
-				var dark = mode === 'dark';
+				var dark = mode === 'dark' || (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 				root.setAttribute('data-theme', dark ? 'dark' : 'light');
 				root.setAttribute('data-darkmode', dark ? 'true' : 'false');
 				var apps = document.querySelectorAll('.oum-app, .oum-shell, .oum-parental, .oum-help-page');
@@ -312,11 +318,12 @@
 			legacyObserver = new MutationObserver(removeLegacyActions);
 			legacyObserver.observe(document.getElementById('maincontent'), { childList: true, subtree: true });
 			removeLegacyActions();
-			applyMode(root.getAttribute('data-theme'));
+			applyMode(localStorage.getItem('oum-theme-mode') || root.getAttribute('data-theme'));
+			window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() { if (localStorage.getItem('oum-theme-mode') === 'auto') setMode('auto'); });
 			ensureMobileBottomNav();
 			window.setTimeout(ensureMobileBottomNav, 500);
 		})();
-		L.require('menu-oum');
+		L.require('menu-oum').then(function() { window.dispatchEvent(new Event('resize')); });
 		</script>
 		{% endif %}
 	</body>

@@ -620,12 +620,24 @@ function unmanagedTunnels(uci) {
 	return result;
 }
 
+function radioPhyForBand(uci, band) {
+ let phy = '';
+ uci.foreach('wireless', 'wifi-device', (radio) => {
+  if (length(phy) || radio.band != band) return;
+  phy = radio.phy || '';
+  let section = radio['.name'];
+  if (!length(phy) && match(section, /^[A-Za-z0-9_-]+$/)) {
+   // Calling rpcd's iwinfo through ubus from inside rpcd deadlocks. The CLI
+   // resolves UCI path/macaddr to PHY directly, including disabled radios.
+   let process = popen(`/usr/bin/iwinfo nl80211 phyname ${section} 2>/dev/null`);
+   if (process) { phy = trim(process.read('all') || ''); process.close(); }
+  }
+ });
+ return match(phy, /^[A-Za-z0-9_-]+$/) ? phy : '';
+}
+
 function radioInterfaceForBand(uci, band) {
-	let phy = '';
-	uci.foreach('wireless', 'wifi-device', (radio) => {
-		if (!length(phy) && radio.band == band)
-			phy = radio.phy ?? '';
-	});
+	let phy = radioPhyForBand(uci, band);
 	if (!match(phy, /^[A-Za-z0-9_-]+$/))
 		return '';
 	let process = popen('/usr/bin/iwinfo 2>/dev/null');
@@ -676,11 +688,7 @@ function scanWifiNetworks(uci, band) {
 	let iface = radioInterfaceForBand(uci, band);
 	let temporaryIface = '';
 	if (!length(iface)) {
-		let phy = '';
-		uci.foreach('wireless', 'wifi-device', (radio) => {
-			if (!length(phy) && radio.band == band)
-				phy = radio.phy ?? '';
-		});
+		let phy = radioPhyForBand(uci, band);
 		if (!match(phy, /^[A-Za-z0-9_-]+$/))
 			return [];
 		temporaryIface = band == '5g' ? 'oum_scan5' : 'oum_scan2';
@@ -2429,6 +2437,7 @@ const methods = {
 				vpn_ready: vpnReady(),
 				reboot_required: access('/etc/oum/reboot-required') ? true : false,
 				policy_applying: access('/tmp/oum-device-policy.lock') ? true : false,
+				policy_state: trim(readfile('/tmp/oum-device-policy.state') ?? ''),
 				passwall,
 				podkop,
 				openclash: engines.openclash,
@@ -2568,7 +2577,7 @@ const methods = {
 	setDevicePolicy: {
 		args: { mac: '', policy: 'default' },
 		call: function(request) {
-			if (access(SYSTEM_JOB_LOCK))
+			if (configurationBusy())
 				return failure('configuration_busy', 'Дождитесь завершения системной настройки.');
 			let mac = uc(request.args.mac ?? '');
 			let policy = request.args.policy ?? 'default';

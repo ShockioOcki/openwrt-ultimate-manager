@@ -36,3 +36,5 @@ grep -Fq '"wispStatus", "scanWifi"' "$ACL"
 grep -Fq '"setWisp"' "$ACL"
 
 printf 'WISP tests: OK\n'
+
+grep -Fq 'iwinfo nl80211 phyname ${section}' "$RPC"

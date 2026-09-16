@@ -24,6 +24,12 @@ cp "$SOURCE_DIR/root/usr/libexec/oum-openclash-nodes" /usr/libexec/oum-openclash
 cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-nodes" /usr/libexec/oum-passwall-nodes
 cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-policy" /usr/libexec/oum-passwall-policy
 cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-source-job" /usr/libexec/oum-passwall-source-job
+cp "$SOURCE_DIR/root/usr/libexec/oum-traffic" /usr/libexec/oum-traffic
+cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-geodata" /usr/libexec/oum-passwall-geodata
+cp "$SOURCE_DIR/root/usr/libexec/oum-adguard" /usr/libexec/oum-adguard
+cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-route-check" /usr/libexec/oum-passwall-route-check
+cp "$SOURCE_DIR/root/usr/libexec/oum-parental-cron" /usr/libexec/oum-parental-cron
+cp "$SOURCE_DIR/root/usr/libexec/oum-passwall-bypass-russia" /usr/libexec/oum-passwall-bypass-russia
 cp "$SOURCE_DIR/root/usr/libexec/oum-device-policy" /usr/libexec/oum-device-policy
 cp "$SOURCE_DIR/root/usr/libexec/oum-policy-yaml.rb" /usr/libexec/oum-policy-yaml.rb
 cp "$SOURCE_DIR/root/usr/libexec/oum-subscription-info" /usr/libexec/oum-subscription-info
@@ -62,17 +68,25 @@ rm -f /www/luci-static/resources/view/oum/first-run.js \
 	/www/luci-static/resources/view/oum/dashboard-v10.js \
 	/www/luci-static/resources/view/oum/settings-v2.js \
 	/www/luci-static/resources/view/oum/settings-v3.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/first-run-v2.js" /www/luci-static/resources/view/oum/first-run-v2.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/dashboard-v57.js" /www/luci-static/resources/view/oum/dashboard-v57.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/settings-v58.js" /www/luci-static/resources/view/oum/settings-v58.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/first-run-v4.js" /www/luci-static/resources/view/oum/first-run-v4.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/dashboard-v64.js" /www/luci-static/resources/view/oum/dashboard-v64.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/settings-v64.js" /www/luci-static/resources/view/oum/settings-v64.js
 cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/parental-v5.js" /www/luci-static/resources/view/oum/parental-v5.js
-cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/help-v3.js" /www/luci-static/resources/view/oum/help-v3.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/help-v5.js" /www/luci-static/resources/view/oum/help-v5.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/qrcode.min.js" /www/luci-static/resources/view/oum/qrcode.min.js
+cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/qrcode.min.js.LICENSE.txt" /www/luci-static/resources/view/oum/qrcode.min.js.LICENSE.txt
 cp "$SOURCE_DIR/htdocs/luci-static/resources/oum/oum.css" /www/luci-static/resources/oum/oum.css
 
+chmod 755 /usr/libexec/oum-parental-cron
+chmod 755 /usr/libexec/oum-passwall-route-check
+chmod 755 /usr/libexec/oum-adguard
+chmod 755 /usr/libexec/oum-passwall-geodata
+chmod 755 /usr/libexec/oum-traffic
 chmod 600 /etc/config/oum
+chmod 755 /usr/libexec/oum-mobile-manager
 chmod 755 /usr/libexec/oum-firstboot /usr/libexec/oum-source-job /usr/libexec/oum-reset-first-run \
 		/usr/libexec/oum-mihomo-api /usr/libexec/oum-openclash-nodes /usr/libexec/oum-passwall-nodes /usr/libexec/oum-passwall-policy /usr/libexec/oum-device-policy /usr/libexec/oum-policy-yaml.rb \
-	/usr/libexec/oum-passwall-source-job \
+	/usr/libexec/oum-passwall-source-job /usr/libexec/oum-passwall-bypass-russia \
 	/usr/libexec/oum-subscription-info \
 	/usr/libexec/oum-backup /usr/libexec/oum-backup-codec.rb /usr/libexec/oum-reset-vpn \
 	/usr/libexec/oum-system-job \
@@ -98,15 +112,16 @@ chmod 700 /etc/oum/support
 chmod 644 /etc/oum/support/support_key.pub
 chmod 600 /usr/libexec/oum/source_converter.rb
 mkdir -p /usr/share/oum
+cp -R "$SOURCE_DIR/root/usr/share/oum/routing" /usr/share/oum/
 cp "$SOURCE_DIR/root/usr/share/oum/zapret-youtube-strategies" /usr/share/oum/zapret-youtube-strategies
 rm -rf /usr/share/oum/packages
 cp -R "$SOURCE_DIR/root/usr/share/oum/packages" /usr/share/oum/packages
 chmod 644 /usr/share/oum/zapret-youtube-strategies
 find /usr/share/oum/packages -type f -exec chmod 600 {} \;
 chmod 644 /usr/share/luci/menu.d/luci-app-oum.json /usr/share/ucode/luci/controller/oum.uc /usr/share/rpcd/acl.d/luci-app-oum.json \
-	/usr/share/rpcd/ucode/oum /www/luci-static/resources/view/oum/first-run-v2.js \
-	/www/luci-static/resources/view/oum/dashboard-v57.js /www/luci-static/resources/view/oum/settings-v58.js \
-	/www/luci-static/resources/view/oum/parental-v5.js /www/luci-static/resources/view/oum/help-v3.js \
+	/usr/share/rpcd/ucode/oum /www/luci-static/resources/view/oum/first-run-v4.js \
+	/www/luci-static/resources/view/oum/dashboard-v64.js /www/luci-static/resources/view/oum/settings-v64.js \
+	/www/luci-static/resources/view/oum/parental-v5.js /www/luci-static/resources/view/oum/help-v5.js \
 	/www/luci-static/resources/oum/oum.css
 
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
@@ -117,6 +132,8 @@ if [ -e /lib/apk/db/installed ]; then
 elif [ -e /usr/lib/opkg/status ]; then
 	touch /usr/lib/opkg/status 2>/dev/null || true
 fi
+# Install the scheduled parental control task without running first-boot setup.
+sh "$SOURCE_DIR/root/etc/uci-defaults/94_oum_parental"
 /usr/libexec/oum-login-default
 /etc/init.d/oum-support enable >/dev/null 2>&1 || true
 /usr/libexec/oum-support cleanup-boot >/dev/null 2>&1 || true

@@ -197,7 +197,7 @@ return view.extend({
 		const podkopRouting = data[3] || { catalog: [], proxy: {}, direct: {} };
 		if (!status.setup_complete) {
 			const page = E('main', { 'class': 'oum-main' }, [
-				E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260913-passwallflat1` }),
+				E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260915-nodemobile1` }),
 				E('div', { 'class': 'oum-page-head' }, [
 					E('div', {}, [
 						E('h2', {}, 'Панель OUM'),
@@ -268,7 +268,7 @@ return view.extend({
 		]);
 
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260914-systemusb1` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260915-nodemobile1` }),
 			E('div', { 'class': 'oum-page-head' }, [
 				E('div', {}, [ E('h2', {}, 'Панель OUM'), E('p', { 'class': 'oum-muted' }, 'Домашняя сеть и защищённое подключение') ]),
 				E('div', { 'class': 'oum-head-actions' }, [
@@ -470,7 +470,7 @@ return view.extend({
 						E('div', { 'class': 'oum-current-node', id: 'current-node' }, 'Нет активной ноды'),
 						E('div', { 'class': 'oum-node-list oum-node-quick', id: 'quick-node-list', hidden: '' }),
 						E('div', { 'class': 'oum-node-message oum-muted', id: 'node-message' }),
-						E('button', { 'class': 'oum-all-nodes-btn', id: 'show-all-nodes' }, [
+						E('button', { 'class': 'oum-all-nodes-btn', id: 'show-all-nodes', 'aria-expanded': 'false', 'aria-controls': 'oum-nodes-sheet' }, [
 							E('span', { id: 'show-all-nodes-count' }, 'Все ноды'),
 							E('span', { 'class': 'oum-all-nodes-hint oum-muted' }, 'быстрые наверху ⌄')
 						]),
@@ -543,6 +543,7 @@ return view.extend({
 		let passwallNodeState = {};
 		let editingAliasMac = null;
 		let mobileClientsExpanded = false;
+		const clientOrder = new Map();
 		let pickedNode = null;
 		let pickedName = '';
 		let nodeApplying = false;
@@ -877,6 +878,9 @@ return view.extend({
 
 		const updateDashboard = (fresh) => {
 			dashboardState = fresh;
+			for (const client of (fresh.clients || [])) if (!clientOrder.has(client.mac)) clientOrder.set(client.mac, clientOrder.size);
+			const visibleClients = (fresh.clients || []).slice().sort((a,b) => clientOrder.get(a.mac) - clientOrder.get(b.mac));
+			const visibleOffline = (fresh.offline_clients || []);
 			vpnEngine = fresh.vpn_engine || 'openclash';
 			passwallInstalled = fresh.passwall?.installed === true;
 			podkopInstalled = fresh.podkop?.installed === true;
@@ -997,8 +1001,8 @@ return view.extend({
 				]),
 				E('span', { 'class': 'oum-mobile-client-tune', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/oum/icons/ui-tune.svg?v=2', alt: '' }))
 			]);
-			if (!editingAliasMac || !activeEditor) {
-				body.replaceChildren(...(fresh.clients || []).map((client) => E('tr', { 'class': client.paused ? 'oum-client-paused' : '' }, [
+			if ((!editingAliasMac || !activeEditor) && !body.contains(document.activeElement) && !offlineBody.contains(document.activeElement)) {
+				body.replaceChildren(...visibleClients.map((client) => E('tr', { 'class': client.paused ? 'oum-client-paused' : '' }, [
 					nameCell(client), E('td', {}, client.ip),
 					E('td', {}, client.medium === 'wifi' ? 'Wi-Fi' : (client.medium === 'ethernet' ? 'Кабель' : 'Не определено')),
 					E('td', { 'class': 'optional' }, client.mac), trafficCell(client.traffic),
@@ -1006,7 +1010,7 @@ return view.extend({
 					E('td', {}, parentalButton(client)),
 					E('td', { 'class': 'oum-mobile-device-action' }, mobileDeviceButton(client))
 				])));
-				offlineBody.replaceChildren(...(fresh.offline_clients || []).map((client) => {
+				offlineBody.replaceChildren(...visibleOffline.map((client) => {
 					const select = policySelect(client, vpnEngine);
 					select.disabled = true;
 					return E('tr', { 'class': client.paused ? 'oum-client-paused' : '' }, [
@@ -1014,20 +1018,20 @@ return view.extend({
 						E('td', {}, select), E('td', {}, parentalButton(client))
 					]);
 				}));
-				const mobileClients = mobileClientsExpanded ? (fresh.clients || []) : (fresh.clients || []).slice(0, 3);
+				const mobileClients = mobileClientsExpanded ? visibleClients : visibleClients.slice(0, 3);
 				root.querySelector('#mobile-client-list').replaceChildren(...mobileClients.map(mobileDeviceRow));
 			}
-			if (!fresh.clients?.length)
+			if (!visibleClients.length && !body.querySelector('td[colspan]'))
 				body.appendChild(E('tr', {}, E('td', { colspan: 8, 'class': 'oum-muted' }, 'Нет активных устройств')));
 			const clientCountLabel = clientCount % 10 === 1 && clientCount % 100 !== 11 ? 'устройство' :
 				([ 2, 3, 4 ].includes(clientCount % 10) && ![ 12, 13, 14 ].includes(clientCount % 100) ? 'устройства' : 'устройств');
 			root.querySelector('#active-client-badge').textContent = `${clientCount} ${clientCountLabel}`;
 			const mobileMore = root.querySelector('#mobile-client-more');
-			mobileMore.hidden = clientCount <= 3;
+			mobileMore.hidden = visibleClients.length <= 3;
 			mobileMore.querySelector('span').textContent = mobileClientsExpanded ? 'Свернуть' : 'Показать все';
 			mobileMore.dataset.expanded = mobileClientsExpanded ? 'true' : 'false';
 			const offlineSection = root.querySelector('#offline-section');
-			offlineSection.hidden = !(fresh.offline_clients || []).length;
+			offlineSection.hidden = !visibleOffline.length;
 			root.querySelector('#offline-summary').textContent = `Недавно были (офлайн) · ${(fresh.offline_clients || []).length}`;
 			for (const select of body.querySelectorAll('.oum-policy'))
 				select.disabled = false;
@@ -1141,8 +1145,8 @@ return view.extend({
 			const pickerButton = root.querySelector('#show-node-picker');
 			pickerButton.hidden = isPasswall;
 			pickerButton.style.display = isPasswall ? 'none' : '';
-			showAllNodes.hidden = isPasswall && window.innerWidth > 900;
-			showAllNodes.style.display = (isPasswall && window.innerWidth > 900) ? 'none' : '';
+			showAllNodes.hidden = false;
+			showAllNodes.style.display = '';
 			if (!isPasswall) {
 				const src = dashboardState.active_source || fresh.active_source || '';
 				const singleNode = src !== '' && src !== 'subscription';
@@ -1172,19 +1176,19 @@ return view.extend({
 			if (sp >= Math.floor(max / 2)) t = t.slice(0, sp);
 			return t.replace(/[\s|#.,\-()+]+$/u, '') + '…';
 		};
-			const usePick = window.innerWidth <= 900;
+			const usePick = true;
 		const makeNode = (node, isCurrent, quick) => {
-			if (!quick && usePick) return E('div', { 'class': `oum-node oum-pick${isCurrent ? ' is-current' : ''}`, 'data-pick': (node.id || node.name), role: 'button' }, [
+			if (!quick && (usePick || isPasswall)) return E('div', { 'class': `oum-node oum-pick${isCurrent ? ' is-current' : ''}`, 'data-pick': (node.id || node.name), role: 'button' }, [
 				E('div', { 'class': 'oum-node-copy' }, [
 					E('span', { 'class': 'oum-node-name', title: node.name }, node.name),
 					isCurrent ? E('span', { 'class': 'oum-pick-active' }, 'Активна') : ''
 				]),
 				E('span', { 'class': 'oum-delay', 'data-delay': delayState(node) }, delayText(node, '—'))
 			]);
-			if (quick && window.innerWidth <= 900) return E('div', { 'class': `oum-node${isCurrent ? ' is-current' : ''} is-quick`, 'data-node': !isCurrent ? (node.id || node.name) : null }, [
+			if (quick && (window.innerWidth <= 900 || isPasswall)) return E('div', { 'class': `oum-node${isCurrent ? ' is-current' : ''} is-quick`, 'data-node': !isCurrent ? (node.id || node.name) : null }, [
 				E('div', { 'class': 'oum-node-copy' }, [
 					E('span', { 'class': 'oum-node-flag', 'aria-hidden': 'true' }, flagOf(node.name)),
-					E('span', { 'class': 'oum-node-name', title: node.name }, shortOf(node.name, isPasswall ? 28 : 14)),
+					E('span', { 'class': 'oum-node-name', title: node.name }, shortOf(String(node.name).split('|')[0].replace(/#\d+/g, ''), 20)),
 					E('span', { 'class': 'oum-delay', 'data-delay': delayState(node) }, delayText(node, '—'))
 				])
 			]);
@@ -1214,7 +1218,7 @@ return view.extend({
 			quickNodeList.replaceChildren(...quick.map((node) => makeNode(node,
 				fresh.current_id ? node.id === fresh.current_id : node.name === fresh.current, true)));
 			root.querySelector('#all-nodes-summary').textContent = isPasswall ? `Показать все ${all.length}` : `Все ноды (${all.length})`;
-			if (showAllNodesCount) showAllNodesCount.textContent = `Все ноды (${all.length})`;
+			if (showAllNodesCount) showAllNodesCount.textContent = window.innerWidth>900 && document.getElementById('oum-nodes-sheet')?.classList.contains('active') ? 'Свернуть список' : `Все ноды (${all.length})`;
 			const sheetTitle = document.getElementById('oum-nodes-sheet-title');
 			if (sheetTitle) sheetTitle.textContent = `Все ноды (${all.length})`;
 		allNodeList.replaceChildren(...all.map((node) => makeNode(node,
@@ -1267,13 +1271,23 @@ return view.extend({
 		});
 		root.querySelector('#show-node-picker').addEventListener('click', () => {
 			const sheet = document.getElementById('oum-nodes-sheet');
-			if (sheet && window.innerWidth <= 900) { sheet.classList.add('active'); return; }
+			if (sheet) { showAllNodes.click(); return; }
 			nodePicker.open = !nodePicker.open;
 			if (nodePicker.open) nodePicker.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 		});
 		showAllNodes.addEventListener('click', () => {
 			const sheet = document.getElementById('oum-nodes-sheet');
-			if (sheet && window.innerWidth <= 900) { sheet.dataset.engine = root.querySelector('#node-controls').dataset.engine; sheet.classList.add('active'); return; }
+			if (sheet) {
+                if(window.innerWidth<=900) {
+                    sheet.dataset.engine=nodeControls.dataset.engine;
+                    sheet.classList.add('active');
+                    return;
+                }
+                const expanded = sheet.classList.toggle('active');
+                showAllNodes.setAttribute('aria-expanded', String(expanded));
+                showAllNodesCount.textContent = expanded ? 'Свернуть список' : `Все ноды (${allNodeList.children.length})`;
+                return;
+            }
 			nodePicker.open = !nodePicker.open;
 			if (nodePicker.open) nodePicker.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 		});
@@ -1596,12 +1610,21 @@ return view.extend({
 			});
 		});
 
+		const staleMessage = E('div', { 'class': 'oum-stale-message', hidden: '', role: 'status' });
+		page.prepend(staleMessage);
+		let lastDashboardUpdate = new Date();
+		const refreshDashboard = () => Promise.allSettled([callDashboardStatus(), callNodeStatus()]).then(([state, nodes]) => {
+			if (state.status === 'fulfilled') {
+				updateDashboard(state.value); lastDashboardUpdate = new Date(); staleMessage.hidden = true;
+			} else {
+				staleMessage.hidden = false;
+				staleMessage.textContent = `Не удалось обновить состояние. Показаны данные на ${lastDashboardUpdate.toLocaleTimeString()}. Повторяем попытку автоматически.`;
+			}
+			if (nodes.status === 'fulfilled') updateNodes(nodes.value);
+		});
 		updateDashboard(dashboard);
 		updateNodes(initialNodes);
-		poll.add(() => Promise.all([ callDashboardStatus(), callNodeStatus() ]).then(([fresh, nodes]) => {
-			updateDashboard(fresh);
-			updateNodes(nodes);
-		}), 10);
+		poll.add(refreshDashboard, 10);
 		// === Mobile 1:1 patch v-main12 - bottom nav + system pills + podkop sheets + device/QR bottom-sheet ===
 		setTimeout(()=>{
 		  const tryInit=()=>{ if(window.innerWidth<=900){
@@ -1738,20 +1761,22 @@ return view.extend({
 		        });
 		      }
 		    }catch(e){}
+		  }
 		    try{
 		      var nodesSheet=document.getElementById("oum-nodes-sheet");
-		      if(nodesSheet&&window.innerWidth>900){
-		        var backList=nodesSheet.querySelector("#all-node-list");
-		        var pickerEl=document.querySelector("#node-picker");
-		        if(backList&&pickerEl) pickerEl.appendChild(backList);
-		        nodesSheet.remove();
-		        nodesSheet=null;
-		      }
+          if(nodesSheet && nodesSheet.classList.contains("oum-modal") !== (window.innerWidth<=900)) {
+            const list=nodesSheet.querySelector("#all-node-list");
+            if(list) nodePicker.appendChild(list);
+            nodesSheet.remove(); nodesSheet=null;
+            showAllNodes.setAttribute("aria-expanded","false");
+          }
 		      if(!nodesSheet){
 		        const nc=document.querySelector("#node-controls");
 		        const allList=document.querySelector("#all-node-list");
-		        if(nc&&allList&&window.innerWidth<=900){
-		          const m=document.createElement("div"); m.id="oum-nodes-sheet"; m.className="oum-modal";
+		        if(nc&&allList){
+            const m=document.createElement("div"); m.id="oum-nodes-sheet";
+            if(window.innerWidth<=900) {
+		          m.className="oum-modal";
 		          m.innerHTML="<div class=\"oum-bottom-sheet\"><div class=\"sheet-handle\"></div><div style=\"display:flex;justify-content:space-between;align-items:center\"><strong id=\"oum-nodes-sheet-title\">Все ноды</strong><button onclick=\"document.getElementById('oum-nodes-sheet').classList.remove('active')\" style=\"width:32px;height:32px;min-width:32px;min-height:32px;max-width:32px;max-height:32px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;display:grid;place-items:center;font-size:16px;line-height:1;padding:0;flex:0 0 32px;box-sizing:border-box;\" class=\"oum-sheet-x\">✕</button></div><div id=\"oum-nodes-sheet-hint\" style=\"font-size:11px;color:#6b7280\">Лёгкие TCP · быстрые наверху</div><div id=\"oum-nodes-sheet-list\"></div><div id=\"oum-pick-message\"></div><button id=\"oum-pick-confirm\" disabled>Выбрать</button></div>";
 		          m.addEventListener("click",e=>{if(e.target===m) m.classList.remove("active")});
 		          document.addEventListener("keydown",function escNodes(e){if(e.key==="Escape"){const s=document.getElementById("oum-nodes-sheet");if(s&&s.classList.contains("active"))s.classList.remove("active");}});
@@ -1760,7 +1785,13 @@ return view.extend({
 		          bs.addEventListener("touchstart",e=>{sy=e.touches[0].clientY;drag=true;try{for(let el=e.target;el;el=el.parentElement){if(el.scrollHeight>el.clientHeight+4&&el.scrollTop>0){drag=false;break}if(el===bs)break}}catch(_){}try{if(sy-bs.getBoundingClientRect().top<72)drag=true}catch(_){}bs.style.transition="none"},{passive:true});
 		          bs.addEventListener("touchmove",e=>{if(!drag)return;cy=e.touches[0].clientY-sy;if(cy>0) bs.style.transform="translateY("+cy+"px)"},{passive:true});
 		          bs.addEventListener("touchend",()=>{drag=false;bs.style.transition="transform .2s"; if(cy>90) m.classList.remove("active"); bs.style.transform=""; cy=0});
+		          // Keep the overlay outside dashboard layout and its containing blocks.
+		          document.body.appendChild(m);
+            } else {
+		          m.className="oum-node-expanded";
+		          m.innerHTML='<div id="oum-nodes-sheet-list"></div><div id="oum-pick-message" role="status"></div><button id="oum-pick-confirm" class="btn cbi-button-action" disabled>Выбрать</button>';
 		          nc.appendChild(m);
+            }
 		          m.querySelector("#oum-nodes-sheet-list").appendChild(allList);
 		          const t=document.getElementById("all-nodes-summary"); const st=document.getElementById("oum-nodes-sheet-title"); if(t&&st) st.textContent=t.textContent;
 		          const dstList=m.querySelector("#oum-nodes-sheet-list");
@@ -1797,6 +1828,8 @@ return view.extend({
 		              refreshPickButton();
 		              showNodeMessage("Нода переключена.",false);
 		              m.classList.remove("active");
+		              showAllNodes.setAttribute("aria-expanded", "false");
+		              showAllNodesCount.textContent = `Все ноды (${allNodeList.children.length})`;
 		            }).catch((err)=>{
 		              const pm=document.getElementById("oum-pick-message");
 		              if(pm){ pm.textContent=err.message; if(pickMessageTimer) window.clearTimeout(pickMessageTimer); pickMessageTimer=window.setTimeout(()=>{ const p=document.getElementById("oum-pick-message"); if(p) p.textContent=""; },5000); }
@@ -1811,7 +1844,7 @@ return view.extend({
 		        }
 		      }
 		    }catch(e){}
-		  }}
+		  }
 		  tryInit(); setInterval(tryInit,2000); window.addEventListener("resize",tryInit);
 		}, 900);
 		// force device/QR modals to bottom-sheet like Podkop (mobile only)

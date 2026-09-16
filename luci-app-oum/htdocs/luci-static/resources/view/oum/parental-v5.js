@@ -38,7 +38,7 @@ return view.extend({
 	render(status) {
 		const days = [ [ '1', 'Пн' ], [ '2', 'Вт' ], [ '3', 'Ср' ], [ '4', 'Чт' ], [ '5', 'Пт' ], [ '6', 'Сб' ], [ '7', 'Вс' ] ];
 		const page = E('main', { 'class': 'oum-main' }, [
-			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260907-quick14` }),
+			E('link', { rel: 'stylesheet', href: `${L.resource('oum/oum.css')}?v=20260914-parental-dialog` }),
 			E('div', { 'class': 'oum-parental-head' }, [ E('div', {}, [ E('h2', {}, 'Родительский контроль'), E('p', { 'class': 'oum-parental-help' }, 'Ограничивайте доступ в интернет по времени и выбирайте DNS-фильтр для всей сети или отдельного устройства.') ]), E('a', { 'class': 'btn', href: L.url('oum', 'settings') }, 'Настройки') ]),
 			E('details', { 'class': 'oum-parental-guide' }, [
 				E('summary', {}, 'Как работает родительский контроль'),

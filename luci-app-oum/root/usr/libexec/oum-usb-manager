@@ -31,6 +31,13 @@ emit() {
 	printf '%s=%s\n' "$1" "$(clean_value "${2:-}")"
 }
 
+usb_host_present() {
+ for host in /sys/bus/usb/devices/usb*; do
+  [ ! -d "$host" ] || return 0
+ done
+ return 1
+}
+
 storage_attached() {
 	for class in /sys/bus/usb/devices/*:*/bInterfaceClass; do
 		[ -f "$class" ] || continue
@@ -139,7 +146,7 @@ status() {
 		label="$(block_value "$info" LABEL)"
 		mountpoint="$(mounted_at "$partition")"
 	fi
-	emit host_present "$([ -d /sys/bus/usb/devices/usb1 ] && echo 1 || echo 0)"
+	emit host_present "$(usb_host_present && echo 1 || echo 0)"
 	emit storage_attached "$(storage_attached && echo 1 || echo 0)"
 	emit runtime_ready "$(packages_ready && echo 1 || echo 0)"
 	emit disk "$disk"
@@ -216,7 +223,9 @@ require_usb_disk() {
 }
 
 prepare() {
-	apk -U add $STORAGE_PACKAGES
+	usb_host_present || { echo 'USB controller not found' >&2; return 1; }
+	storage_attached || { echo 'Connect a USB storage device before setup' >&2; return 1; }
+	packages_ready || apk -U add $STORAGE_PACKAGES
 	modprobe usb-storage 2>/dev/null || true
 	modprobe uas 2>/dev/null || true
 	count=0
@@ -226,7 +235,8 @@ prepare() {
 		sleep 1
 	done
 	storage_attached && { echo 'Storage driver installed, reconnect the USB drive' >&2; return 2; }
-	return 0
+	echo 'USB storage disconnected during setup' >&2
+	return 1
 }
 
 unmount_disk_partitions() {

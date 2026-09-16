@@ -21,6 +21,7 @@ tunnel_ready() {
 prepare_zapret_runtime() {
 	config=/opt/zapret/config
 	[ -r "$config" ] || return 1
+	/usr/libexec/oum-zapret-manager fix || return 1
 	# Zapret's package owns its service user and runtime permissions. OUM must
 	# not silently replace WS_USER or rewrite user-managed runtime files.
 	return 0
@@ -342,7 +343,8 @@ routing() {
 	normalize_lines domain "$tmp/direct_domains.raw" "$tmp/direct_domains" || { echo 'Invalid direct domain' >&2; return 1; }
 	normalize_lines subnet "$tmp/direct_subnets.raw" "$tmp/direct_subnets" || { echo 'Invalid direct subnet' >&2; return 1; }
 	grep -Fvx youtube "$tmp/proxy_lists" > "$tmp/proxy_lists.clean" || true
-	grep -Fvx youtube "$tmp/direct_lists" > "$tmp/direct_lists.clean" || true
+	# Unchecked services inherit routing, including requests from cached clients.
+	: > "$tmp/direct_lists.clean"
 	mv "$tmp/proxy_lists.clean" "$tmp/proxy_lists"
 	mv "$tmp/direct_lists.clean" "$tmp/direct_lists"
 	if [ "$youtube_mode" = vpn ]; then printf '%s\n' youtube >> "$tmp/proxy_lists"; else printf '%s\n' youtube >> "$tmp/direct_lists"; fi

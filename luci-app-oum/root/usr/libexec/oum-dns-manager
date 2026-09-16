@@ -56,7 +56,17 @@ dns = config["dns"] = {} unless config["dns"].is_a?(Hash)
 dns = config["dns"]
 dns["enable"] = true
 dns["default-nameserver"] = [ENV.fetch("OUM_BOOTSTRAP_DNS")]
-dns["nameserver"] = [ENV.fetch("OUM_DNS_SERVER")]
+if dns["respect-rules"] && dns["nameserver-policy"].is_a?(Hash)
+  bootstrap = ENV.fetch("OUM_BOOTSTRAP_DNS")
+  dns["nameserver"] = [bootstrap]
+  dns["proxy-server-nameserver"] = [bootstrap]
+  dns["direct-nameserver"] = [bootstrap]
+  dns["nameserver-policy"].each do |domain, resolvers|
+    dns["nameserver-policy"][domain] = Array(resolvers).map { |resolver| resolver.to_s.end_with?("#PROXY") ? "tcp://#{ENV.fetch("OUM_DNS_SERVER")}:53#PROXY" : bootstrap }
+  end
+else
+  dns["nameserver"] = [ENV.fetch("OUM_DNS_SERVER")]
+end
 File.open("#{path}.tmp", "w", 0600) { |file| file.write(YAML.dump(config)) }
 File.rename("#{path}.tmp", path)
 ' "$profile"
@@ -75,8 +85,12 @@ configure_passwall() {
 	MUTATED=1
 	uci -q set "passwall.$global.direct_dns_mode=udp"
 	uci -q set "passwall.$global.direct_dns=$BOOTSTRAP:53"
-	uci -q set "passwall.$global.v2ray_dns_mode=udp"
+	uci -q set "passwall.$global.v2ray_dns_mode=tcp"
 	uci -q set "passwall.$global.remote_dns=$SERVER:53"
+	for device_acl in $(uci -q show passwall | sed -n 's/^passwall\.\([^.=]*\)=acl_rule$/\1/p'); do
+		[ "$(uci -q get "passwall.$device_acl.remarks")" = 'OUM device VPN' ] || continue
+		uci -q set "passwall.$device_acl.remote_dns=$SERVER:53"
+	done
 	uci -q commit passwall
 	[ "$ACTION" != apply ] || /etc/init.d/passwall restart >/dev/null 2>&1
 }

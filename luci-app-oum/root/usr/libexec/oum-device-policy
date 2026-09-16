@@ -14,7 +14,8 @@ END_MARKER='# OUM-DEVICE-RULES-END'
 PAUSE_RULES=/tmp/oum-device-pause.nft
 
 mkdir "$LOCK_DIR" 2>/dev/null || exit 0
-trap 'rm -rf "$LOCK_DIR"; rm -f "$RULE_BLOCK" "$RULE_OUTPUT" "$RUNTIME_RULES" "$OLD_IPS" "$RUNTIME_BACKUP" "$PAUSE_RULES"' EXIT INT TERM
+printf '%s\n' running > /tmp/oum-device-policy.state
+trap 'result=$?; if [ "$result" = 0 ]; then echo success; else echo failed; fi > /tmp/oum-device-policy.state; rm -rf "$LOCK_DIR"; rm -f "$RULE_BLOCK" "$RULE_OUTPUT" "$RUNTIME_RULES" "$OLD_IPS" "$RUNTIME_BACKUP" "$PAUSE_RULES"' EXIT INT TERM
 
 # Several UI changes made together are coalesced into one OpenClash reload.
 [ "${1:-}" = apply ] && sleep 2

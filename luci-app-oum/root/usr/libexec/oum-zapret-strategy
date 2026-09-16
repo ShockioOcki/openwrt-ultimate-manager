@@ -76,6 +76,7 @@ require_runtime() {
 
 require_running() {
 	require_runtime
+	/usr/libexec/oum-zapret-manager fix || fail 'Не удалось применить FIX Flow Offloading.'
 	pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1 ||
 		fail 'Сначала настройте AWG и запустите Podkop.'
 }

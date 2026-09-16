@@ -47,13 +47,11 @@ append_word() {
 	fi
 }
 
-# Per-device routing rides on an OUM-owned passwall acl_rule (remarks marker):
-# sources are `ip:<addr>` entries with all-ports no_redir, i.e. a full bypass
-# that survives passwall restarts. Default stays VPN, so the vpn policy only
-# needs bookkeeping. NOTE: sources must be ONE space-joined string via
-# `uci set` — add_list breaks passwall's eval parser (findings 2026-09-06).
+# Device overrides use independent ACLs; the global node may be a selective
+# shunt. Sources are a single space-joined string, not UCI list entries.
 ACL_REMARKS='OUM device direct'
 GAME_ACL_REMARKS='OUM gaming direct'
+VPN_ACL_REMARKS='OUM device VPN'
 GAME_TCP_PORTS='3074,3478-3480,5222-5223,27014-27050'
 GAME_UDP_PORTS='88,500,3074,3478-3479,3544,3658,4379-4380,4500,27000-27200'
 
@@ -74,6 +72,7 @@ cp /etc/config/oum "$OUM_BACKUP"
 chmod 600 "$PASSWALL_BACKUP" "$DHCP_BACKUP" "$OUM_BACKUP"
 
 vpn_ips=''
+vpn_macs=''
 direct_ips=''
 gaming_ips=''
 
@@ -100,6 +99,7 @@ apply_device() {
 			;;
 		vpn)
 			vpn_ips="$(append_word "$vpn_ips" "$ip")"
+			vpn_macs="$(append_word "$vpn_macs" "$mac")"
 			;;
 		*) return 0 ;;
 	esac
@@ -188,6 +188,7 @@ if [ -n "$gaming_ips" ]; then
 	uci -q set "passwall.$game_acl_sec.enabled=1"
 	uci -q set "passwall.$game_acl_sec.remarks=$GAME_ACL_REMARKS"
 	uci -q set "passwall.$game_acl_sec.sources=$gaming_ips"
+	uci -q set "passwall.$game_acl_sec.use_global_config=1"
 	uci -q set "passwall.$game_acl_sec.tcp_no_redir_ports=$GAME_TCP_PORTS"
 	uci -q set "passwall.$game_acl_sec.udp_no_redir_ports=$GAME_UDP_PORTS"
 	uci -q set passwall.@global[0].acl_enable=1
@@ -196,6 +197,54 @@ elif [ -n "$game_acl_sec" ]; then
 	uci -q delete "passwall.$game_acl_sec"
 	uci commit passwall
 fi
+# Full-device VPN bypasses the global selective shunt. MAC matching also
+# covers IPv6 and survives address changes. Keep LAN destinations local.
+vpn_acl_sec="$(find_oum_acl "$VPN_ACL_REMARKS" || true)"
+if [ -n "$vpn_ips" ]; then
+	vpn_node="$(uci -q get passwall.@global[0].tcp_node)"
+	if [ "$(uci -q get "passwall.$vpn_node.protocol")" = _shunt ]; then
+		vpn_node="$(uci -q get "passwall.$vpn_node.default_node")"
+	fi
+	[ "$(uci -q get "passwall.$vpn_node")" = nodes ] || exit 1
+	[ -n "$vpn_acl_sec" ] || vpn_acl_sec="$(uci add passwall acl_rule)"
+	for option in use_global_config use_direct_list use_proxy_list use_block_list use_gfw_list; do
+		uci -q set "passwall.$vpn_acl_sec.$option=0"
+	done
+	uci -q set "passwall.$vpn_acl_sec.enabled=1"
+	uci -q set "passwall.$vpn_acl_sec.remarks=$VPN_ACL_REMARKS"
+	uci -q set "passwall.$vpn_acl_sec.sources=$vpn_macs"
+	uci -q set "passwall.$vpn_acl_sec.tcp_node=$vpn_node"
+	uci -q set "passwall.$vpn_acl_sec.udp_node=tcp"
+	uci -q set "passwall.$vpn_acl_sec.chn_list=0"
+	for protocol in tcp udp; do
+		uci -q set "passwall.$vpn_acl_sec.${protocol}_proxy_mode=proxy"
+		uci -q set "passwall.$vpn_acl_sec.${protocol}_no_redir_ports=disable"
+		uci -q set "passwall.$vpn_acl_sec.${protocol}_proxy_drop_ports=disable"
+		uci -q set "passwall.$vpn_acl_sec.${protocol}_redir_ports=1-65535"
+	done
+	uci -q set "passwall.$vpn_acl_sec.dns_shunt=dnsmasq"
+	uci -q set "passwall.$vpn_acl_sec.dns_mode=xray"
+	uci -q set "passwall.$vpn_acl_sec.v2ray_dns_mode=tcp"
+	uci -q set "passwall.$vpn_acl_sec.remote_dns=$(uci -q get passwall.@global[0].remote_dns)"
+	uci -q set "passwall.$vpn_acl_sec.use_default_dns=remote"
+	uci -q set "passwall.$vpn_acl_sec.filter_proxy_ipv6=0"
+	uci -q set passwall.@global[0].acl_enable=1
+	# Enable the IPv6 interception hook so MAC ACLs cannot silently leak IPv6.
+	if ! uci -q get oum.main.passwall_policy_previous_ipv6 >/dev/null; then
+		uci -q set "oum.main.passwall_policy_previous_ipv6=$(uci -q get passwall.@global_forwarding[0].ipv6_tproxy || echo 0)"
+	fi
+	uci -q set passwall.@global_forwarding[0].ipv6_tproxy=1
+else
+	[ -z "$vpn_acl_sec" ] || uci -q delete "passwall.$vpn_acl_sec"
+	previous_ipv6="$(uci -q get oum.main.passwall_policy_previous_ipv6 || true)"
+	if [ -n "$previous_ipv6" ]; then
+		uci -q set "passwall.@global_forwarding[0].ipv6_tproxy=$previous_ipv6"
+		uci -q delete oum.main.passwall_policy_previous_ipv6
+	fi
+fi
+uci commit passwall
+uci commit oum
+
 /etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
 
 # Updating an intentionally disabled PassWall instance does not require Xray

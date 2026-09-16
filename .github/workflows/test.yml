@@ -29,3 +29,12 @@ jobs:
         run: ./tests/test_contracts.sh
       - name: Backup codec
         run: ruby ./tests/test_backup_codec.rb
+      - name: Russia routing and game exclusions
+        run: ruby ./tests/test_russia_routing.rb
+      - name: Installer dependency and USB decisions
+        run: python3 ./tests/test_install_dependencies.py
+      - name: Routing selection and progress
+        run: |
+          node ./tests/test_podkop_selection.js
+          node ./tests/test_routing_progress.js
+          node ./tests/test_mobile_dns.js

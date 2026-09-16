@@ -16,3 +16,7 @@ artifacts/
 .impeccable/review/
 .playwright-cli/
 repository-history.bundle
+
+# Local development snapshots and diagnostics.
+/backups/
+/outputs/

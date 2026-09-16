@@ -273,3 +273,11 @@ Corners describe hierarchy. Inputs and buttons use compact 9px corners, inset ch
 - **Don't** use Signal Lime as decoration or a large fill.
 - **Don't** require hover, color vision, LuCI knowledge, or technical jargon to understand a primary task.
 - **Don't** visually imply changes to RPC, UCI, routing, rollback, permissions, or any other networking behavior.
+
+## OUM theme UX extension (2026-09-14)
+
+The current theme extends the existing OUM identity across native LuCI pages. Desktop keeps the sidebar and dense operational tables; mobile uses four native LuCI groups in a bottom navigation and keeps secondary row actions behind an Actions disclosure. Native editors use a fixed heading, independently scrolling form, and persistent actions; mobile editors become full screen. `oum-theme-ux.js` adds search, dirty-form protection, focus restoration, pending-change review with masked values, and system theme preference without replacing LuCI handlers or UCI/RPC semantics. OUM settings reuse the existing forms in a responsive section hub. Dashboard device data keeps stable ordering and shows stale timestamps only after a failed refresh.
+
+### Native wireless list
+
+`wireless-list.css` scopes the radio/network list to `#cbi-wireless-wifi-device` on the native wireless route. Radio rows retain a quiet surface; SSID is the strongest network text. Desktop uses badge / facts / actions columns; 901–1279px moves actions below facts; mobile stacks the same rows and wraps radio actions below 480px. Targets remain at least 44px tall. Native polling containers, button order and handlers remain untouched. There are no client-table or editor changes in this layer.

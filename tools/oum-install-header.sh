@@ -4,7 +4,7 @@ set -eu
 OUM_INSTALLER_VERSION='@OUM_INSTALLER_VERSION@'
 OUM_PAYLOAD_SHA256='@OUM_PAYLOAD_SHA256@'
 OUM_PAYLOAD_SIZE='@OUM_PAYLOAD_SIZE@'
-OUM_BASE_PACKAGES='luci-base rpcd rpcd-mod-ucode uhttpd uhttpd-mod-ubus curl ca-bundle ruby ruby-yaml unzip jsonfilter nftables-json iw iwinfo dnsmasq firewall4'
+OUM_BASE_PACKAGES='luci-base luci-mod-admin-full luci-app-firewall luci-app-package-manager luci-proto-ppp luci-proto-ipv6 luci-lib-uqr luci-i18n-base-ru luci-i18n-firewall-ru luci-i18n-package-manager-ru rpcd rpcd-mod-ucode rpcd-mod-file rpcd-mod-iwinfo rpcd-mod-luci uhttpd uhttpd-mod-ubus curl ca-bundle openssh-client ruby ruby-yaml unzip jsonfilter nftables-json iw iwinfo ip-full ppp ppp-mod-pppoe firewall4'
 
 oum_die() {
 	printf 'OUM installer: %s\n' "$*" >&2
@@ -70,9 +70,61 @@ oum_is_installed() {
 	[ -x /usr/libexec/oum-firstboot ] && [ -f /usr/share/luci/menu.d/luci-app-oum.json ]
 }
 
+# Detect the enabled controller even before its kernel driver is installed.
+# USB applications remain opt-in; only the detected controller belongs to base setup.
+oum_usb_controller_packages() {
+ tree="${OUM_DEVICE_TREE:-/sys/firmware/devicetree/base}"
+ [ -d "$tree" ] || return 0
+ find "$tree" -name compatible -type f | while IFS= read -r file; do
+  case "$(tr '\000' '\n' < "$file")" in
+   *mediatek,mtk-xhci*) ;;
+   *) continue ;;
+  esac
+  node="${file%/compatible}"
+  enabled=1
+  while [ "$node" != "$tree" ] && [ "$node" != / ]; do
+   if [ -f "$node/status" ]; then
+    case "$(tr -d '\000' < "$node/status")" in okay|ok) ;; *) enabled=0; break ;; esac
+   fi
+   node="${node%/*}"
+  done
+  [ "$enabled" = 1 ] || continue
+  printf '%s\n' kmod-usb3 kmod-usb-xhci-mtk
+ done | sort -u
+}
+
+oum_platform_preflight() {
+ . /etc/openwrt_release
+ case "${DISTRIB_RELEASE:-}" in 25.12.*) ;; *) oum_die 'OUM 0.0.1 requires OpenWrt 25.12; other releases are not validated' ;; esac
+ free_kb="$(df -Pk /overlay | awk 'NR == 2 { print $4 }')"
+ [ "${free_kb:-0}" -ge 8192 ] || oum_die 'at least 8 MiB free overlay space is required; export old backups first'
+ tmp_kb="$(df -Pk /tmp | awk 'NR == 2 { print $4 }')"
+ [ "${tmp_kb:-0}" -ge 16384 ] || oum_die 'at least 16 MiB temporary memory is required'
+ OUM_PLATFORM_PACKAGES=''
+ if [ -r /sys/firmware/devicetree/base/compatible ]; then
+  compatible="$(tr '\000' '\n' < /sys/firmware/devicetree/base/compatible)"
+  case "$compatible" in
+   *mediatek,mt7981*) OUM_PLATFORM_PACKAGES='kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware' ;;
+   *mediatek,mt7986*) OUM_PLATFORM_PACKAGES='kmod-mt7915e kmod-mt7986-firmware mt7986-wo-firmware' ;;
+  esac
+ fi
+ OUM_USB_PACKAGES="$(oum_usb_controller_packages)"
+ if [ -n "$OUM_USB_PACKAGES" ]; then
+  printf 'OUM USB: controller detected; storage and applications install when configured\n'
+ else
+  printf 'OUM USB: no supported controller detected; no USB packages requested\n'
+ fi
+ printf 'OUM platform: %s / %s / %s; kernel %s\n' "${DISTRIB_TARGET:-unknown}" "${DISTRIB_ARCH:-unknown}" "${DISTRIB_RELEASE:-unknown}" "$(uname -r)"
+ # apk resolves the kernel ABI from this firmware's signed feeds; never force kmods.
+}
+
 oum_install_base_packages() {
 	missing=''
-	for package in $OUM_BASE_PACKAGES; do
+	# Preserve dnsmasq-full: installing dnsmasq alongside it causes a conflict.
+ if ! apk info -e dnsmasq >/dev/null 2>&1 && ! apk info -e dnsmasq-full >/dev/null 2>&1; then
+  missing="$missing dnsmasq"
+ fi
+ for package in $OUM_BASE_PACKAGES ${OUM_PLATFORM_PACKAGES:-} ${OUM_USB_PACKAGES:-}; do
 		apk info -e "$package" >/dev/null 2>&1 || missing="$missing $package"
 	done
 	[ -n "$missing" ] || return 0
@@ -82,8 +134,9 @@ oum_install_base_packages() {
 }
 
 oum_install_package() {
-	oum_install_base_packages
+	oum_platform_preflight
 	oum_backup_current
+	oum_install_base_packages
 	mkdir -p "$OUM_INSTALL_TMP/package"
 	tar -xzf "$payload" -C "$OUM_INSTALL_TMP/package" || oum_die 'cannot unpack payload'
 	[ -x "$OUM_INSTALL_TMP/package/tools/install-luci-dev.sh" ] || oum_die 'invalid payload: installer missing'
@@ -92,10 +145,12 @@ oum_install_package() {
 		"$OUM_INSTALL_TMP/package/luci-app-oum" || oum_die 'installation failed; backup was preserved'
 	sh "$OUM_INSTALL_TMP/package/tools/install-theme-dev.sh" \
 		"$OUM_INSTALL_TMP/package/luci-theme-oum" || oum_die 'system theme installation failed; backup was preserved'
-	/usr/libexec/oum-awg-manager install || oum_die 'AmneziaWG package installation failed'
+	# VPN components are installed on demand.
+	uci -q set luci.main.lang='ru'
+	uci -q commit luci
 	mkdir -p /etc/oum
 	printf '%s\n' "$OUM_INSTALLER_VERSION" > /etc/oum/version
-	printf '%s\n' $OUM_BASE_PACKAGES > /etc/oum/base-packages
+	printf '%s\n' $OUM_BASE_PACKAGES ${OUM_PLATFORM_PACKAGES:-} ${OUM_USB_PACKAGES:-} > /etc/oum/base-packages
 	chmod 600 /etc/oum/version /etc/oum/base-packages
 
 	printf '\nOUM %s успешно установлен.\n' "$OUM_INSTALLER_VERSION"
