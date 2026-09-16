@@ -4,8 +4,8 @@ set -eu
 umask 077
 
 ACTION="${1:-}"
-UPDATE_URL='https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/refs/heads/agent/podkop-zapret-engine/dist/oum-install.sh'
-REVISION_URL='https://api.github.com/repos/ShockioOcki/openwrt-ultimate-manager/commits/agent/podkop-zapret-engine'
+UPDATE_URL='https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/refs/heads/main/dist/oum-install.sh'
+REVISION_URL='https://api.github.com/repos/ShockioOcki/openwrt-ultimate-manager/commits/main'
 BACKUP_DIR=/etc/oum/project-rollback
 INSTALLER=/tmp/oum-project-update.sh
 MANAGED_PATHS='etc/config/luci etc/config/oum etc/config/oum_theme etc/oum/version etc/oum/base-packages etc/oum/theme-previous-mediaurlbase usr/share/luci/menu.d/luci-app-oum.json usr/share/ucode/luci/controller/oum.uc usr/share/ucode/luci/template/themes/oum usr/share/rpcd/acl.d/luci-app-oum.json usr/share/rpcd/acl.d/luci-theme-oum.json usr/share/rpcd/ucode/oum usr/libexec/oum usr/share/oum www/luci-static/oum www/luci-static/resources/menu-oum.js www/luci-static/resources/view/oum'

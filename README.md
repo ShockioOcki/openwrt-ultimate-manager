@@ -3,7 +3,7 @@
 > Понятная панель управления OpenWrt: первоначальная настройка, Wi‑Fi, клиенты,
 > VPN-движки, выборочная маршрутизация, диагностика и безопасное восстановление.
 
-[![Проверки](https://github.com/ShockioOcki/openwrt-ultimate-manager/actions/workflows/test.yml/badge.svg?branch=agent%2Fpodkop-zapret-engine)](https://github.com/ShockioOcki/openwrt-ultimate-manager/actions/workflows/test.yml)
+[![Проверки](https://github.com/ShockioOcki/openwrt-ultimate-manager/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/ShockioOcki/openwrt-ultimate-manager/actions/workflows/test.yml)
 [![OpenWrt 25.12](https://img.shields.io/badge/OpenWrt-25.12-00B5E2?logo=openwrt&logoColor=white)](https://openwrt.org/)
 [![Лицензия MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Статус: тестирование](https://img.shields.io/badge/status-тестирование-orange.svg)](#статус-проекта)
@@ -15,7 +15,7 @@ OUM превращает сложную конфигурацию OpenWrt в ед
 
 > [!IMPORTANT]
 > Проект находится на стадии активного тестирования. Текущая версия проверяется
-> на Xiaomi Redmi Router AX6S с OpenWrt 25.12.3 (`mediatek/mt7622`,
+> на Xiaomi Redmi Router AX6S с OpenWrt 25.12.5 (`mediatek/mt7622`,
 > `aarch64_cortex-a53`). Перед использованием на другом устройстве необходима
 > отдельная проверка архитектуры, свободного места и способа восстановления.
 
@@ -25,7 +25,7 @@ OUM превращает сложную конфигурацию OpenWrt в ед
 выполните:
 
 ```sh
-wget -O /tmp/oum-install.sh "https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/refs/heads/agent/podkop-zapret-engine/dist/oum-install.sh" &&
+wget -O /tmp/oum-install.sh "https://github.com/ShockioOcki/openwrt-ultimate-manager/releases/download/v0.0.1/oum-install.sh" &&
 sh /tmp/oum-install.sh
 ```
 
@@ -291,22 +291,20 @@ GitHub Actions проверяет:
 
 ## Статус проекта
 
-Рабочая версия находится в ветке
-[`agent/podkop-zapret-engine`](https://github.com/ShockioOcki/openwrt-ultimate-manager/tree/agent/podkop-zapret-engine).
+Версия **0.0.1** — рабочий выпуск для дальнейшего тестирования. Исходники находятся в
+[`main`](https://github.com/ShockioOcki/openwrt-ultimate-manager/tree/main).
 
-Уже проверено на реальном AX6S:
+На AX6S с OpenWrt 25.12.5 проверены чистая установка, автоматические зависимости,
+первый запуск, согласованная тема и установка PassWall. Проверка всех VPN-туннелей,
+переключения движков и сторонних форм на этой сборке ещё не завершена.
 
-- установка и повторное обновление одним файлом;
-- резервное копирование предыдущей версии;
-- OpenClash, PassWall и Podkop + Zapret;
-- AWG и Reality для Podkop;
-- определение Wi-Fi/проводных клиентов;
-- маршрутизация сервисов и отдельных устройств.
-- безопасная замена `wpad-basic` на `wpad-mesh` и одновременная работа AP +
-  Mesh point на 5 ГГц.
+На Xiaomi CR6606 (прошивка сообщает CR6609) проверена базовая установка;
+VPN/Mesh-комплекты OUM для MIPS пока не поддерживаются. USB требует отдельной
+аппаратной проверки. Полная совместимость со всеми роутерами не заявляется.
 
-В следующих этапах: тестирование на других моделях, Mesh-связь между двумя роутерами, USB-модем,
-резервный WAN, NAS/AriaNG/MiniDLNA и подготовка стабильного релиза.
+Подробности: [аудит выпуска](docs/release-0.0.1.md),
+[AX6S](docs/test-ax6s-0.0.1.md), [CR6606](docs/test-cr6606-0.0.1.md),
+[инструкция](docs/guide.md).
 
 ## Лицензия
 
