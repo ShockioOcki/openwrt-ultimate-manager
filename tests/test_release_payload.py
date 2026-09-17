@@ -24,6 +24,12 @@ with tempfile.TemporaryDirectory() as temporary:
         archive.extractall(package)
     subprocess.run(['python3', str(ROOT / 'tools/audit-release.py'), str(package)], check=True)
     app = package / 'luci-app-oum'
+    offloading = package / 'tools/install-offloading.sh'
+    assert offloading.read_bytes() == (ROOT / 'tools/install-offloading.sh').read_bytes()
+    subprocess.run(['sh', '-n', str(offloading)], check=True)
+    header = blob[:-size].decode()
+    assert 'sh "$OUM_INSTALL_TMP/package/tools/install-offloading.sh" || oum_die' in header
+    assert 'kmod-nft-offload' in header.split("OUM_BASE_PACKAGES='")[1].split("'")[0]
     views = app / 'htdocs/luci-static/resources/view/oum'
     expected_views = {p.name for p in views.glob('*-v*.js')}
     assert len(expected_views) == 5

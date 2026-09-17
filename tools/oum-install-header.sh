@@ -4,7 +4,7 @@ set -eu
 OUM_INSTALLER_VERSION='@OUM_INSTALLER_VERSION@'
 OUM_PAYLOAD_SHA256='@OUM_PAYLOAD_SHA256@'
 OUM_PAYLOAD_SIZE='@OUM_PAYLOAD_SIZE@'
-OUM_BASE_PACKAGES='luci-base luci-mod-admin-full luci-app-firewall luci-app-package-manager luci-proto-ppp luci-proto-ipv6 luci-lib-uqr luci-i18n-base-ru luci-i18n-firewall-ru luci-i18n-package-manager-ru rpcd rpcd-mod-ucode rpcd-mod-file rpcd-mod-iwinfo rpcd-mod-luci uhttpd uhttpd-mod-ubus curl ca-bundle openssh-client ruby ruby-yaml unzip jsonfilter nftables-json iw iwinfo ip-full ppp ppp-mod-pppoe firewall4'
+OUM_BASE_PACKAGES='luci-base luci-mod-admin-full luci-app-firewall luci-app-package-manager luci-proto-ppp luci-proto-ipv6 luci-lib-uqr luci-i18n-base-ru luci-i18n-firewall-ru luci-i18n-package-manager-ru rpcd rpcd-mod-ucode rpcd-mod-file rpcd-mod-iwinfo rpcd-mod-luci uhttpd uhttpd-mod-ubus curl ca-bundle openssh-client ruby ruby-yaml unzip jsonfilter nftables-json iw iwinfo ip-full ppp ppp-mod-pppoe firewall4 kmod-nft-offload'
 
 oum_die() {
 	printf 'OUM installer: %s\n' "$*" >&2
@@ -37,6 +37,8 @@ oum_backup_current() {
 	set --
 	for absolute in \
 		/etc/config/luci \
+		/etc/config/firewall \
+		/usr/share/firewall4/templates/ruleset.uc \
 		/etc/config/oum \
 		/etc/config/proton2025 \
 		/etc/oum/proton-defaults-applied \
@@ -153,6 +155,8 @@ oum_install_package() {
 	sh "$OUM_INSTALL_TMP/package/tools/install-luci-dev.sh" \
 		"$OUM_INSTALL_TMP/package/luci-app-oum" || oum_die 'installation failed; backup was preserved'
 	sh "$OUM_INSTALL_TMP/package/tools/archive-luci-theme.sh" || oum_die 'cannot archive experimental LuCI theme; backup was preserved'
+	mkdir -p /etc/oum/rollback
+	sh "$OUM_INSTALL_TMP/package/tools/install-offloading.sh" || oum_die 'flow offloading setup failed; backup was preserved'
 	# VPN components are installed on demand.
 	uci -q set luci.main.lang='ru'
 	uci -q commit luci
