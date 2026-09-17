@@ -3936,6 +3936,14 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
 .oum-parental-sheet .oum-parental-days { justify-content: center; }
 .oum-parental-sheet .oum-parental-times .btn { flex: 1 1 100%; min-height: 44px; }
 
+/* Match the DNS select, excluding its label from button alignment. */
+@layer oum-form-buttons {
+  body.theme-oum #maincontent .oum-parental-global > #apply-global-adguard {
+    --oum-button-height: 42px;
+    align-self: flex-end !important;
+  }
+}
+
 .oum-passwall-tools { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--oum-line); }
 .oum-passwall-tools h4 { margin: 0 0 4px; }
 .oum-passwall-tool-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }

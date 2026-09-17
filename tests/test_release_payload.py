@@ -25,27 +25,33 @@ with tempfile.TemporaryDirectory() as temporary:
     subprocess.run(['python3', str(ROOT / 'tools/audit-release.py'), str(package)], check=True)
     app = package / 'luci-app-oum'
     views = app / 'htdocs/luci-static/resources/view/oum'
-    expected_views = {name + '-v1.js' for name in ['dashboard', 'settings', 'first-run', 'help', 'parental']}
-    assert {p.name for p in views.glob('*-v*.js')} == expected_views
+    expected_views = {p.name for p in views.glob('*-v*.js')}
+    assert len(expected_views) == 5
+    assert {re.fullmatch(r'(dashboard|settings|first-run|help|parental)-v1-[0-9a-f]{12}\.js', name).group(1) for name in expected_views} == {'dashboard', 'settings', 'first-run', 'help', 'parental'}
     assert not (views / 'oum.css').exists()
     assert (views / 'qrcode.min.js').is_file()
     menu = json.loads((app / 'root/usr/share/luci/menu.d/luci-app-oum.json').read_text())
     source_menu = json.loads((ROOT / 'luci-app-oum/root/usr/share/luci/menu.d/luci-app-oum.json').read_text())
     for route, entry in menu.items():
         action = entry.get('action', {})
-        if action.get('type') != 'view':
+        if action.get('type') not in ('view', 'template'):
             continue
+        assert action['type'] == 'template', 'OUM must select its theme per page'
+        template = app / 'root/usr/share/ucode/luci/template' / (action['path'] + '.ut')
+        assert template.read_text().count("http.redirect(dispatcher.build_url('oum'))") == 1
+        assert "{% include('view', { view: '" + action['path'] + "', theme: 'oum-app', media: '/luci-static/oum-app' }) %}\n" in template.read_text()
         view = views / (action['path'].split('/')[-1] + '.js')
         original = ROOT / 'luci-app-oum/htdocs/luci-static/resources/view' / (source_menu[route]['action']['path'] + '.js')
         normalized = re.sub(r'\?v=(?:202609[\w-]*|\d+)(?=[\x27"`])', '?v=1', original.read_text())
         css_hash = hashlib.sha256((app / 'htdocs/luci-static/resources/oum/oum.css').read_bytes()).hexdigest()[:12]
         normalized = normalized.replace("oum/oum.css')}?v=1`", "oum/oum.css')}?v=1&h=" + css_hash + '`')
         assert view.read_text() == normalized, 'View behavior changed: ' + route
+        assert view.stem.endswith('-' + hashlib.sha256(normalized.encode()).hexdigest()[:12])
         subprocess.run(['node', '--check', str(view)], check=True)
-    for name in ['luci-app-oum', 'luci-theme-oum']:
+    for name in ['luci-app-oum']:
         for css in (package / name / 'htdocs').rglob('*.css'):
             assert css.read_bytes() == (ROOT / css.relative_to(package)).read_bytes(), css.name
-    for name, script in [('luci-app-oum', 'install-luci-dev.sh'), ('luci-theme-oum', 'install-theme-dev.sh')]:
+    for name, script in [('luci-app-oum', 'install-luci-dev.sh'), ('luci-app-oum', 'install-proton.sh')]:
         text = (package / 'tools' / script).read_text()
         subprocess.run(['sh', '-n', str(package / 'tools' / script)], check=True)
         for reference in re.findall(r'\$SOURCE_DIR/([^"\n]+)', text):
@@ -62,19 +68,22 @@ with tempfile.TemporaryDirectory() as temporary:
     assert {p.name for p in installed.iterdir()} == expected_views | {'qrcode.min.js', 'unrelated.txt'}
     import shutil
     shutil.rmtree(installed)
-    theme = package / 'luci-theme-oum'
-    assert not (theme / 'htdocs/luci-static/resources/oum-theme-ux.js').exists()
-    assert hashlib.sha256((theme / 'htdocs/luci-static/oum/stock-layout.css').read_bytes()).hexdigest() == '863845c21e0e3844a7bd200cf020a73aa614237ee8b4450e1354af0d3b08fcc6'
-    for template in (theme / 'ucode/template/themes/oum').glob('*.ut'):
+    assert not (package / 'luci-theme-oum').exists()
+    assert not (package / 'experimental').exists()
+    assert not (package / 'tools/install-theme-dev.sh').exists()
+    shell = app / 'htdocs/luci-static/oum-app'
+    assert {p.name for p in shell.iterdir()} == {'bootstrap-base.css', 'bootstrap-mobile.css', 'cascade.css', 'buttons.css', 'compact-inputs.css', 'logo.svg', 'brand.svg'}
+    proton = app / 'root/usr/share/oum/packages/proton2025/luci-theme-proton2025-1.4.1-r1.apk'
+    assert hashlib.sha256(proton.read_bytes()).hexdigest() == '01a779aad7e26fec6e9ad4dde00cec9b0f44883b9c09b88083a498a6108fbb97'
+    assert (app / 'root/usr/share/oum/proton2025.defaults').read_bytes() == (ROOT / 'luci-app-oum/root/usr/share/oum/proton2025.defaults').read_bytes()
+    for template in (app / 'root/usr/share/ucode/luci/template/themes/oum-app').glob('*.ut'):
         text = template.read_text()
         for media, path in re.findall(r'\{\{ (media|resource) \}\}/([^?"\s]+)', text):
             if '{{' in path:
                 continue
-            if media == 'resource' and not (path.startswith('oum/') or path == 'oum-theme-ux.js'):
-                continue  # LuCI's own runtime assets are supplied by luci-base.
-            base = theme / 'htdocs/luci-static/oum' if media == 'media' else theme / 'htdocs/luci-static/resources'
-            if path.startswith('oum/') and media == 'resource':
-                base = app / 'htdocs/luci-static/resources'
+            if media == 'resource' and not path.startswith('oum/'):
+                continue  # LuCI runtime assets are supplied by luci-base.
+            base = shell if media == 'media' else app / 'htdocs/luci-static/resources'
             assert (base / path).exists(), (template.name, path)
     # Negative gate: do not print credential material when rejecting a release.
     secret = 'A' * 43 + '='
@@ -83,4 +92,4 @@ with tempfile.TemporaryDirectory() as temporary:
     result = subprocess.run(['python3', str(ROOT / 'tools/audit-release.py'), str(package)], capture_output=True, text=True)
     assert result.returncode != 0
     assert secret not in result.stdout + result.stderr
-print('Release payload: five active v1 views, unchanged CSS/behavior, assets present, credential gate OK')
+print('Release payload: five content-versioned views, unchanged CSS/behavior, Proton bundled, experimental theme excluded, credential gate OK')

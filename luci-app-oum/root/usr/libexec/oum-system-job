@@ -404,7 +404,7 @@ case "$ACTION" in
 	usb_swap_disable) write_status running stopping 'Отключаем swap на USB-накопителе…'; /usr/libexec/oum-usb-manager swap-disable || fail usb_swap_disable_failed 'Не удалось отключить swap. Не извлекайте накопитель.'; write_status success disabled 'Swap выключен; файл сохранён для быстрого повторного включения.' ;;
 	wisp) write_status running applying 'Подключаем репитер к выбранной Wi-Fi сети…'; apply_wisp ;;
 	adguard) write_status running applying 'Применяем DNS-фильтр…'; apply_adguard ;;
-	project_update) write_status running downloading 'Загружаем и проверяем новую версию OUM…'; /usr/libexec/oum-project-manager update || fail update_failed 'Обновление OUM не установилось; текущая версия сохранена.'; write_status success updated 'OUM обновлён. Интерфейс перезагружается.' ;;
+	project_update) write_status running downloading 'Загружаем и проверяем новую версию OUM…'; /usr/libexec/oum-project-manager update "$(json_value .revision)" "$(json_value .version)" || fail update_failed 'Обновление OUM не установилось; текущая версия сохранена. Проверьте обновления ещё раз.'; write_status success updated 'OUM обновлён. Интерфейс перезагружается.' ;;
 	project_rollback) write_status running rollback 'Восстанавливаем предыдущую версию OUM…'; /usr/libexec/oum-project-manager rollback || fail rollback_failed 'Не удалось восстановить предыдущую версию OUM.'; write_status success rolled_back 'Предыдущая версия OUM восстановлена.' ;;
 	rollback_wifi) write_status running rollback 'Восстанавливаем Wi-Fi…'; rollback_config wireless ;;
 	rollback_wan) write_status running rollback 'Восстанавливаем подключение…'; rollback_config network ;;

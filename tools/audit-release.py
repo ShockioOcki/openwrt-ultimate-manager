@@ -12,7 +12,7 @@ RULES = {
     'subscription URL': re.compile(rb'https?://(?:sub\.[A-Za-z0-9.-]+/|[A-Za-z0-9.-]+/sub/)[A-Za-z0-9_-]{8,}'),
 }
 PUBLIC_KEY = 'luci-app-oum/root/etc/oum/support/support_key.pub'
-CONFIGS = {'luci-app-oum/root/etc/config/oum', 'luci-theme-oum/root/etc/config/oum_theme'}
+CONFIGS = {'luci-app-oum/root/etc/config/oum'}
 
 
 def audit(root):

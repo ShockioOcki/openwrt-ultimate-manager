@@ -2,7 +2,7 @@
 
 set -eu
 
-SOURCE_DIR="${1:-luci-theme-oum}"
+SOURCE_DIR="${1:-experimental/luci-theme-oum}"
 [ -d "$SOURCE_DIR" ] || { echo "Directory not found: $SOURCE_DIR" >&2; exit 1; }
 
 mkdir -p \
@@ -89,8 +89,14 @@ test -s /www/luci-static/resources/menu-oum.js
 test -s /usr/share/ucode/luci/template/themes/oum/header.ut
 ! grep -q 'dispatcher.node()' /usr/share/ucode/luci/template/themes/oum/header.ut
 
-uci set luci.main.mediaurlbase='/luci-static/oum'
-uci commit luci
+# OUM pages select their own theme; preserve the user's standard LuCI theme.
+if [ "$(uci -q get luci.main.mediaurlbase)" = /luci-static/oum ]; then
+ previous="$(cat /etc/oum/theme-previous-mediaurlbase 2>/dev/null || true)"
+ case "$previous" in /luci-static/oum|'') previous=/luci-static/bootstrap ;; esac
+ [ -f "/usr/share/ucode/luci/template/themes/${previous##*/}/header.ut" ] || previous=/luci-static/bootstrap
+ uci set luci.main.mediaurlbase="$previous"
+ uci commit luci
+fi
 
 find /tmp -maxdepth 1 -name 'luci-indexcache*' -delete 2>/dev/null || true
 find /tmp/luci-modulecache -mindepth 1 -delete 2>/dev/null || true
@@ -102,5 +108,5 @@ fi
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd reload || /etc/init.d/uhttpd restart
 
-echo "OUM system theme installed and activated."
+echo "OUM page theme installed; standard LuCI theme preserved."
 echo "Fallback: uci set luci.main.mediaurlbase=/luci-static/bootstrap; uci commit luci; /etc/init.d/uhttpd reload"

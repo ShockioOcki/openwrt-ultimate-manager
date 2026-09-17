@@ -30,6 +30,18 @@ function failure(code, message) {
 	return { ok: false, code, message };
 }
 
+function checkProjectUpdateData() {
+	let process = popen('/usr/libexec/oum-project-manager check 2>/dev/null');
+	if (!process)
+		return failure('update_check_failed', 'Не удалось проверить обновления. Попробуйте ещё раз.');
+	let result = {};
+	try { result = json(process) ?? {}; } catch (err) {}
+	let code = process.close();
+	if (code != 0 || result.ok != true)
+		return failure('update_check_failed', 'Не удалось проверить обновления. Проверьте доступ к интернету и повторите попытку.');
+	return result;
+}
+
 function writePrivate(path, value) {
 	let file = open(path, 'w');
 	if (!file)
@@ -2081,11 +2093,35 @@ const methods = {
 		}
 	},
 
+	checkProjectUpdate: {
+		call: function() { return checkProjectUpdateData(); }
+	},
+
 	updateProject: {
-		call: function() {
+		args: { revision: '', version: '' },
+		call: function(request) {
 			if (!access('/usr/libexec/oum-project-manager'))
 				return failure('runtime_missing', 'Менеджер обновлений OUM не установлен.');
-			return startSystemJob('project_update', {});
+			let revision = request.args.revision ?? '';
+			let version = request.args.version ?? '';
+			// Old cached views call updateProject without a target. Check only; never install.
+			if (!length(revision) && !length(version)) {
+				if (configurationBusy())
+					return failure('configuration_busy', 'Дождитесь завершения текущей операции.');
+				let result = checkProjectUpdateData();
+				if (result.ok != true) return result;
+				if (configurationBusy())
+					return failure('configuration_busy', 'Дождитесь завершения текущей операции.');
+				let message = result.available ? `Доступна версия ${result.version}. Обновите страницу, чтобы перейти к установке.` :
+					`Установлена актуальная версия ${result.installed_version}. Обновлений нет.`;
+				if (system(`mkdir -p ${SYSTEM_JOB_DIR}`) != 0 ||
+					!writePrivate(`${SYSTEM_JOB_DIR}/status`, `state=success\naction=project_check\ncode=checked\nmessage=${message}\n`))
+					return failure('update_check_status', 'Не удалось сохранить результат проверки. Обновите страницу.');
+				return { ...result, message, action: 'project_check', state: 'success' };
+			}
+			if (!match(revision, /^[a-f0-9]{40}$/) || !match(version, /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/))
+				return failure('update_check_required', 'Сначала проверьте наличие обновления OUM.');
+			return startSystemJob('project_update', { revision, version });
 		}
 	},
 

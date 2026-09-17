@@ -1,0 +1,106 @@
+/* Shared form actions. Important layer wins over legacy page-specific overrides.
+ * Keep native display, widths, ordering, hidden states and event handlers. */
+@layer oum-form-buttons {
+  body.theme-oum { --oum-button-height: 36px; --oum-button-radius: 9px; }
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]) {
+    box-sizing: border-box !important; min-height: var(--oum-button-height) !important;
+    height: auto !important; align-self: center !important; padding: 7px 8px !important;
+    border: 1px solid var(--oum-line-strong) !important;
+    border-radius: var(--oum-button-radius) !important;
+    background: var(--oum-paper) !important; color: var(--oum-ink) !important;
+    box-shadow: none !important; font: 500 12px/20px var(--oum-font) !important;
+    text-align: center !important; align-items: center !important; justify-content: center !important;
+    text-decoration: none !important; text-shadow: none !important;
+    white-space: normal !important; word-break: normal !important; overflow-wrap: normal !important;
+  }
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]):is(.primary, .cbi-button-action, .cbi-button-edit, .cbi-button-positive, .cbi-button-save, .cbi-button-apply, .cbi-button-add) {
+    border-color: var(--oum-action) !important; color: var(--oum-action) !important;
+  }
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]):is(.cbi-button-negative, .cbi-button-remove, .cbi-button-reset) {
+    border-color: color-mix(in srgb, var(--oum-bad) 45%, var(--oum-line)) !important;
+    color: var(--oum-bad) !important;
+    background: color-mix(in srgb, var(--oum-bad) 10%, var(--oum-paper)) !important;
+  }
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]):hover:not(:disabled):not([disabled]) { background: var(--oum-paper-soft) !important; }
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]):focus-visible { outline: 2px solid var(--oum-action) !important; outline-offset: 2px !important; }
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]):is(:disabled, [disabled]) { opacity: .5 !important; cursor: not-allowed !important; }
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]).cbi-dropdown { padding: 0 !important; align-items: stretch !important; overflow: visible !important; }
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]).cbi-dropdown > ul:not(.dropdown) { margin: 0 !important; padding: 7px 8px !important; align-items: center !important; }
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]).cbi-dropdown > .open {
+    position: relative !important; align-self: stretch !important;
+    width: 36px !important; min-width: 36px !important; padding: 0 !important; margin: 0 !important;
+    border-left: 1px solid currentColor !important; font-size: 0 !important;
+  }
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]).cbi-dropdown > .open::after {
+    content: ''; position: absolute; top: 50%; left: 50%; margin-top: -1.5px;
+    width: 7px; height: 7px; border-right: 2px solid currentColor !important; border-bottom: 2px solid currentColor !important;
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]).down { border-color: var(--oum-warn) !important; color: var(--oum-warn) !important; }
+  body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]):is([data-active="true"], [aria-pressed="true"]) { border-color: var(--oum-action) !important; background: var(--oum-action-soft) !important; color: var(--oum-action) !important; }
+  html[data-theme="dark"] body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]):is(.primary, .cbi-button-action, .cbi-button-edit, .cbi-button-positive, .cbi-button-save, .cbi-button-apply, .cbi-button-add, [data-active="true"], [aria-pressed="true"]) { color: #8db1ff !important; }
+  html[data-theme="dark"] body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]):is(.cbi-button-negative, .cbi-button-remove, .cbi-button-reset) { color: #ffaaa3 !important; }
+  html[data-theme="dark"] body.theme-oum :is(#maincontent, #modal_overlay) :is(.btn, .cbi-button, input[type="button"], input[type="submit"], input[type="reset"]).down { color: #f2bc70 !important; }
+body.theme-oum :is(#maincontent, #modal_overlay) .cbi-dropdown:is(.btn, .cbi-button)[open] > ul.dropdown {
+  position: absolute !important; inset: auto auto calc(100% + 8px) 0 !important;
+  width: max-content !important; min-width: 100% !important; max-width: calc(100vw - 32px) !important;
+  max-height: min(240px, 50vh) !important; margin: 0 !important; padding: 6px !important;
+  border: 1px solid var(--oum-line-strong) !important; border-radius: 12px !important;
+  background: var(--oum-paper) !important; color: var(--oum-ink) !important;
+  box-shadow: none !important; text-align: left !important; overflow-y: auto !important;
+}
+body.theme-oum :is(#maincontent, #modal_overlay) .cbi-dropdown:is(.btn, .cbi-button)[open] > ul.dropdown > li {
+  box-sizing: border-box; min-height: 44px !important; padding: 10px 12px !important;
+  border: 0 !important; border-radius: 7px; background: transparent !important;
+  color: var(--oum-ink) !important; font-size: 14px !important; line-height: 1.4 !important;
+  font-weight: 500 !important; white-space: normal !important;
+}
+body.theme-oum :is(#maincontent, #modal_overlay) .cbi-dropdown:is(.btn, .cbi-button)[open] > ul.dropdown > li:is([selected], :hover, .focus) { background: var(--oum-paper-soft) !important; }
+body.theme-oum :is(#maincontent, #modal_overlay) .cbi-dropdown:is(.btn, .cbi-button)[open] > ul.dropdown > li:focus-visible { outline: 2px solid var(--oum-action) !important; outline-offset: -2px; }
+
+}
+
+@layer oum-form-buttons {
+ body.theme-oum #maincontent .cbi-page-actions { display: flex !important; flex-wrap: wrap !important; align-items: center !important; justify-content: flex-end !important; gap: 8px !important; width: 100% !important; }
+ body.theme-oum #maincontent .cbi-page-actions > :is(button,.btn,.cbi-button) { flex: 0 0 auto !important; width: auto !important; min-width: 0 !important; margin: 0 !important; }
+ body.theme-oum #maincontent .cbi-page-actions > .cbi-button-apply { margin-left: 0 !important; }
+ body.theme-oum #maincontent .cbi-page-actions > .cbi-button-apply[open] > ul.dropdown { inset: auto 0 calc(100% + 8px) auto !important; }
+ body.theme-oum #maincontent #cbi-wireless-wifi-device .oum-radio-row .cbi-section-actions .cbi-button { padding-inline: 4px !important; }
+}
+
+@layer oum-form-buttons {
+ body.theme-oum #maincontent .cbi-page-actions::before, body.theme-oum #maincontent .cbi-page-actions::after { display: none !important; }
+ body.theme-oum #maincontent .cbi-page-actions .cbi-dropdown > ul:not(.dropdown) > li { font: inherit !important; }
+}
+
+/* Consistent select chevrons and comfortable field insets. */
+@layer oum-form-buttons {
+ body.theme-oum :is(#maincontent,#modal_overlay) select:not([multiple]) { appearance:none !important; -webkit-appearance:none !important; padding-left:12px !important; padding-right:34px !important; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%23627068' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important; background-repeat:no-repeat !important; background-position:right 12px center !important; background-size:12px !important; }
+ html[data-theme="dark"] body.theme-oum :is(#maincontent,#modal_overlay) select:not([multiple]) { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%23dce5ee' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown:not(.btn):not(.cbi-button) > .open { display:flex !important; align-items:center !important; justify-content:center !important; width:32px !important; min-width:32px !important; align-self:stretch !important; padding:0 !important; font-size:0 !important; color:var(--oum-ink) !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown:not(.btn):not(.cbi-button) > .open::after { content:'' !important; display:block !important; position:static !important; width:6px !important; height:6px !important; margin:-3px 0 0 !important; border:solid currentColor !important; border-width:0 1.7px 1.7px 0 !important; transform:rotate(45deg) !important; background:none !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown:not(.btn):not(.cbi-button) > .open::before { display:none !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown:not(.btn):not(.cbi-button):not([open]) > ul { padding-left:12px !important; }
+}
+
+@layer oum-form-buttons {
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown:not(.btn):not(.cbi-button)[open] > ul.dropdown { box-sizing:border-box !important; background:var(--oum-paper) !important; color:var(--oum-ink) !important; border:1px solid var(--oum-line-strong) !important; border-radius:10px !important; padding:4px !important; margin:5px 0 0 !important; box-shadow:0 6px 18px rgb(0 0 0 / 18%) !important; overflow-y:auto !important; overflow-x:hidden !important; scrollbar-width:thin; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown:not(.btn):not(.cbi-button)[open] > ul.dropdown > li { box-sizing:border-box !important; min-height:40px !important; padding:9px 8px !important; border:0 !important; border-radius:6px !important; background:transparent !important; color:var(--oum-ink) !important; font:400 12px/1.6 var(--oum-font) !important; white-space:normal !important; overflow-wrap:anywhere !important; -webkit-tap-highlight-color:transparent !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown:not(.btn):not(.cbi-button)[open] > ul.dropdown > li[selected] { color:var(--oum-action) !important; font-weight:500 !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown:not(.btn):not(.cbi-button)[open] > ul.dropdown > li:focus-visible { outline:1px solid var(--oum-action) !important; outline-offset:-1px; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown[open] > ul.dropdown > li > label { white-space:normal !important; -webkit-tap-highlight-color:transparent !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown[open] > ul.dropdown input[type="checkbox"] { appearance:none !important; width:18px !important; height:18px !important; min-width:18px !important; margin:0 8px 0 0 !important; vertical-align:middle !important; border:1px solid var(--oum-line-strong) !important; border-radius:5px !important; background:var(--oum-paper-soft) !important; box-shadow:none !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown[open] > ul.dropdown input[type="checkbox"]:checked { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 12 4 4 10-10' fill='none' stroke='%2338bdf8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important; background-position:center !important; background-size:16px !important; background-repeat:no-repeat !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown[open] > ul.dropdown input[type="checkbox"]::before,
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown[open] > ul.dropdown input[type="checkbox"]::after { display:none !important; }
+ body.theme-oum :is(#maincontent,#modal_overlay) .cbi-dropdown[open] > ul.dropdown .create-item-input { box-sizing:border-box !important; width:100% !important; min-width:0 !important; margin:0 !important; padding:8px 10px !important; border:1px solid var(--oum-line-strong) !important; border-radius:8px !important; background:var(--oum-paper-soft) !important; color:var(--oum-ink) !important; }
+}
+
+@layer oum-form-buttons {
+ @media(max-width:900px) {
+ body.theme-oum[data-page="admin-network-firewall-zones"] #maincontent td.cbi-section-actions { width:auto !important; min-width:0 !important; grid-column:1 / -1 !important; }
+ body.theme-oum[data-page="admin-network-firewall-zones"] #maincontent td.cbi-section-actions > div { display:flex !important; flex-wrap:wrap !important; justify-content:flex-end !important; align-items:center !important; width:100% !important; gap:8px !important; }
+ body.theme-oum[data-page="admin-network-firewall-zones"] #maincontent td.cbi-section-actions > div > button { flex:0 0 auto !important; width:auto !important; min-width:36px !important; max-width:100% !important; margin:0 !important; }
+ }
+}

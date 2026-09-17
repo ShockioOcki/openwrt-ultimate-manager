@@ -12,8 +12,17 @@ mkdir -p /etc/config /usr/share/luci/menu.d /usr/share/ucode/luci/controller /us
 	/usr/libexec/oum /www/luci-static/resources/view/oum /www/luci-static/resources/oum /etc/init.d /etc/oum/support
 
 [ -f /etc/config/oum ] || cp "$SOURCE_DIR/root/etc/config/oum" /etc/config/oum
+mkdir -p /www/luci-static/oum-app /usr/share/ucode/luci/template/themes/oum-app
+cp "$SOURCE_DIR/htdocs/luci-static/oum-app/"* /www/luci-static/oum-app/
+cp "$SOURCE_DIR/htdocs/luci-static/resources/menu-oum-app.js" /www/luci-static/resources/menu-oum-app.js
+for template in "$SOURCE_DIR/root/usr/share/ucode/luci/template/themes/oum-app/"*.ut; do
+	cat "$template" > "/usr/share/ucode/luci/template/themes/oum-app/${template##*/}"
+done
+chmod 644 /www/luci-static/oum-app/* /www/luci-static/resources/menu-oum-app.js /usr/share/ucode/luci/template/themes/oum-app/*.ut
 cp "$SOURCE_DIR/root/usr/share/luci/menu.d/luci-app-oum.json" /usr/share/luci/menu.d/luci-app-oum.json
 cp "$SOURCE_DIR/root/usr/share/ucode/luci/controller/oum.uc" /usr/share/ucode/luci/controller/oum.uc
+mkdir -p /usr/share/ucode/luci/template/oum
+cp "$SOURCE_DIR/root/usr/share/ucode/luci/template/oum/"*.ut /usr/share/ucode/luci/template/oum/
 cp "$SOURCE_DIR/root/usr/share/rpcd/acl.d/luci-app-oum.json" /usr/share/rpcd/acl.d/luci-app-oum.json
 cp "$SOURCE_DIR/root/usr/share/rpcd/ucode/oum" /usr/share/rpcd/ucode/oum
 cp "$SOURCE_DIR/root/usr/libexec/oum-firstboot" /usr/libexec/oum-firstboot
@@ -114,6 +123,7 @@ chmod 600 /usr/libexec/oum/source_converter.rb
 mkdir -p /usr/share/oum
 cp -R "$SOURCE_DIR/root/usr/share/oum/routing" /usr/share/oum/
 cp "$SOURCE_DIR/root/usr/share/oum/zapret-youtube-strategies" /usr/share/oum/zapret-youtube-strategies
+cp "$SOURCE_DIR/root/usr/share/oum/proton2025.defaults" /usr/share/oum/proton2025.defaults
 rm -rf /usr/share/oum/packages
 cp -R "$SOURCE_DIR/root/usr/share/oum/packages" /usr/share/oum/packages
 chmod 644 /usr/share/oum/zapret-youtube-strategies

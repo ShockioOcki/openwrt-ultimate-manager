@@ -378,4 +378,7 @@ if grep -Rq 'test_speedtest_yaml' "$ROOT/.github"; then
 	exit 1
 fi
 
+python3 "$ROOT/tests/test_project_update.py"
+node "$ROOT/tests/test_project_update_ui.js"
+
 printf 'OUM contract tests: OK\n'

@@ -5,6 +5,8 @@
 #}
 
 {%
+	import { access } from 'fs';
+	const oum_proton_sync = access('/www/luci-static/proton2025/js/settings-sync.js');
 	const boardinfo = ubus.call('system', 'board') || {};
 	const oum_setup = ubus.call('uci', 'get', { config: 'oum', section: 'main' })?.values || {};
 	const oum_setup_complete = oum_setup.setup_complete == '1';
@@ -77,6 +79,9 @@
 		{% if (css): %}<style title="text/css">{{ css }}</style>{% endif %}
 		<script src="{{ dispatcher.build_url('admin/translations', dispatcher.lang) }}"></script>
 		<script src="{{ resource }}/cbi.js"></script>
+		{% if (oum_proton_sync): %}
+		<script defer src="/luci-static/proton2025/js/settings-sync.js?v=20260917-oum-theme1"></script>
+		{% endif %}
 	<link rel="stylesheet" href="{{ media }}/clients.css?v=20260914-layout1">
 	<link rel="stylesheet" href="{{ media }}/radios.css?v=20260914-radio4">
 <script defer src="{{ media }}/radios.js?v=20260915-desktop1"></script>

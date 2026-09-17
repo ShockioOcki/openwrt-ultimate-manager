@@ -184,6 +184,8 @@
 				localStorage.setItem('oum-theme-mode', mode);
 				var select=document.getElementById('oum-theme-select'); if(select)select.value=mode;
 				localStorage.setItem('oum-theme', mode);
+				// Proton's native settings sync persists this preference to the router.
+				localStorage.setItem('proton-theme-mode', mode);
 				applyMode(mode);
 				var themeColor = document.querySelector('meta[name="theme-color"]');
 				if (themeColor) themeColor.setAttribute('content', root.getAttribute('data-theme') === 'dark' ? '#0f1622' : '#eef0ea');
@@ -323,7 +325,7 @@
 			ensureMobileBottomNav();
 			window.setTimeout(ensureMobileBottomNav, 500);
 		})();
-		L.require('menu-oum').then(function() { window.dispatchEvent(new Event('resize')); });
+		L.require('menu-oum-app').then(function() { window.dispatchEvent(new Event('resize')); });
 		</script>
 		{% endif %}
 	</body>

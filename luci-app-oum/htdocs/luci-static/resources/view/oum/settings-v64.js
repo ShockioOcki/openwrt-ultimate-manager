@@ -48,7 +48,8 @@ const callCreateBackup = rpc.declare({ object: 'oum', method: 'createBackup', ex
 const callRestoreBackup = rpc.declare({ object: 'oum', method: 'restoreBackup', params: [ 'data' ], expect: { '': {} } });
 const callResetVpn = rpc.declare({ object: 'oum', method: 'resetVpn', expect: { '': {} } });
 const callResetFirstRun = rpc.declare({ object: 'oum', method: 'resetFirstRun', expect: { '': {} } });
-const callUpdateProject = rpc.declare({ object: 'oum', method: 'updateProject', expect: { '': {} } });
+const callCheckProjectUpdate = rpc.declare({ object: 'oum', method: 'checkProjectUpdate', expect: { '': {} } });
+const callUpdateProject = rpc.declare({ object: 'oum', method: 'updateProject', params: [ 'revision', 'version' ], expect: { '': {} } });
 const callRollbackProject = rpc.declare({ object: 'oum', method: 'rollbackProject', expect: { '': {} } });
 const callGearupStatus = rpc.declare({ object: 'oum', method: 'gearupStatus', expect: { '': {} } });
 const callInstallGearup = rpc.declare({ object: 'oum', method: 'installGearup', expect: { '': {} } });
@@ -214,6 +215,7 @@ return view.extend({
 		const usb = settings.usb_storage || { available: false, host_present: false, storage_attached: false, runtime_ready: false, disk: '', partition: '', size_bytes: 0, vendor: '', model: '', fs_type: '', uuid: '', mountpoint: '', mounted: false, smb_installed: false, smb_enabled: false, smb_running: false, smb_share: '', aria2_installed: false, aria2_enabled: false, aria2_running: false, ariang_ready: false, aria2_dir: '', aria2_secret_b64: '', dlna_installed: false, dlna_enabled: false, dlna_running: false, dlna_media_dir: '', sorter_installed: false, sorter_enabled: false, tmdb_key_set: false, sorter_last_run: 0, sorter_result: '', sorter_message: '', swap_present: false, swap_enabled: false, swap_size_bytes: 0, swap_used_bytes: 0 };
 		const project = settings.project || { version: 'development', rollback: false };
 		const projectUpdatable = project.version && project.version !== 'development';
+		const projectVersion = String(project.version || '').split('+')[0];
 		const dns = settings.dns || {
 			openclash: '1.1.1.1', bootstrap_openclash: '1.0.0.1',
 			passwall: '1.1.1.1', bootstrap_passwall: '1.0.0.1',
@@ -609,12 +611,14 @@ return view.extend({
 					E('div', { 'class': 'oum-maintenance-card' }, [
 						E('h4', {}, 'Обновление проекта'),
 						E('p', { 'class': 'oum-help' }, projectUpdatable ?
-							`Установлена версия ${project.version}. Перед обновлением OUM автоматически сохраняет предыдущую версию интерфейса и служб.` :
+							`Установлена версия ${projectVersion}. Перед обновлением OUM автоматически сохраняет предыдущую версию интерфейса и служб.` :
 							'Установлена локальная версия для разработки. Онлайн-обновление станет доступно после установки опубликованной сборки.'),
 						E('div', { 'class': 'oum-setting-actions' }, [
-							E('button', { 'class': 'btn cbi-button-action', id: 'update-project', disabled: projectUpdatable ? null : '', 'data-system-action': '' }, 'Проверить и обновить'),
+							E('button', { 'class': 'btn cbi-button-action', id: 'check-project-update', disabled: projectUpdatable ? null : '', 'data-system-action': '' }, 'Проверить обновления'),
+							E('button', { 'class': 'btn cbi-button-action', id: 'update-project', hidden: '', disabled: '', 'data-system-action': '' }, 'Обновить'),
 							E('button', { 'class': 'btn', id: 'rollback-project', disabled: project.rollback ? null : '', 'data-system-action': '' }, 'Откатить версию')
-						])
+						]),
+						E('p', { 'class': 'oum-help', id: 'project-update-status', role: 'status', 'aria-live': 'polite', hidden: '' })
 					]),
 					E('div', { 'class': 'oum-maintenance-card' }, [
 						E('h4', {}, 'Резервная копия'),
@@ -1305,9 +1309,41 @@ const isOperationJob = (status) => Object.prototype.hasOwnProperty.call(operatio
 			if (!await confirmation('Восстановить копию?', 'Сеть, Wi-Fi, OUM и VPN будут заменены данными из файла. При ошибке текущие настройки сохранятся.', 'Восстановить', true)) return;
 			start(file.text().then((content) => callRestoreBackup(content.trim())));
 		});
-		root.querySelector('#update-project').addEventListener('click', async () => {
-			if (await confirmation('Обновить OUM?', 'Будет загружена и проверена текущая закреплённая версия проекта. Перед установкой OUM сохранит локальный снимок для отката. Сеть и VPN не перенастраиваются.', 'Обновить', false))
-				start(callUpdateProject());
+		let projectUpdate = null;
+		const checkProjectButton = root.querySelector('#check-project-update');
+		const updateProjectButton = root.querySelector('#update-project');
+		const projectUpdateStatus = root.querySelector('#project-update-status');
+		checkProjectButton.addEventListener('click', async () => {
+			projectUpdate = null;
+			updateProjectButton.hidden = true;
+			updateProjectButton.disabled = true;
+			checkProjectButton.disabled = true;
+			checkProjectButton.textContent = 'Проверяем…';
+			projectUpdateStatus.hidden = false;
+			projectUpdateStatus.textContent = 'Проверяем наличие новой версии OUM…';
+			try {
+				const result = resultError(await callCheckProjectUpdate(), 'Не удалось проверить обновления.');
+				if (result.available) {
+					projectUpdate = result;
+					projectUpdateStatus.textContent = `Доступна версия ${result.version}.`;
+					updateProjectButton.textContent = `Обновить до ${result.version}`;
+					updateProjectButton.hidden = false;
+					updateProjectButton.disabled = false;
+				} else {
+					projectUpdateStatus.textContent = `Установлена актуальная версия ${projectVersion}. Обновлений нет.`;
+				}
+			} catch (error) {
+				projectUpdateStatus.textContent = error.message || 'Не удалось проверить обновления. Попробуйте ещё раз.';
+			} finally {
+				checkProjectButton.disabled = false;
+				checkProjectButton.textContent = 'Проверить обновления';
+			}
+		});
+		updateProjectButton.addEventListener('click', async () => {
+			const update = projectUpdate;
+			if (!update) return;
+			if (await confirmation(`Обновить OUM до ${update.version}?`, 'Перед установкой OUM сохранит предыдущую версию для отката. Интерфейс перезагрузится после обновления.', 'Обновить', false))
+				start(callUpdateProject(update.revision, update.version));
 		});
 		root.querySelector('#rollback-project').addEventListener('click', async () => {
 			if (await confirmation('Откатить OUM?', 'Интерфейс и системные службы OUM вернутся к версии, сохранённой перед последним обновлением. Настройки сети и VPN останутся на месте.', 'Откатить версию', true))
@@ -1707,7 +1743,7 @@ const isOperationJob = (status) => Object.prototype.hasOwnProperty.call(operatio
 		const vpnState = engineMissing ? 'Не установлен' : `${engineTitle}${engineVersion ? ` · ${engineVersion}` : ''}`;
 		const maintenanceTitles = [ 'Обновление проекта', 'Резервная копия', 'Восстановление', 'Сброс' ];
 		const maintenanceDescriptions = [
-			projectUpdatable ? `Установлена версия ${project.version}` : 'Локальная версия проекта',
+			projectUpdatable ? `Установлена версия ${projectVersion}` : 'Локальная версия проекта',
 			'Скачать настройки OUM и сети',
 			'Загрузить ранее сохранённую копию',
 			'Сброс VPN или повторный первый запуск'

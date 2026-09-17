@@ -1,0 +1,5 @@
+{% if (!length(ctx.request_path)): %}
+{% http.redirect(dispatcher.build_url('oum')); %}
+{% else %}
+{% include('view', { view: 'oum/parental-v5', theme: 'oum-app', media: '/luci-static/oum-app' }) %}
+{% endif %}

@@ -4,11 +4,10 @@ set -eu
 umask 077
 
 ACTION="${1:-}"
-UPDATE_URL='https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/refs/heads/main/dist/oum-install.sh'
 REVISION_URL='https://api.github.com/repos/ShockioOcki/openwrt-ultimate-manager/commits/main'
 BACKUP_DIR=/etc/oum/project-rollback
-INSTALLER=/tmp/oum-project-update.sh
-MANAGED_PATHS='etc/config/luci etc/config/oum etc/config/oum_theme etc/oum/version etc/oum/base-packages etc/oum/theme-previous-mediaurlbase usr/share/luci/menu.d/luci-app-oum.json usr/share/ucode/luci/controller/oum.uc usr/share/ucode/luci/template/themes/oum usr/share/rpcd/acl.d/luci-app-oum.json usr/share/rpcd/acl.d/luci-theme-oum.json usr/share/rpcd/ucode/oum usr/libexec/oum usr/share/oum www/luci-static/oum www/luci-static/resources/menu-oum.js www/luci-static/resources/view/oum'
+INSTALLER=''
+MANAGED_PATHS='etc/config/proton2025 etc/oum/proton-defaults-applied usr/share/ucode/luci/template/themes/oum-app www/luci-static/oum-app www/luci-static/resources/menu-oum-app.js www/luci-static/resources/oum etc/config/luci etc/config/oum etc/config/oum_theme etc/oum/version etc/oum/base-packages etc/oum/theme-previous-mediaurlbase usr/share/luci/menu.d/luci-app-oum.json usr/share/ucode/luci/controller/oum.uc usr/share/ucode/luci/template/themes/oum usr/share/ucode/luci/template/oum usr/share/rpcd/acl.d/luci-app-oum.json usr/share/rpcd/acl.d/luci-theme-oum.json usr/share/rpcd/ucode/oum usr/libexec/oum usr/share/oum www/luci-static/oum www/luci-static/resources/menu-oum.js www/luci-static/resources/view/oum'
 
 snapshot() {
 	mkdir -p "$BACKUP_DIR"
@@ -33,12 +32,53 @@ latest_backup() {
 	ls -1t "$BACKUP_DIR"/oum-*.tar.gz 2>/dev/null | head -n 1
 }
 
-update_project() {
-	revision="$(curl -fsSL --connect-timeout 15 --retry 3 "$REVISION_URL?oum_update=$(date +%s)" | jsonfilter -e '@.sha')"
+valid_version() {
+	printf '%s\n' "$1" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+}
+
+newer_version() {
+	awk -v candidate="$1" -v installed="$2" 'BEGIN {
+		split(candidate, a, "."); split(installed, b, ".");
+		for (i = 1; i <= 3; i++) {
+			if (a[i] + 0 > b[i] + 0) exit 0;
+			if (a[i] + 0 < b[i] + 0) exit 1;
+		}
+		exit 1;
+	}'
+}
+
+fetch_release() {
+	revision="$1"
 	[ "${#revision}" -eq 40 ] || return 1
 	case "$revision" in *[!a-f0-9]*) return 1 ;; esac
+	installed_version="$(cat /etc/oum/version 2>/dev/null || true)"
+	installed_version="${installed_version%%+*}"
+	valid_version "$installed_version" || return 1
+	INSTALLER="$(mktemp /tmp/oum-project-update.XXXXXX)"
+	trap 'rm -f "$INSTALLER"' EXIT
+	trap 'exit 1' INT TERM
 	url="https://raw.githubusercontent.com/ShockioOcki/openwrt-ultimate-manager/$revision/dist/oum-install.sh"
-	curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$INSTALLER" "$url"
+	curl -fsSL --connect-timeout 4 --max-time 8 -o "$INSTALLER" "$url"
+	# Read metadata only: checking for an update must never execute the installer.
+	release_id="$(head -n 8 "$INSTALLER" | sed -n "s/^OUM_INSTALLER_VERSION='\([^']*\)'$/\1/p")"
+	release_version="${release_id%%+*}"
+	valid_version "$release_version" || return 1
+}
+
+check_project() {
+	revision="$(curl -fsSL --connect-timeout 4 --max-time 8 "$REVISION_URL?oum_update=$(date +%s)" | jsonfilter -e '@.sha')"
+	fetch_release "$revision"
+	available=false
+	if newer_version "$release_version" "$installed_version"; then available=true; fi
+	printf '{"ok":true,"installed_version":"%s","version":"%s","revision":"%s","available":%s}\n' "$installed_version" "$release_version" "$revision" "$available"
+}
+
+update_project() {
+	expected_version="$2"
+	valid_version "$expected_version" || return 1
+	fetch_release "$1"
+	[ "$release_version" = "$expected_version" ] || return 1
+	newer_version "$release_version" "$installed_version" || return 1
 	chmod 700 "$INSTALLER"
 	sh "$INSTALLER" --check
 	snapshot
@@ -66,11 +106,12 @@ rollback_project() {
 }
 
 case "$ACTION" in
-	update) update_project ;;
+	check) check_project ;;
+	update) update_project "${2:-}" "${3:-}" ;;
 	rollback) rollback_project ;;
 	status)
 		printf 'version=%s\n' "$(cat /etc/oum/version 2>/dev/null || echo development)"
 		backup="$(latest_backup)"; printf 'rollback=%s\n' "${backup:-}"
 		;;
-	*) printf 'usage: %s {update|rollback|status}\n' "$0" >&2; exit 2 ;;
+	*) printf 'usage: %s {check|update REVISION VERSION|rollback|status}\n' "$0" >&2; exit 2 ;;
 esac

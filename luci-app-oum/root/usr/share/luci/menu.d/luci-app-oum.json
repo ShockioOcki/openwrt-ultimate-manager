@@ -1,70 +1,89 @@
 {
 	"oum": {
 		"title": "OUM",
-		"order": 90,
+		"order": 1,
 		"action": {
 			"type": "firstchild"
 		},
 		"auth": {
-			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ],
+			"methods": [
+				"cookie:sysauth_https",
+				"cookie:sysauth_http"
+			],
 			"login": true
 		}
 	},
 	"oum/setup": {
 		"firstchild_ineligible": true,
 		"action": {
-			"type": "view",
+			"type": "template",
 			"path": "oum/first-run-v4"
 		},
 		"depends": {
-			"acl": [ "luci-app-oum" ]
+			"acl": [
+				"luci-app-oum"
+			]
 		}
 	},
 	"oum/dashboard": {
 		"title": "Главная",
 		"order": 2,
 		"action": {
-			"type": "view",
+			"type": "template",
 			"path": "oum/dashboard-v64"
 		},
 		"depends": {
-			"acl": [ "luci-app-oum" ],
-			"uci": { "oum": true }
+			"acl": [
+				"luci-app-oum"
+			],
+			"uci": {
+				"oum": true
+			}
 		}
 	},
 	"oum/settings": {
 		"title": "Настройки",
 		"order": 4,
 		"action": {
-			"type": "view",
+			"type": "template",
 			"path": "oum/settings-v64"
 		},
 		"depends": {
-			"acl": [ "luci-app-oum" ],
-			"uci": { "oum": true }
+			"acl": [
+				"luci-app-oum"
+			],
+			"uci": {
+				"oum": true
+			}
 		}
 	},
 	"oum/parental": {
 		"title": "Родительский контроль",
 		"order": 3,
 		"action": {
-			"type": "view",
+			"type": "template",
 			"path": "oum/parental-v5"
 		},
 		"depends": {
-			"acl": [ "luci-app-oum" ],
-			"uci": { "oum": true }
+			"acl": [
+				"luci-app-oum"
+			],
+			"uci": {
+				"oum": true
+			}
 		}
 	},
 	"oum/help": {
 		"title": "Помощь",
 		"order": 5,
 		"action": {
-			"type": "view",
+			"type": "template",
 			"path": "oum/help-v5"
 		},
 		"depends": {
-			"acl": [ "luci-app-oum" ]
+			"acl": [
+				"luci-app-oum"
+			]
 		}
 	},
 	"oum/logout": {
@@ -75,7 +94,9 @@
 			"function": "action_logout"
 		},
 		"depends": {
-			"acl": [ "luci-app-oum" ]
+			"acl": [
+				"luci-app-oum"
+			]
 		}
 	}
 }

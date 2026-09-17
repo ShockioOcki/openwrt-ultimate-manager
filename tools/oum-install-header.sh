@@ -38,6 +38,8 @@ oum_backup_current() {
 	for absolute in \
 		/etc/config/luci \
 		/etc/config/oum \
+		/etc/config/proton2025 \
+		/etc/oum/proton-defaults-applied \
 		/usr/share/luci/menu.d/luci-app-oum.json \
 		/usr/share/ucode/luci/controller/oum.uc \
 		/usr/share/rpcd/acl.d/luci-app-oum.json \
@@ -46,8 +48,13 @@ oum_backup_current() {
 		/usr/libexec/oum-* \
 		/usr/share/oum \
 		/www/luci-static/resources/view/oum \
+		/www/luci-static/resources/oum \
+		/www/luci-static/oum-app \
+		/www/luci-static/resources/menu-oum-app.js \
+		/usr/share/ucode/luci/template/themes/oum-app \
 		/etc/config/oum_theme \
 		/usr/share/ucode/luci/template/themes/oum \
+		/usr/share/ucode/luci/template/oum \
 		/usr/share/rpcd/acl.d/luci-theme-oum.json \
 		/www/luci-static/oum \
 		/www/luci-static/resources/menu-oum.js
@@ -95,7 +102,7 @@ oum_usb_controller_packages() {
 
 oum_platform_preflight() {
  . /etc/openwrt_release
- case "${DISTRIB_RELEASE:-}" in 25.12.*) ;; *) oum_die 'OUM 0.0.1 requires OpenWrt 25.12; other releases are not validated' ;; esac
+ case "${DISTRIB_RELEASE:-}" in 25.12.*) ;; *) oum_die 'OUM requires OpenWrt 25.12; other releases are not validated' ;; esac
  free_kb="$(df -Pk /overlay | awk 'NR == 2 { print $4 }')"
  [ "${free_kb:-0}" -ge 8192 ] || oum_die 'at least 8 MiB free overlay space is required; export old backups first'
  tmp_kb="$(df -Pk /tmp | awk 'NR == 2 { print $4 }')"
@@ -141,10 +148,11 @@ oum_install_package() {
 	tar -xzf "$payload" -C "$OUM_INSTALL_TMP/package" || oum_die 'cannot unpack payload'
 	[ -x "$OUM_INSTALL_TMP/package/tools/install-luci-dev.sh" ] || oum_die 'invalid payload: installer missing'
 
+	sh "$OUM_INSTALL_TMP/package/tools/install-proton.sh" \
+		"$OUM_INSTALL_TMP/package/luci-app-oum" || oum_die 'Proton installation failed; backup was preserved'
 	sh "$OUM_INSTALL_TMP/package/tools/install-luci-dev.sh" \
 		"$OUM_INSTALL_TMP/package/luci-app-oum" || oum_die 'installation failed; backup was preserved'
-	sh "$OUM_INSTALL_TMP/package/tools/install-theme-dev.sh" \
-		"$OUM_INSTALL_TMP/package/luci-theme-oum" || oum_die 'system theme installation failed; backup was preserved'
+	sh "$OUM_INSTALL_TMP/package/tools/archive-luci-theme.sh" || oum_die 'cannot archive experimental LuCI theme; backup was preserved'
 	# VPN components are installed on demand.
 	uci -q set luci.main.lang='ru'
 	uci -q commit luci
