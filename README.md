@@ -21,15 +21,15 @@ OUM превращает сложную конфигурацию OpenWrt в ед
 
 ## Быстрая установка
 
-Для версии **0.0.2** подключитесь к роутеру по SSH под `root` и
+Для версии **0.0.3** подключитесь к роутеру по SSH под `root` и
 выполните:
 
 ```sh
-wget -O /tmp/oum-install.sh "https://github.com/ShockioOcki/openwrt-ultimate-manager/releases/download/v0.0.2/oum-install.sh" &&
+wget -O /tmp/oum-install.sh "https://github.com/ShockioOcki/openwrt-ultimate-manager/releases/download/v0.0.3/oum-install.sh" &&
 sh /tmp/oum-install.sh
 ```
 
-Установщик **0.0.2** также находится в `dist/oum-install.sh`.
+Установщик **0.0.3** также находится в `dist/oum-install.sh`.
 
 Установщик:
 
@@ -293,7 +293,7 @@ GitHub Actions проверяет:
 
 ## Статус проекта
 
-Версия **0.0.2** — рабочий выпуск для дальнейшего тестирования. Исходники находятся в
+Версия **0.0.3** — рабочий выпуск для дальнейшего тестирования. Исходники находятся в
 [`main`](https://github.com/ShockioOcki/openwrt-ultimate-manager/tree/main).
 
 На AX6S с OpenWrt 25.12.5 проверены чистая установка, автоматические зависимости,
@@ -304,7 +304,7 @@ GitHub Actions проверяет:
 VPN/Mesh-комплекты OUM для MIPS пока не поддерживаются. USB требует отдельной
 аппаратной проверки. Полная совместимость со всеми роутерами не заявляется.
 
-Подробности: [изменения 0.0.2](docs/release-0.0.2.md), [аудит 0.0.1](docs/release-0.0.1.md),
+Подробности: [изменения 0.0.3](docs/release-0.0.3.md), [изменения 0.0.2](docs/release-0.0.2.md), [аудит 0.0.1](docs/release-0.0.1.md),
 [AX6S](docs/test-ax6s-0.0.1.md), [CR6606](docs/test-cr6606-0.0.1.md),
 [инструкция](docs/guide.md).
 

@@ -256,7 +256,7 @@ return view.extend({
 				E('span', { 'class': 'oum-sr-only' }, viaVpn ? 'Через VPN' : (item.id === 'youtube' ? 'Напрямую + Zapret' : 'Напрямую')),
 				E('input', { type: 'radio', name: `route_${item.id}`, value: 'vpn', 'data-community-route': item.id, checked: viaVpn ? '' : null }),
 				E('input', { type: 'radio', name: `route_${item.id}`, value: 'direct', 'data-community-route': item.id, checked: !viaVpn ? '' : null }),
-				E('span', { 'class': 'oum-route-icon', 'aria-hidden': 'true' }, E('img', { src: `/luci-static/oum/icons/${routeIcons[item.id] || 'ui-globe.svg'}`, alt: '' })),
+				E('span', { 'class': 'oum-route-icon', 'aria-hidden': 'true' }, E('img', { src: `/luci-static/resources/oum/icons/${routeIcons[item.id] || 'ui-globe.svg'}`, alt: '' })),
 				E('strong', {}, item.label),
 				...(item.id === 'youtube' ? [ E('small', { 'class': 'oum-route-zapret', hidden: viaVpn ? '' : null }, 'Zapret') ] : [])
 			]);
@@ -279,11 +279,11 @@ return view.extend({
 			E('div', { 'class': 'oum-warning', id: 'unmanaged-tunnel-warning', hidden: '' }),
 			E('div', { 'class': 'oum-warning', id: 'reboot-required-warning', hidden: '' }, 'После замены VPN-движка рекомендуется перезагрузить роутер из раздела «Настройки».'),
 			E('div', { 'class': 'oum-cards' }, [
-				E('div', { 'class': 'oum-card' }, [ E('img', { 'class': 'oum-metric-icon', src: '/luci-static/oum/icons/ui-globe.svg?v=2', width: '48', height: '48', alt: '' }), E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
-				E('div', { 'class': 'oum-card oum-client-metric' }, [ E('div', {}, [ E('img', { 'class': 'oum-metric-icon', src: '/luci-static/oum/icons/ui-users.svg?v=1', width: '48', height: '48', alt: '' }), E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, '') ]), E('button', { 'class': 'oum-qr-tile', id: 'show-wifi-qr', type: 'button', disabled: '', title: 'Подготавливаем QR-код Wi-Fi' }, [ E('canvas', { 'class': 'oum-qr-preview', id: 'wifi-qr-preview', hidden: '', 'aria-hidden': 'true' }), E('span', { 'class': 'oum-qr-placeholder', 'aria-hidden': 'true' }, '•••'), E('small', {}, 'Wi‑Fi QR') ]) ]),
-				E('div', { 'class': 'oum-card' }, [ E('img', { 'class': 'oum-metric-icon oum-temperature-icon', src: '/luci-static/oum/icons/ui-temperature.svg?v=1', width: '48', height: '48', alt: '' }), E('small', {}, 'Температура'), E('strong', { id: 'health-state', 'class': 'oum-health' }, '—'), E('div', { id: 'health-detail', 'class': 'oum-muted' }, 'Максимум по датчикам') ]),
+				E('div', { 'class': 'oum-card' }, [ E('img', { 'class': 'oum-metric-icon', src: '/luci-static/resources/oum/icons/ui-globe.svg?v=2', width: '48', height: '48', alt: '' }), E('small', {}, 'Интернет'), E('strong', { id: 'wan-state' }, ''), E('div', { id: 'wan-detail', 'class': 'oum-muted' }, '') ]),
+				E('div', { 'class': 'oum-card oum-client-metric' }, [ E('div', {}, [ E('img', { 'class': 'oum-metric-icon', src: '/luci-static/resources/oum/icons/ui-users.svg?v=1', width: '48', height: '48', alt: '' }), E('small', {}, 'Клиенты'), E('strong', { id: 'client-count' }, '0'), E('div', { id: 'wifi-detail', 'class': 'oum-muted' }, '') ]), E('button', { 'class': 'oum-qr-tile', id: 'show-wifi-qr', type: 'button', disabled: '', title: 'Подготавливаем QR-код Wi-Fi' }, [ E('canvas', { 'class': 'oum-qr-preview', id: 'wifi-qr-preview', hidden: '', 'aria-hidden': 'true' }), E('span', { 'class': 'oum-qr-placeholder', 'aria-hidden': 'true' }, '•••'), E('small', {}, 'Wi‑Fi QR') ]) ]),
+				E('div', { 'class': 'oum-card' }, [ E('img', { 'class': 'oum-metric-icon oum-temperature-icon', src: '/luci-static/resources/oum/icons/ui-temperature.svg?v=1', width: '48', height: '48', alt: '' }), E('small', {}, 'Температура'), E('strong', { id: 'health-state', 'class': 'oum-health' }, '—'), E('div', { id: 'health-detail', 'class': 'oum-muted' }, 'Максимум по датчикам') ]),
 				E('div', { 'class': 'oum-card oum-vpn-metric' }, [
-					E('img', { 'class': 'oum-metric-icon', src: '/luci-static/oum/icons/ui-vpn.svg?v=2', width: '48', height: '48', alt: '' }),
+					E('img', { 'class': 'oum-metric-icon', src: '/luci-static/resources/oum/icons/ui-vpn.svg?v=2', width: '48', height: '48', alt: '' }),
 					E('small', {}, 'VPN-движок'),
 					E('div', { 'class': 'oum-vpn-card-row' }, [
 						E('strong', { id: 'active-source' }, sourceNames[dashboard.active_source] || dashboard.active_source),
@@ -396,9 +396,9 @@ return view.extend({
 							E('span', { id: 'podkop-transport-label' }), E('span', { id: 'podkop-tunnel' }), E('span', { id: 'podkop-routing' }), E('span', { id: 'podkop-route-kind' })
 						]),
 						E('div', { 'class': 'oum-mobile-podkop-actions', 'aria-label': 'Разделы Podkop' }, [
-							E('button', { type: 'button', 'data-mobile-podkop': 'routing' }, [ E('span', { 'class': 'oum-mobile-podkop-icon', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/oum/icons/ui-services.svg?v=1', alt: '' })), E('strong', {}, 'Сервисы') ]),
-							E('button', { type: 'button', 'data-mobile-podkop': 'domains' }, [ E('span', { 'class': 'oum-mobile-podkop-icon', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/oum/icons/ui-globe.svg?v=2', alt: '' })), E('strong', {}, 'Домены') ]),
-							E('button', { type: 'button', 'data-mobile-podkop': 'diagnostics' }, [ E('span', { 'class': 'oum-mobile-podkop-icon', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/oum/icons/ui-diagnostics.svg?v=1', alt: '' })), E('strong', {}, 'Диагностика') ])
+							E('button', { type: 'button', 'data-mobile-podkop': 'routing' }, [ E('span', { 'class': 'oum-mobile-podkop-icon', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/resources/oum/icons/ui-services.svg?v=1', alt: '' })), E('strong', {}, 'Сервисы') ]),
+							E('button', { type: 'button', 'data-mobile-podkop': 'domains' }, [ E('span', { 'class': 'oum-mobile-podkop-icon', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/resources/oum/icons/ui-globe.svg?v=2', alt: '' })), E('strong', {}, 'Домены') ]),
+							E('button', { type: 'button', 'data-mobile-podkop': 'diagnostics' }, [ E('span', { 'class': 'oum-mobile-podkop-icon', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/resources/oum/icons/ui-diagnostics.svg?v=1', alt: '' })), E('strong', {}, 'Диагностика') ])
 						]),
 						E('div', { 'class': 'oum-tabs' }, [
 							E('button', { 'class': 'oum-tab', 'data-podkop-tab': 'routing', 'data-active': 'true' }, 'Сервисы'),
@@ -1014,7 +1014,7 @@ return view.extend({
 					E('strong', {}, client.name),
 					E('small', {}, `${client.ip || 'Без IP'} · ${client.medium === 'wifi' ? 'Wi-Fi' : (client.medium === 'ethernet' ? 'Кабель' : 'Подключение')}`)
 				]),
-				E('span', { 'class': 'oum-mobile-client-tune', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/oum/icons/ui-tune.svg?v=2', alt: '' }))
+				E('span', { 'class': 'oum-mobile-client-tune', 'aria-hidden': 'true' }, E('img', { src: '/luci-static/resources/oum/icons/ui-tune.svg?v=2', alt: '' }))
 			]);
 			if ((!editingAliasMac || !activeEditor) && !body.contains(document.activeElement) && !offlineBody.contains(document.activeElement)) {
 				body.replaceChildren(...visibleClients.map((client) => E('tr', { 'class': client.paused ? 'oum-client-paused' : '' }, [
@@ -1745,7 +1745,7 @@ return view.extend({
 		                  const isVpn=row.querySelector('input[value="vpn"]')?.checked;
 		                  const pill=document.createElement("span"); pill.className="pill"+(isVpn?" active":"");
                   const iconName = (typeof routeIcons !== 'undefined' && row.getAttribute('data-route-row') && routeIcons[row.getAttribute('data-route-row')]) ? routeIcons[row.getAttribute('data-route-row')] : 'ui-globe.svg';
-                  const icon = document.createElement("img"); icon.src="/luci-static/oum/icons/"+iconName; icon.alt=""; icon.style.width="14px"; icon.style.height="14px"; icon.style.flexShrink="0";
+                  const icon = document.createElement("img"); icon.src="/luci-static/resources/oum/icons/"+iconName; icon.alt=""; icon.style.width="14px"; icon.style.height="14px"; icon.style.flexShrink="0";
                   pill.dataset.routePill=row.dataset.routeRow; pill.style.display=row.hidden?"none":"inline-flex"; pill.style.alignItems="center"; pill.style.gap="6px";
                   pill.appendChild(icon);
                   pill.appendChild(document.createTextNode(" "+label));

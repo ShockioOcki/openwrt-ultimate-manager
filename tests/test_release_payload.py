@@ -62,6 +62,24 @@ with tempfile.TemporaryDirectory() as temporary:
     for name in expected_views | {'dashboard-v64.js', 'help-v3.js', 'oum.css', 'qrcode.min.js', 'unrelated.txt'}:
         (installed / name).write_text('keep or remove')
     script = (package / 'tools/install-luci-dev.sh').read_text()
+    # A clean install must provide every dashboard icon without the old theme.
+    icon_start = script.index('mkdir -p /www/luci-static/resources/oum/icons')
+    icon_end = script.index('chmod 644 /www/luci-static/resources/oum/icons/*.svg', icon_start)
+    icon_install = script[icon_start:script.index('\n', icon_end)]
+    webroot = package / 'fake-www'
+    icon_install = icon_install.replace('/www/', str(webroot) + '/')
+    subprocess.run(['sh', '-eu', '-c', 'SOURCE_DIR="$1"\n' + icon_install, 'install-icons', str(app)], check=True)
+    dashboard = next(views.glob('dashboard-v*.js')).read_text()
+    assert '/luci-static/oum/icons/' not in dashboard, 'Dashboard still depends on the archived theme'
+    icon_names = set(re.findall(r'[\w-]+\.svg', dashboard))
+    assert {'ui-globe.svg', 'ui-vpn.svg', 'ui-users.svg', 'ui-temperature.svg'} <= icon_names
+    import xml.etree.ElementTree as ET
+    for name in icon_names:
+        installed_icon = webroot / 'luci-static/resources/oum/icons' / name
+        assert installed_icon.read_bytes() == (app / 'htdocs/luci-static/resources/oum/icons' / name).read_bytes()
+        assert ET.parse(installed_icon).getroot().tag == '{http://www.w3.org/2000/svg}svg'
+    import shutil
+    shutil.rmtree(webroot)
     cleanup = script[script.index('for old_view in '):script.index('rm -f /tmp/luci-indexcache')]
     cleanup = cleanup.replace('/www/luci-static/resources/view/oum', str(installed))
     subprocess.run(['sh', '-eu', '-c', cleanup], check=True)

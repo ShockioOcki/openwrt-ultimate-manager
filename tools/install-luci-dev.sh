@@ -85,6 +85,9 @@ cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/help-v5.js" /www/luci-stat
 cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/qrcode.min.js" /www/luci-static/resources/view/oum/qrcode.min.js
 cp "$SOURCE_DIR/htdocs/luci-static/resources/view/oum/qrcode.min.js.LICENSE.txt" /www/luci-static/resources/view/oum/qrcode.min.js.LICENSE.txt
 cp "$SOURCE_DIR/htdocs/luci-static/resources/oum/oum.css" /www/luci-static/resources/oum/oum.css
+mkdir -p /www/luci-static/resources/oum/icons
+cp "$SOURCE_DIR/htdocs/luci-static/resources/oum/icons/"*.svg /www/luci-static/resources/oum/icons/
+chmod 644 /www/luci-static/resources/oum/icons/*.svg
 
 chmod 755 /usr/libexec/oum-parental-cron
 chmod 755 /usr/libexec/oum-passwall-route-check
