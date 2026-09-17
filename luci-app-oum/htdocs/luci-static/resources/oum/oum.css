@@ -4217,3 +4217,12 @@ html[data-theme="dark"] [data-route-pill]:not([data-route-pill^="russia_"]) > im
 .oum-route-row[data-route-row^="russia_"] .oum-route-icon img { filter:none!important; }
 html[data-theme="dark"] .oum-route-row:has(input[value="vpn"]:checked):not([data-route-row^="russia_"]) .oum-route-icon img,
 html[data-theme="dark"] [data-route-pill].active:not([data-route-pill^="russia_"]) > img { filter:brightness(0) invert(1); }
+
+/* The same activation progress is a centered dialog on desktop and a sheet on mobile. */
+@media (min-width: 901px) {
+ #oum-activation-sheet { align-items:center; padding:24px; }
+ #oum-activation-sheet .oum-activation-panel { border-radius:16px!important; padding:24px!important; gap:16px!important; }
+ #oum-activation-sheet .oum-mobile-menu-handle { display:none; }
+ #oum-activation-sheet .oum-act-title { font-size:18px; }
+ #oum-activation-sheet :is(.oum-act-desc,.oum-act-step,.oum-act-result) { font-size:14px; }
+}

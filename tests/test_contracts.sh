@@ -380,5 +380,6 @@ fi
 
 python3 "$ROOT/tests/test_project_update.py"
 node "$ROOT/tests/test_project_update_ui.js"
+node "$ROOT/tests/test_activation_progress.js"
 
 printf 'OUM contract tests: OK\n'

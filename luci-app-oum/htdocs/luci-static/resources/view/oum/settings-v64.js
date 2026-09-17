@@ -275,7 +275,7 @@ return view.extend({
 				(!usb.runtime_ready ? 'Накопитель найден · нужны драйверы' :
 					(!usb.disk ? 'Драйверы установлены · переподключите накопитель' :
 						(usb.mounted ? `${usbName} · ${formatBytes(usb.size_bytes)} · подключён` : `${usbName} · ${formatBytes(usb.size_bytes)} · не подключён`))));
-		const smbAddress = `\\\\${lan.address || '192.168.5.1'}\\OUM`;
+		const smbAddress = `smb://${lan.address || '192.168.5.1'}/OUM`;
 		const ariaHost = lan.address || '192.168.5.1';
 		const ariangUrl = `http://${ariaHost}/ariang/#!/settings/rpc/set?protocol=http&host=${ariaHost}&port=6800&interface=jsonrpc&secret=${usb.aria2_secret_b64 || ''}`;
 		const sorterNote = usb.sorter_enabled ? (usb.sorter_result === 'waiting' ? 'Ждёт завершения загрузок' : (usb.sorter_message || 'Проверка каждые 5 минут')) : 'TMDB · фильмы и сериалы';
@@ -1149,14 +1149,7 @@ const isOperationJob = (status) => Object.prototype.hasOwnProperty.call(operatio
 		}
 		importButton.addEventListener('click', (event) => {
 			event.preventDefault();
-			const payload = configInput.value.trim();
-			if (!payload) return showVpnJob({ state: 'failed', message: 'Введите данные подключения.' });
-			showVpnJob({ state: 'running', message: 'Запускаем безопасный импорт…' });
-			callStartVpnImport(selectedSource, payload).then((result) => {
-				resultError(result, 'Не удалось запустить импорт.');
-				configInput.value = '';
-				watchVpnJob();
-			}).catch((error) => showVpnJob({ state: 'failed', message: error.message }));
+			openActivationSheet(selectedSource, configInput.value.trim());
 		});
 
 		root.querySelector('#apply-wifi').addEventListener('click', async () => {
@@ -1484,20 +1477,22 @@ const isOperationJob = (status) => Object.prototype.hasOwnProperty.call(operatio
 			if (section) { section.hidden = false; section.open = true; }
 		};
 		const openActivationSheet = (kind, payload) => {
+			if (importButton.disabled) return;
+			const opener = document.activeElement;
+			const title = kind === 'subscription' ? 'Активация подписки' : kind === 'awg' ? 'Активация туннеля' : 'Активация подключения';
 			const steps = kind === 'subscription'
 				? ['Проверка формата', 'Загрузка подписки', 'Установка и активация']
 				: ['Проверка формата', 'Установка и активация'];
-			const order = kind === 'subscription' ? ['queued', 'preparing', 'downloading', 'activating'] : ['queued', 'preparing', 'activating'];
 			let ov = document.getElementById('oum-activation-sheet');
 			if (ov) ov.remove();
 			ov = E('div', { id: 'oum-activation-sheet', hidden: '' }, [
-				E('div', { 'class': 'oum-mobile-menu-panel oum-activation-panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Активация ключа' }, [
+				E('div', { 'class': 'oum-mobile-menu-panel oum-activation-panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, [
 					E('span', { 'class': 'oum-mobile-menu-handle', 'aria-hidden': 'true' }),
-					E('div', { 'class': 'oum-act-title' }, 'Активация ключа'),
+					E('div', { 'class': 'oum-act-title' }, title),
 					E('div', { 'class': 'oum-act-desc' }, kind === 'subscription' ? 'Проверяем формат, загружаем подписку и безопасно активируем подключение.' : 'Проверяем формат и безопасно активируем подключение.'),
 					E('div', { 'class': 'oum-act-steps' }, steps.map(s=>E('div', { 'class': 'oum-act-step', 'data-state': 'pending' }, [E('span', { 'class': 'oum-act-ico', 'aria-hidden': 'true' }), E('span', {}, s)]))),
 					E('div', { 'class': 'oum-act-bar' }, [E('span', { 'class': 'oum-act-fill' })]),
-					E('div', { 'class': 'oum-act-result', hidden: '' }),
+					E('div', { 'class': 'oum-act-result', hidden: '', role: 'status', 'aria-live': 'polite' }),
 					E('button', { type: 'button', 'class': 'oum-mobile-menu-btn oum-act-hide', 'data-act-close': '' }, 'Скрыть')
 				])
 			]);
@@ -1506,17 +1501,28 @@ const isOperationJob = (status) => Object.prototype.hasOwnProperty.call(operatio
 			const stepEls = Array.from(panel.querySelectorAll('.oum-act-step'));
 			const fill = panel.querySelector('.oum-act-fill');
 			const resBox = panel.querySelector('.oum-act-result');
-			let stopped = false;
-			const closeAct = () => { stopped = true; ov.hidden = true; document.body.classList.remove('oum-act-open'); };
-			panel.querySelector('[data-act-close]').addEventListener('click', closeAct);
+			const closeButton = panel.querySelector('[data-act-close]');
+			const closeAct = () => {
+				ov.hidden = true;
+				document.body.classList.remove('oum-act-open');
+				vpnJobNode.hidden = false;
+				document.removeEventListener('keydown', onKeyDown);
+				if (opener?.isConnected && !opener.disabled) opener.focus();
+			};
+			const onKeyDown = (ev) => {
+				if (ov.hidden) return;
+				if (ev.key === 'Escape') closeAct();
+				if (ev.key === 'Tab') { ev.preventDefault(); closeButton.focus(); }
+			};
+			closeButton.addEventListener('click', closeAct);
 			ov.addEventListener('click', (ev) => { if (ev.target === ov) closeAct(); });
-			document.addEventListener('keydown', function escAct(ev) { if (ev.key === 'Escape' && !ov.hidden) { closeAct(); document.removeEventListener('keydown', escAct); } });
+			document.addEventListener('keydown', onKeyDown);
 			let touchY = null;
 			panel.addEventListener('touchstart', (ev) => { if (ev.touches.length === 1) touchY = ev.touches[0].clientY; }, { passive: true });
 			panel.addEventListener('touchend', (ev) => { if (touchY == null || !ev.changedTouches.length) return; if (ev.changedTouches[0].clientY - touchY > 90) closeAct(); touchY = null; }, { passive: true });
 			const stageStep = kind === 'subscription'
-				? { queued: 0, preparing: 0, downloading: 1, activating: 2 }
-				: { queued: 0, preparing: 0, activating: 1 };
+				? { queued: 0, preparing: 0, downloading: 1, importing: 2, activating: 2 }
+				: { queued: 0, preparing: 0, importing: 1, activating: 1 };
 			let lastStep = 0;
 			const paint = (code, state, message) => {
 				let activeIdx;
@@ -1540,25 +1546,27 @@ const isOperationJob = (status) => Object.prototype.hasOwnProperty.call(operatio
 						resBox.textContent = message || (state === 'success' ? 'Подключение активировано' : 'Не удалось активировать');
 					} else { resBox.hidden = true; }
 				}
-				const mirror = document.getElementById('vpn-job-status');
-				if (mirror) { mirror.dataset.state = state || 'idle'; mirror.textContent = message || ''; }
+				showVpnJob({ state, code, message });
+				vpnJobNode.hidden = !ov.hidden;
+				closeButton.textContent = state === 'running' ? 'Скрыть' : 'Закрыть';
 				const mobMirror = document.getElementById('vpn-job-mobile');
 				if (mobMirror) mobMirror.textContent = message || '';
 			};
 			const poll = () => {
-				if (stopped) return;
 				callVpnJobStatus().then((job) => {
 					paint(job.code || '', job.state || 'idle', job.message || '');
-					if (!stopped && job.state === 'running') window.setTimeout(poll, 1500);
-				}).catch(() => { if (!stopped) window.setTimeout(poll, 2000); });
+					if (job.state === 'running') window.setTimeout(poll, 1500);
+				}).catch(() => { window.setTimeout(poll, 2000); });
 			};
 			ov.hidden = false;
 			document.body.classList.add('oum-act-open');
+			closeButton.focus();
 			paint('queued', 'running', 'Запускаем безопасный импорт…');
 			if (!payload) { paint('', 'failed', 'Введите данные подключения.'); return; }
 			callStartVpnImport(kind, payload).then((result) => {
 				try { resultError(result, 'Не удалось запустить импорт.'); }
 				catch (e) { paint('', 'failed', e.message); return; }
+				configInput.value = '';
 				poll();
 			}).catch((e) => paint('', 'failed', e.message));
 		};
