@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-OUM_INSTALLER_VERSION='0.0.4+22d88224be9b'
-OUM_PAYLOAD_SHA256='8fe77cffc7321892b522900d3daedd4dd5e161e7a8f5afbe711a00165f9afcd9'
+OUM_INSTALLER_VERSION='0.0.5+8cbacb4198f4'
+OUM_PAYLOAD_SHA256='922f14da7879509008d12483e0e64bf5bfe4f44d005c097c785c8830d97fd191'
 OUM_PAYLOAD_SIZE='2182797'
 OUM_BASE_PACKAGES='luci-base luci-mod-admin-full luci-app-firewall luci-app-package-manager luci-proto-ppp luci-proto-ipv6 luci-lib-uqr luci-i18n-base-ru luci-i18n-firewall-ru luci-i18n-package-manager-ru rpcd rpcd-mod-ucode rpcd-mod-file rpcd-mod-iwinfo rpcd-mod-luci uhttpd uhttpd-mod-ubus curl ca-bundle openssh-client ruby ruby-yaml unzip jsonfilter nftables-json iw iwinfo ip-full ppp ppp-mod-pppoe firewall4 kmod-nft-offload'
 
@@ -419,7 +419,7 @@ D´:Ğw¤â±ò¦6TÒ.
 |ô™g$‰˜²®¼0’¿„½Ã˜jOO’”’K•_QæŸ¸ËåÒxG	‡HˆÂ±»ú
 šM—m¸tt¯á]êP$`1ç.Š.hlT7ü¢oğ7…µ+´uî®Xôå_ş2^eÎİ	“ğÛœ»èašes—]Æ &¾{·‰{w¿
 ¡YŒ°Ëçn<ÍQœ“¹˜ı;ÃÜu9iCçî	¶
-Yİd:¥;zi%¿øı>xüñïC¦-x‘·?ßGaÔ’?üñÃO 2z[[U šŸj¡_Nw€ƒúş*Œü/Dä`W†vÆ˜Œñn Ìf±—¯Òà7öÛÿ)áÿyî'“Ûıó¿w I¿9ÿßÁ}ı)Ù×[€…ë¯ÿ°×ïıfıßÅÏúõ‡düüppıõ~³şïâgóõWrt¢Ã:“,Û´Fú¿×ß‡æú÷{½a÷7ôÿ»ø9F’ëÒu1Â
+Yİd:¥;zi%¿øı>xüñïC¦-x‘·?ßGaÔˆ’?üñÃO 2z[[U šŸj¡_Nw€ƒúş*Œü/Dä`W†vÆ˜Œñn Ìf±—¯Òà7öÛÿ)áÿyî'“Ûıó¿w I¿9ÿßÁ}ı)Ù×[€…ë¯ÿ°×ïıfıßÅÏúõ‡düüppıõ~³şïâgóõWrt¢Ã:“,Û´Fú¿×ß‡æú÷{½a÷7ôÿ»ø9F’ëÒu1Â
 Qcß$Q’º~å¹H»½{–,óã®-9;î~`K{]û—y8›»ó,:>õÒ]Û÷V»æKVû%jÕµt-íÖµ$zÒ²–^~»á¦=òwR×pÔrî:5ßô¥h9:ıÎ`ôAC›XÁ>DTÛãtúöñAïš':O#C(÷ÌoÃZ‚€^-%ª¤ ”Y®M”şQN‘^©%-jY+ÕÆgo±<ºÒæYßm™Œî¨ª™:½Q§÷¥õ½¶u¹²Şn§GİN¿ÜéÊN±v¯Üqsw¼İ^;Gå^›ğ_íïé$EóÆZ4®×oôrÖ¬.kVÉZ‹>¢JÖ2ê7¾)dcôÃD4F»’©›‚âîÖè¸ÅÖÉêôVO„w2€Ş 3TÇPEÿö¾VÇQBûïdûıƒêJ(ŞÒIêı2^z¡/ŞŞÑÁ¾ß¯|³r§7ÚNº•ÏØà®?Ü÷pw$±ù¹v@‹Øò³ÕÁ$ûÃıöpĞîZ2C18[ÙV¹RÙûà°ßëú¥ÔwŸèhî»öq]Ï³ÕddY¹ïİvï ß><²æĞ:o/ŞªÖ,ĞíyÃIå3O÷àh°ÏC0>¯Zü0LÇ~wl~‘=˜v'ûı#ó5?íûıá”›/¾Y°<ŸÂØ°0¿÷İdéMÂüâ¸spOìòP? o§Iœ»™gÇ?
 ¢Ó 8*Ïù,XmõÚ~†^Ô^…”­ĞÂi;CWú…»
 ÛE¢¬m‘ÄÉñ§IìM’öÔp¼%í“U)T†µa¶z´ÕÓ‘ûÏ|£ÿ{)JƒûÛh8²ı|-pK< ¡®Í½	…&9‹Ú£¯Wƒ3†¾×³ 	2Ãá¡ïíÛqÆ`rà–wdºGíÃıöá f?§Ã€¶Ce?{Ã£á~ãİßo÷º‡M[m8
@@ -7517,4 +7517,4 @@ $º›I3‚`­NX²ÍÄ¡¬Öâ‘Õ}YàÀÀ™Ü^8ËØ´Ncıa€ ¬)Y÷Å”îdš[¹¡®j¦'[¹Ú|µš ¯¹
 úD°ú7(ö;ÌÂG¬DÔÁÁT_ï>ù1SUA¹´ÿšr©2Õ{òC"1Ÿ=ùi&¬ø
 h£ª"¡B Q'O2LNLHì 4à'%¦Y%)>ÕÈÃ5)¼§×j%]c²(0ûoÒv¨Õä’]Ç•R}7j·Ğ:‘r2EÉ£ˆ­À½‡R¶ÀYÁ|¯—6£V{Ø'!úò¦ˆÚ$¬¨f°'OIŒàK(IŒV=ÏR^ «­0JZvó®€|M Z³2>©'Šá¾µá-òGëKÄs@“Ï),Õ—´'RTHåL'b8#ÒÄp-´é®µE|Rûi`˜mt,)ş)~|ù¯¥÷÷ÈøsµÚ‚ïÿ½¸tìÿı\>ø£Ü¿¯ß¸vóÚÕúõóşüük—ÖŠŞ1Ùa9¬@æi¹VY¨ÔÊıZ%êİ×İ¬¿~°a­T­E§N¢æ©xni3n,Å§£æB³W«¸qz£º¹°°¼<¿qºQ=½±¼\]N/GKµêòæÆÆéS¥‰‹—^=ë›ë£!\É¡ôöfÜomòmÀÆ°ÓDmfMJZÀÈ÷å­&ïb[Ô1*9­5n%xraØ³&pT^”¾•ñ­ÅØÉ“Î¨'Í9Û“â€Â»d¸#ÊQ >fLD™#`¤&×WF*–+FMôµ@»{åa˜Å¥ÏT×ÈJ?ƒ@,º‰ñ·øşòx	ü¢8Oç;i˜‡ğµ…SİJ†(Yõ»¨¦¢¯
 „ª/8¾pÂákú»d­¯g©cAû©TĞúeÜÔ‰æº‰éŞ2‡5ßg`ÆMr9É-™B'
-àò—TÄ^RGÂ€Ë¡¸p0›µRÆü–RÑP<8®›qF†-¡<ğï´àE§‰êÔRTJÇÂñçøsü9ş?ÇŸãÏñçøsü9ş?ÇŸãÏñçøsü9ş?ÇŸãÏñçøsü9ş?ÇŸãÏñçøsü9ş?ÏéóÿíáM H5 
+àò—TÄ^RGÂ€Ë¡¸p0›µRÆü–RÑP<8®›qF†-¡<ğï´àE§‰êÔRTJÇÂñçøsü9ş?ÇŸãÏñçøsü9ş?ÇŸãÏñçøsü9ş?ÇŸãÏñçøsü9ş?ÇŸãÏñçøsü9ş?ÏéóÿT¾f H5 
