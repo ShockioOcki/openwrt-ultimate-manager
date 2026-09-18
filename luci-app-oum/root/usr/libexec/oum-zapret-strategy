@@ -71,14 +71,14 @@ require_runtime() {
 	[ -x /etc/init.d/zapret ] && [ -x /opt/zapret/sync_config.sh ] || fail 'Zapret не установлен.'
 	[ -f /etc/config/zapret ] && [ -f /opt/zapret/config ] || fail 'Конфигурация Zapret не найдена.'
 	[ -n "$(zapret_section)" ] || fail 'Секция Zapret с NFQWS_OPT не найдена.'
-	[ "$(/usr/libexec/oum-engine-manager current 2>/dev/null || true)" = podkop ] || fail 'Стратегии доступны только для Podkop + Zapret.'
 }
 
 require_running() {
 	require_runtime
 	/usr/libexec/oum-zapret-manager fix || fail 'Не удалось применить FIX Flow Offloading.'
-	pidof sing-box >/dev/null 2>&1 && nft list table inet PodkopTable >/dev/null 2>&1 ||
-		fail 'Сначала настройте AWG и запустите Podkop.'
+	if /etc/init.d/podkop enabled >/dev/null 2>&1 && [ "$(uci -q get oum.main.youtube_mode || echo zapret)" = vpn ]; then
+		fail 'Сначала переключите маршрут YouTube на Zapret.'
+	fi
 }
 
 write_progress() {
@@ -269,6 +269,7 @@ apply_selected() {
 	set -- $result
 	[ "$1" -ge 3 ] || fail "Стратегия $name прошла только $1 из $2 проверок; возвращена предыдущая."
 	save_state apply "$name" "$1" "$2" "$3"
+	/etc/init.d/zapret enable || fail 'Не удалось включить автозапуск Zapret.'
 	SUCCESS=1
 	MUTATED=0
 }
@@ -306,6 +307,7 @@ auto_select() {
 	cp "$WORK/results" "$RESULTS"
 	chmod 600 "$RESULTS"
 	save_state auto "$best" "$best_ok" 4 "$best_elapsed"
+	/etc/init.d/zapret enable || fail 'Не удалось включить автозапуск Zapret.'
 	SUCCESS=1
 	MUTATED=0
 }
@@ -331,11 +333,16 @@ status() {
 }
 
 case "$ACTION" in
+	stop)
+		acquire_lock
+		/etc/init.d/zapret stop || fail 'Не удалось остановить Zapret.'
+		/etc/init.d/zapret disable || fail 'Не удалось отключить автозапуск Zapret.'
+		;;
 	status) status ;;
 	check) acquire_lock; check_current ;;
 	apply) acquire_lock; apply_selected ;;
 	auto) acquire_lock; auto_select ;;
 	restore) acquire_lock; restore_previous ;;
 	validate) validate_catalog ;;
-	*) printf 'usage: %s {status|check|apply NAME|auto|restore|validate}\n' "$0" >&2; exit 2 ;;
+	*) printf 'usage: %s {status|check|apply NAME|auto|restore|stop|validate}\n' "$0" >&2; exit 2 ;;
 esac

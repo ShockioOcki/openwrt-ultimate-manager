@@ -2599,6 +2599,11 @@ html[data-darkmode="true"] body[data-page^="oum-"] #modal_overlay .modal {
   color:var(--oum-ink, #edf2f7) !important;
 }
 html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper, #fff) !important; }
+#modal_overlay .modal, #modal_overlay .modal-dialog, .oum-settings-sheet-content, .oum-mobile-menu-panel, .oum-activation-panel {
+  min-height: 0 !important; max-height: calc(100dvh - 24px) !important; overflow-y: auto !important;
+  overflow-x: hidden !important; -webkit-overflow-scrolling: touch !important; overscroll-behavior: contain !important;
+}
+
 # hide duplicate Готово inside device custom sheet
 #oum-device-custom-content .right { display:none !important; }
 #oum-device-custom-content .oum-mobile-device-sheet .right { display:none !important; }
@@ -3605,7 +3610,7 @@ html body[data-page^="oum-"] #modal_overlay .modal { background:var(--oum-paper,
 /* engine24: show engine switch action in sheet, keep tab/update buttons hidden. */
 @media (max-width: 900px) {
   .oum-settings-sheet-content .oum-vpn-switchboard { display: grid !important; grid-template-columns: 1fr !important; gap: 8px !important; margin-top: 12px !important; }
-  .oum-settings-sheet-content .oum-vpn-switchboard [data-vpn-settings-tab],
+  .oum-settings-sheet-content .oum-vpn-switchboard [data-vpn-settings-tab]:not([data-vpn-settings-tab="zapret"]),
   .oum-settings-sheet-content .oum-vpn-switchboard #update-engine { display: none !important; }
   .oum-settings-sheet-content .oum-vpn-switchboard #switch-engine { width: 100% !important; min-height: 44px !important; margin: 0 !important; }
 }

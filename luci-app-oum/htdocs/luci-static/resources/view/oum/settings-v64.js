@@ -503,10 +503,30 @@ return view.extend({
 						E('button', { 'class': 'btn cbi-button-action', id: 'switch-engine', 'data-system-action': '', disabled: engines.supported ? null : '' }, engineActionLabel),
 						E('button', { 'class': 'btn', type: 'button', 'data-vpn-settings-tab': 'dns', 'data-active': 'false' }, 'DNS для VPN'),
 						E('button', { 'class': 'btn', type: 'button', 'data-vpn-settings-tab': 'connection', 'data-active': String(initialVpnTab === 'connection') }, 'Защищённое подключение'),
+						...(engines.current === 'podkop' ? [ E('button', { 'class': 'btn', type: 'button', 'data-vpn-settings-tab': 'zapret', 'data-active': String(initialVpnTab === 'zapret') }, 'Zapret') ] : []),
 						...((engines.current === 'openclash' || engines.current === 'podkop') ? [
 							E('button', { 'class': 'btn oum-engine-update', type: 'button', id: 'update-engine', 'data-system-action': '' }, 'Проверить обновление')
 						] : [])
 					]),
+			E('details', { 'class': 'oum-settings-panel oum-protected oum-vpn-section', id: 'vpn-section-zapret', hidden: '' }, [
+				E('summary', {}, 'Zapret'),
+				E('p', { 'class': 'oum-help' }, 'Прямой доступ к YouTube без VPN-туннеля. Podkop можно оставить выключенным. Доступность зависит от провайдера и выбранной стратегии.'),
+						E('h4', { id: 'zapret-section-anchor' }, 'Стратегия Zapret'),
+						E('p', { 'class': 'oum-help' }, `Закреплённый каталог содержит ${zapret.catalog_total || 27} стратегий. Можно выбрать стратегию вручную или запустить автоподбор. Рабочим считается результат не хуже 3 из 4 проверок.`),
+						E('div', { 'class': 'oum-engine-current' }, [
+							E('span', {}, [ E('small', {}, 'Текущая стратегия'), E('br'), E('strong', { id: 'zapret-current' }, zapret.current || 'не выбрана OUM') ]),
+							E('span', { 'class': 'oum-help' }, zapret.last_total ? `Последняя проверка: ${zapret.last_ok}/${zapret.last_total} · ${zapret.last_elapsed_ms} мс` : (zapret.running ? 'Zapret работает' : 'Zapret выключен — выберите стратегию или запустите автоподбор'))
+						]),
+						E('div', { 'class': 'oum-setting-actions' }, [
+							E('select', { id: 'zapret-strategy' }, (zapret.strategies || []).map((item) => E('option', { value: item.id, selected: item.id === zapret.current ? '' : null }, item.label))),
+							E('button', { 'class': 'btn', id: 'zapret-apply', 'data-system-action': '' }, zapret.running ? 'Применить выбранную' : 'Включить с выбранной'),
+							E('button', { 'class': 'btn cbi-button-action', id: 'zapret-auto', 'data-system-action': '' }, youtubeMode === 'vpn' ? 'Подобрать и включить' : 'Подобрать автоматически'),
+							E('button', { 'class': 'btn', id: 'zapret-check', 'data-system-action': '', disabled: zapret.running ? null : '' }, 'Проверить текущую'),
+							E('button', { 'class': 'btn', id: 'zapret-restore', 'data-system-action': '', disabled: zapret.rollback ? null : '' }, 'Вернуть предыдущую')
+						]),
+						E('p', { 'class': 'oum-help', id: 'zapret-status' }, initialJob.action?.startsWith('zapret_') ? initialJob.message : (youtubeMode === 'vpn' ? 'Zapret сейчас остановлен. Ручной выбор или автоподбор одновременно переключит YouTube на прямое подключение.' : 'Во время автоподбора YouTube-соединения будут кратковременно перезапускаться.')),
+				E('button', { 'class': 'btn', id: 'zapret-stop', 'data-system-action': '', disabled: zapret.running ? null : '' }, 'Выключить Zapret')
+			]),
 			E('details', { 'class': 'oum-settings-panel oum-protected oum-vpn-section', id: 'vpn-section-dns', hidden: '' }, [
 					E('summary', {}, 'DNS для VPN'),
 					E('div', { 'class': 'oum-protected-content' }, [
@@ -563,20 +583,7 @@ return view.extend({
 						]),
 						E('button', { 'class': 'btn cbi-button-action', id: 'apply-youtube-mode', 'data-system-action': '' }, 'Применить режим YouTube'),
 						E('hr'),
-						E('h4', {}, 'Стратегия Zapret'),
-						E('p', { 'class': 'oum-help' }, `Закреплённый каталог содержит ${zapret.catalog_total || 27} стратегий. Можно выбрать стратегию вручную или запустить автоподбор. Рабочим считается результат не хуже 3 из 4 проверок.`),
-						E('div', { 'class': 'oum-engine-current' }, [
-							E('span', {}, [ E('small', {}, 'Текущая стратегия'), E('br'), E('strong', { id: 'zapret-current' }, zapret.current || 'не выбрана OUM') ]),
-							E('span', { 'class': 'oum-help' }, zapret.last_total ? `Последняя проверка: ${zapret.last_ok}/${zapret.last_total} · ${zapret.last_elapsed_ms} мс` : (zapret.running ? 'Zapret работает' : 'Сначала настройте AWG и запустите Podkop'))
-						]),
-						E('div', { 'class': 'oum-setting-actions' }, [
-							E('select', { id: 'zapret-strategy' }, (zapret.strategies || []).map((item) => E('option', { value: item.id, selected: item.id === zapret.current ? '' : null }, item.label))),
-							E('button', { 'class': 'btn', id: 'zapret-apply', 'data-system-action': '' }, youtubeMode === 'vpn' ? 'Включить с выбранной' : 'Применить выбранную'),
-							E('button', { 'class': 'btn cbi-button-action', id: 'zapret-auto', 'data-system-action': '' }, youtubeMode === 'vpn' ? 'Подобрать и включить' : 'Подобрать автоматически'),
-							E('button', { 'class': 'btn', id: 'zapret-check', 'data-system-action': '', disabled: youtubeMode === 'zapret' && zapret.running ? null : '' }, 'Проверить текущую'),
-							E('button', { 'class': 'btn', id: 'zapret-restore', 'data-system-action': '', disabled: youtubeMode === 'zapret' && zapret.rollback ? null : '' }, 'Вернуть предыдущую')
-						]),
-						E('p', { 'class': 'oum-help', id: 'zapret-status' }, initialJob.action?.startsWith('zapret_') ? initialJob.message : (youtubeMode === 'vpn' ? 'Zapret сейчас остановлен. Ручной выбор или автоподбор одновременно переключит YouTube на прямое подключение.' : 'Во время автоподбора YouTube-соединения будут кратковременно перезапускаться.'))
+
 					]),
 					E('div', { hidden: sourceSupported ? null : '' }, [
 						E('p', { 'class': 'oum-help' }, sourceHelp),
@@ -651,11 +658,12 @@ return view.extend({
 			const button = event.target.closest('[data-vpn-settings-tab]');
 			if (!button) return;
 			const target = button.dataset.vpnSettingsTab;
-			const section = root.querySelector(`#vpn-section-${target}`);
+			const sectionTarget = target;
+			const section = root.querySelector(`#vpn-section-${sectionTarget}`);
 			const closing = button.dataset.active === 'true' && section && !section.hidden;
 			root.querySelectorAll('[data-vpn-settings-tab]').forEach((item) => item.dataset.active = String(!closing && item === button));
 			root.querySelectorAll('.oum-vpn-section').forEach((section) => {
-				const active = !closing && section.id === `vpn-section-${target}`;
+				const active = !closing && section.id === `vpn-section-${sectionTarget}`;
 				section.hidden = !active;
 				if (active) section.open = true;
 			});
@@ -1127,6 +1135,7 @@ const isOperationJob = (status) => Object.prototype.hasOwnProperty.call(operatio
 				auto: 'OUM последовательно проверит 27 стратегий. Это займёт несколько минут и временно перезапустит YouTube-соединения.',
 				apply: `Стратегия ${strategy} будет применена и проверена. При ошибке вернётся предыдущая.`,
 				check: 'Будет проверена текущая стратегия без изменения конфигурации.',
+				stop: 'Zapret будет остановлен, его автозапуск отключён. Podkop останется в текущем состоянии.',
 				restore: 'Будет восстановлена конфигурация Zapret до последнего выбора через OUM.'
 			};
 			if (await confirmation('Настроить Zapret?', descriptions[action], action === 'auto' ? 'Начать подбор' : 'Продолжить', action === 'restore'))
@@ -1143,7 +1152,7 @@ const isOperationJob = (status) => Object.prototype.hasOwnProperty.call(operatio
 			if (await confirmation('Изменить маршрут YouTube?', text, 'Переключить', false))
 				start(callSetPodkopYoutubeMode(mode, ''));
 		});
-		for (const action of [ 'auto', 'apply', 'check', 'restore' ]) {
+		for (const action of [ 'auto', 'apply', 'check', 'restore', 'stop' ]) {
 			const button = root.querySelector(`#zapret-${action}`);
 			if (button) button.addEventListener('click', (event) => { event.preventDefault(); runZapret(action); });
 		}
@@ -1440,9 +1449,8 @@ const isOperationJob = (status) => Object.prototype.hasOwnProperty.call(operatio
 		sheetPanel.addEventListener('touchstart', (event) => {
 			if (event.touches.length !== 1) return;
 			sheetSy = event.touches[0].clientY;
-			sheetDrag = true;
+			sheetDrag = !!event.target.closest('.oum-settings-sheet-head, .oum-mobile-menu-handle');
 			try { for (let el = event.target; el; el = el.parentElement) { if (el.scrollHeight > el.clientHeight + 4 && el.scrollTop > 0) { sheetDrag = false; break; } if (el === sheetPanel) break; } } catch (_) {}
-			try { if (sheetSy - sheetPanel.getBoundingClientRect().top < 72) sheetDrag = true; } catch (_) {}
 			sheetPanel.style.transition = 'none';
 		}, { passive: true });
 		sheetPanel.addEventListener('touchmove', (event) => {
@@ -1653,12 +1661,13 @@ const isOperationJob = (status) => Object.prototype.hasOwnProperty.call(operatio
 				// etalon: build custom bottom-sheet for Защищённое подключение as per right image
 				const isAWG = engines.podkop?.transport !== 'reality';
 				const awgActive = isAWG;
-				const seg = E('div', { 'class': 'oum-apple-segment', style: 'background:#f1f5f9;padding:3px;border-radius:12px;display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:0 0 12px;' }, [
+				const seg = E('div', { 'class': 'oum-apple-segment oum-apple-segment-3', style: 'background:#f1f5f9;padding:3px;border-radius:12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:0 0 12px;' }, [
 					E('button', { type: 'button', 'class': awgActive ? 'oum-apple-seg is-active' : 'oum-apple-seg', style: 'padding:7px;font-size:12px;font-weight:600;border-radius:8px;border:none;background:'+(awgActive?'#fff':'transparent')+';color:'+(awgActive?'#0f172a':'#64748b')+';box-shadow:'+(awgActive?'0 1px 3px rgba(0,0,0,.08)':'none'), 'data-conn-tab': 'awg' }, 'AWG'),
-					E('button', { type: 'button', 'class': !awgActive ? 'oum-apple-seg is-active' : 'oum-apple-seg', style: 'padding:7px;font-size:12px;font-weight:600;border-radius:8px;border:none;background:'+(!awgActive?'#fff':'transparent')+';color:'+(!awgActive?'#0f172a':'#64748b')+';box-shadow:'+(!awgActive?'0 1px 3px rgba(0,0,0,.08)':'none'), 'data-conn-tab': 'reality' }, 'Reality')
+					E('button', { type: 'button', 'class': !awgActive ? 'oum-apple-seg is-active' : 'oum-apple-seg', style: 'padding:7px;font-size:12px;font-weight:600;border-radius:8px;border:none;background:'+(!awgActive?'#fff':'transparent')+';color:'+(!awgActive?'#0f172a':'#64748b')+';box-shadow:'+(!awgActive?'0 1px 3px rgba(0,0,0,.08)':'none'), 'data-conn-tab': 'reality' }, 'Reality'),
+					E('button', { type: 'button', 'class': 'oum-apple-seg', style: 'padding:7px;font-size:12px;font-weight:600;border-radius:8px;border:none;background:transparent;color:#64748b;box-shadow:none', 'data-conn-tab': 'zapret' }, 'Zapret')
 				]);
 				const awgPane = E('div', { 'data-conn-pane': 'awg', hidden: awgActive ? null : '' }, [
-					E('textarea', { id: 'podkop-awg-config-mobile', placeholder: '[Interface]\nPrivateKey = ...\nAddress = ...\n...\n\n[Peer]\nPublicKey = ...\nEndpoint = ...', style: 'width:100%;min-height:88px;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font-size:13px;background:#fff;box-sizing:border-box;' }, document.getElementById('podkop-awg-config')?.value || 'test'),
+					E('textarea', { id: 'podkop-awg-config-mobile', placeholder: '[Interface]\nPrivateKey = ...\nAddress = ...\n...\n\n[Peer]\nPublicKey = ...\nEndpoint = ...', style: 'width:100%;min-height:88px;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font-size:13px;background:#fff;box-sizing:border-box;' }, document.getElementById('podkop-awg-config')?.value || ''),
 					E('div', { style: 'display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:8px;' }, [
 						E('select', { id: 'podkop-interface-mobile', style: 'height:42px;border:1px solid #e5e7eb;border-radius:10px;padding:0 12px;' }, ...podkopInterfaces.map(name=>E('option', { value: name, selected: name===engines.podkop?.interface ? '' : null }, name))),
 						E('button', { 'class': 'btn cbi-button-action', style: 'height:42px;padding:0 12px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:600;', click: ()=>document.getElementById('import-podkop-awg')?.click() }, 'Импорт')
@@ -1669,44 +1678,39 @@ const isOperationJob = (status) => Object.prototype.hasOwnProperty.call(operatio
 					E('textarea', { id: 'podkop-reality-config-mobile', placeholder: 'vless://UUID@server:443?security=reality&pbk=...', style: 'width:100%;min-height:88px;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;font-size:13px;background:#fff;box-sizing:border-box;' }, document.getElementById('podkop-reality-config')?.value || ''),
 					E('button', { 'class': 'btn cbi-button-action', style: 'width:100%;height:42px;background:#2563eb;color:#fff;border:none;border-radius:12px;font-weight:600;margin-top:8px;', click: ()=>document.getElementById('import-podkop-reality')?.click() }, 'Проверить и использовать Reality')
 				]);
+				const zapretPane = E('div', { 'data-conn-pane': 'zapret', hidden: '' }, [
+					E('p', { style: 'font-size:12px;color:var(--oum-subtle);line-height:1.45;margin:0 0 10px;' }, 'Прямой доступ к YouTube через Zapret. Podkop может оставаться выключенным.'),
+					E('div', { style: 'display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--oum-field-soft);border:1px solid var(--oum-line);border-radius:10px;padding:10px 12px;font-size:12px;' }, [ E('span', {}, [ E('strong', {}, zapret.running ? 'Zapret работает' : 'Zapret выключен'), E('small', { style: 'display:block;color:var(--oum-subtle);margin-top:3px;' }, 'Для YouTube напрямую') ]), E('strong', { style: 'color:var(--oum-subtle);' }, zapret.current || 'Стратегия не выбрана') ]),
+					E('label', { style: 'display:block;font-size:11px;font-weight:600;margin-top:10px;' }, 'Стратегия'),
+					E('select', { id: 'zapret-strategy-mobile', style: 'width:100%;height:42px;border:1px solid var(--oum-line);border-radius:10px;padding:0 12px;background:var(--oum-paper);color:var(--oum-ink);' }, (zapret.strategies||[]).map(item=>E('option', { value:item.id, selected:item.id===zapret.current?'':'' }, item.label))),
+					E('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;' }, [
+						E('button', { 'class': 'btn cbi-button-action', style: 'height:42px;background:var(--oum-action);color:#fff;border:none;border-radius:10px;font-weight:600;', click: ()=>document.getElementById('zapret-auto')?.click() }, 'Подобрать'),
+						E('button', { 'class': 'btn', style: 'height:42px;background:var(--oum-paper);border:1px solid var(--oum-line);color:var(--oum-ink);border-radius:10px;', click: ()=>document.getElementById(zapret.running ? 'zapret-stop' : 'zapret-apply')?.click() }, zapret.running ? 'Выключить' : 'Включить')
+					]),
+					E('button', { 'class': 'btn', style: 'width:100%;height:38px;margin-top:8px;background:transparent;border:1px solid #e5e7eb;border-radius:10px;', click: ()=>document.getElementById('zapret-check')?.click() }, 'Проверить текущую')
+				]);
 				const youtubeSeg = E('div', { 'class': 'oum-apple-segment', style: 'background:#f1f5f9;padding:3px;border-radius:12px;display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:12px 0 8px;' }, [
 					E('button', { type: 'button', 'class': youtubeMode==='zapret' ? 'oum-apple-seg is-active' : 'oum-apple-seg', style: 'padding:7px;font-size:11px;font-weight:600;border-radius:8px;border:none;background:'+(youtubeMode==='zapret'?'#fff':'transparent')+';color:'+(youtubeMode==='zapret'?'#0f172a':'#64748b'), 'data-youtube': 'zapret' }, 'Напрямую + Zapret'),
 					E('button', { type: 'button', 'class': youtubeMode==='vpn' ? 'oum-apple-seg is-active' : 'oum-apple-seg', style: 'padding:7px;font-size:11px;font-weight:600;border-radius:8px;border:none;background:'+(youtubeMode==='vpn'?'#fff':'transparent')+';color:'+(youtubeMode==='vpn'?'#0f172a':'#64748b'), 'data-youtube': 'vpn' }, 'Через VPN')
 				]);
-				const zapretInfo = E('div', { 'class': 'oum-zapret-info', style: 'color:var(--oum-ink);background:var(--oum-field-soft);border:1px solid var(--oum-line);border-radius:12px;padding:12px;margin-top:12px;' }, [
-					E('div', { style: 'font-weight:700;font-size:13px;' }, 'Стратегия Zapret'),
-					E('div', { style: 'font-size:11px;color:var(--oum-subtle);margin:4px 0 8px;' }, 'Каталог 27 стратегий - рабочая от 3 из 4 проверок.'),
-					E('div', { style: 'display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:var(--oum-paper);border:1px solid var(--oum-line);border-radius:10px;padding:8px 12px;font-size:12px;' }, [
-						E('span', {}, 'Текущая: '+(zapret.current || 'не выбрана OUM')),
-						E('span', { style: 'color:var(--oum-subtle);font-size:11px;' }, zapret.last_total ? `${zapret.last_ok}/${zapret.last_total} · ${zapret.last_elapsed_ms} мс` : 'Ещё не проверена')
-					]),
-					E('div', { style: 'display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:8px;' }, [
-						E('select', { id: 'zapret-strategy-mobile', style: 'height:42px;border:1px solid var(--oum-line);border-radius:10px;padding:0 12px;' }, ...(zapret.strategies||[]).map(item=>E('option', { value: item.id, selected: item.id===zapret.current ? '' : null }, item.id))),
-						E('button', { 'class': 'btn', style: 'height:42px;padding:0 12px;border:1px solid var(--oum-line);border-radius:10px;background:var(--oum-paper);', click: ()=>document.getElementById('zapret-apply')?.click() }, 'Применить')
-					]),
-					E('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;' }, [
-						E('button', { 'class': 'btn cbi-button-action', style: 'height:42px;background:#2563eb;color:#fff;border:none;border-radius:12px;font-weight:600;', click: ()=>document.getElementById('zapret-auto')?.click() }, 'Подобрать автоматически'),
-						E('button', { 'class': 'btn', style: 'height:42px;background:var(--oum-paper);border:1px solid var(--oum-line);border-radius:10px;', click: ()=>document.getElementById('zapret-check')?.click() }, 'Проверить текущую')
-					]),
-					E('div', { style: 'text-align:center;margin-top:8px;' }, E('a', { href: '#', style: 'font-size:11px;color:var(--oum-subtle);text-decoration:underline;', click: (e)=>{ e.preventDefault(); document.getElementById('zapret-restore')?.click(); } }, 'Вернуть предыдущую')),
-					E('div', { style: 'font-size:11px;color:var(--oum-subtle);text-align:center;margin-top:4px;' }, 'YouTube кратковременно перезапустится при автоподборе.')
-				]);
 				const custom = E('div', { 'class': 'oum-settings-sheet-content' }, [
-					seg, awgPane, realityPane,
+					seg, awgPane, realityPane, zapretPane,
 					E('div', { style: 'font-weight:700;font-size:13px;margin-top:12px;' }, 'Маршрут YouTube'),
 					E('div', { style: 'font-size:11px;color:#6b7280;margin-bottom:6px;' }, 'Напрямую экономит VPN-трафик, через VPN - Zapret не нужен.'),
 					youtubeSeg,
-					E('button', { 'class': 'btn cbi-button-action', style: 'width:100%;height:42px;background:#2563eb;color:#fff;border:none;border-radius:12px;font-weight:600;margin-top:8px;', click: ()=>document.getElementById('apply-youtube-mode')?.click() }, 'Применить режим YouTube'),
-					zapretInfo
+					E('button', { 'class': 'btn cbi-button-action', style: 'width:100%;height:42px;background:#2563eb;color:#fff;border:none;border-radius:12px;font-weight:600;margin-top:8px;', click: ()=>document.getElementById('apply-youtube-mode')?.click() }, 'Применить режим YouTube')
 				]);
 				// tab switching
 				custom.querySelectorAll('[data-conn-tab]').forEach(btn=>{
 					btn.addEventListener('click', ()=>{
-						const isAWG = btn.dataset.connTab==='awg';
-						custom.querySelectorAll('[data-conn-tab]').forEach(b=>{ b.classList.toggle('is-active', b===btn); b.style.background=b===btn?'#fff':'transparent'; b.style.color=b===btn?'#0f172a':'#64748b'; b.style.boxShadow=b===btn?'0 1px 3px rgba(0,0,0,.08)':'none'; });
-						custom.querySelector('[data-conn-pane="awg"]').hidden = !isAWG;
-						custom.querySelector('[data-conn-pane="reality"]').hidden = isAWG;
+						const target = btn.dataset.connTab;
+						custom.querySelectorAll('[data-conn-tab]').forEach(b=>{ const active=b===btn; b.classList.toggle('is-active', active); b.style.background=active?'#fff':'transparent'; b.style.color=active?'#0f172a':'#64748b'; b.style.boxShadow=active?'0 1px 3px rgba(0,0,0,.08)':'none'; });
+						custom.querySelectorAll('[data-conn-pane]').forEach(p=>p.hidden = p.dataset.connPane !== target);
 					});
+				});
+				custom.querySelector('#zapret-strategy-mobile')?.addEventListener('change', (event) => {
+					const desktop = document.getElementById('zapret-strategy');
+					if (desktop) desktop.value = event.target.value;
 				});
 				custom.querySelectorAll('[data-youtube]').forEach(btn=>{
 					btn.addEventListener('click', ()=>{

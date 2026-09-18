@@ -243,13 +243,22 @@
 					});
 				});
 				p.querySelector('[data-menu-act="logout"]').addEventListener('click', function() { window.location.href = logoutHref; });
-				var touchY = null, touchScrolled = false;
-				p.addEventListener('touchstart', function(ev) { if (ev.touches.length !== 1) return; touchY = ev.touches[0].clientY; touchScrolled = false; try { for (var el = ev.target; el; el = el.parentElement) { if (el.scrollHeight > el.clientHeight + 4 && el.scrollTop > 0) { touchScrolled = true; break; } if (el === p) break; } } catch (_) {} try { if (touchY - p.getBoundingClientRect().top < 72) touchScrolled = false; } catch (_) {} }, { passive: true });
-				p.addEventListener('touchend', function(ev) {
-					if (touchY == null || !ev.changedTouches.length) return;
-					var d = ev.changedTouches[0].clientY - touchY;
-					if (d > 90 && !touchScrolled) closeMenu();
-					touchY = null;
+				var touchY = null, dragY = 0, canDrag = false;
+				p.addEventListener('touchstart', function(ev) {
+					if (ev.touches.length !== 1) return;
+					touchY = ev.touches[0].clientY; dragY = 0; canDrag = p.scrollTop <= 0;
+					p.style.transition = 'none';
+				}, { passive: true });
+				p.addEventListener('touchmove', function(ev) {
+					if (touchY == null || !canDrag || ev.touches.length !== 1) return;
+					dragY = Math.max(0, ev.touches[0].clientY - touchY);
+					if (dragY > 0) { p.style.transform = 'translateY(' + Math.min(dragY, 180) + 'px)'; ev.preventDefault(); }
+				}, { passive: false });
+				p.addEventListener('touchend', function() {
+					if (touchY == null) return;
+					p.style.transition = 'transform .2s';
+					if (dragY > 90) closeMenu(); else p.style.transform = '';
+					touchY = null; dragY = 0;
 				}, { passive: true });
 				return m;
 			}

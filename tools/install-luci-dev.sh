@@ -135,6 +135,7 @@ chmod 644 /usr/share/luci/menu.d/luci-app-oum.json /usr/share/ucode/luci/control
 	/usr/share/rpcd/ucode/oum /www/luci-static/resources/view/oum/first-run-v4.js \
 	/www/luci-static/resources/view/oum/dashboard-v64.js /www/luci-static/resources/view/oum/settings-v64.js \
 	/www/luci-static/resources/view/oum/parental-v5.js /www/luci-static/resources/view/oum/help-v5.js \
+	/www/luci-static/resources/view/oum/qrcode.min.js /www/luci-static/resources/view/oum/qrcode.min.js.LICENSE.txt \
 	/www/luci-static/resources/oum/oum.css
 
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true

@@ -36,6 +36,8 @@ with tempfile.TemporaryDirectory() as temporary:
     assert {re.fullmatch(r'(dashboard|settings|first-run|help|parental)-v1-[0-9a-f]{12}\.js', name).group(1) for name in expected_views} == {'dashboard', 'settings', 'first-run', 'help', 'parental'}
     assert not (views / 'oum.css').exists()
     assert (views / 'qrcode.min.js').is_file()
+    assert 'qrcode.min.js' in (package / 'tools/install-luci-dev.sh').read_text()
+    assert 'chmod 644' in (package / 'tools/install-luci-dev.sh').read_text()
     menu = json.loads((app / 'root/usr/share/luci/menu.d/luci-app-oum.json').read_text())
     source_menu = json.loads((ROOT / 'luci-app-oum/root/usr/share/luci/menu.d/luci-app-oum.json').read_text())
     for route, entry in menu.items():
